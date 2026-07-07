@@ -151,15 +151,42 @@ Variables d'environnement (fichier `.env`, chargé via `python-dotenv`) :
 
 ---
 
-## Lancer
+## Démarrage rapide
 
 ```bash
-# 1. Configurer .env (DATABASE_URL + clés API)
-# 2. S'assurer que la base est créée et peuplée (tests, models, evaluation_prompts)
+# 1. Dépendances
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
 
-python main.py            # run complet + évaluation (modèles/juges codés en dur)
-python mainUnitaire.py    # smoke test OpenAI web search
+# 2. Configuration
+cp .env.example .env         # puis remplir DATABASE_URL + clés API
+
+# 3. Base PostgreSQL (option A : Docker fourni)
+docker compose up -d         # PostgreSQL sur localhost:5432 (user/pass/db = geoeval)
+
+# 4. Schéma + données de démarrage
+python init_db.py            # crée les 7 tables (create_all)
+psql "postgresql://geoeval:geoeval@localhost:5432/geoeval" -f seed.sql
+#   (ou, sans psql local :)
+#   docker compose exec -T db psql -U geoeval -d geoeval < seed.sql
+
+# 5. Exécuter
+python main.py               # run complet + évaluation
+python mainUnitaire.py       # smoke test OpenAI web search (sans base)
 ```
+
+> Le `seed.sql` fournit les modèles connus, deux prompts d'évaluation et deux tests d'exemple.
+> Remplace/complète la table `tests` avec tes propres questions pour un vrai benchmark.
+
+### Fichiers du kit de démarrage
+
+| Fichier              | Rôle                                                            |
+| -------------------- | -------------------------------------------------------------- |
+| `requirements.txt`   | Dépendances Python.                                            |
+| `.env.example`       | Modèle de configuration (à copier en `.env`).                 |
+| `init_db.py`         | Crée le schéma (`--drop` pour tout recréer).                  |
+| `seed.sql`           | Données de démarrage (models, prompts d'éval, tests d'exemple).|
+| `docker-compose.yml` | PostgreSQL local prêt à l'emploi.                             |
 
 ---
 
@@ -167,16 +194,14 @@ python mainUnitaire.py    # smoke test OpenAI web search
 
 Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :
 
-- **Bug — juge OpenAI cassé** (`evaluate.py`, branche `openai`) : la ligne
-  `respo=nse = llm_clients.call_with_retry(...)` est une affectation chaînée
-  (`respo = nse = ...`) et le `return response` qui suit référence une variable **inexistante**
-  → `NameError` dès qu'un juge OpenAI est utilisé. Les juges Mistral/Gemini ne sont pas touchés.
+- ✅ **Corrigé — juge OpenAI** (`evaluate.py`, branche `openai`) : l'affectation chaînée
+  involontaire `respo=nse = ...` provoquait un `NameError` (variable `response` inexistante) dès
+  qu'un juge OpenAI était utilisé. Remplacée par `response = ...`.
 - **`todo.md`** : la signature de `evaluate_run` doit encore évoluer pour accepter des juges par
   **nom de modèle** (`{"model": "gpt-5.2", "repeats": 2}`) avec résolution nom → `model_id` en interne.
 - **Modèles/juges codés en dur** dans `main.py` (ids `[2,3,4]` et juge `5`) — non paramétrable en CLI.
 - **Extraction de citations naïve** : simple regex sur les URLs du texte, indépendante des
   métadonnées de sources renvoyées par les API (OpenAI renvoie pourtant `web_search_call.action.sources`).
-- **Pas de packaging** : ni `requirements.txt`, ni `pyproject.toml`, ni migrations de schéma.
 - **Retry trop large** : `retry_exceptions = (Exception,)` réessaie même des erreurs non transitoires
   (ex. clé API invalide, erreurs de validation).
 - **Imports morts** dans `evaluate.py` (`Model`, `Tuple`, `List`) et un `__import__("google.genai")`

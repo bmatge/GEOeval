@@ -117,7 +117,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
             )
             return resp.output_text or ""
 
-        respo=nse = llm_clients.call_with_retry(
+        response = llm_clients.call_with_retry(
             _do,
             retry_exceptions=llm_clients.OPENAI_RETRY_EXCEPTIONS,
             max_retries=8,
@@ -127,7 +127,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response 
+        return response
 
     # Mistral (sans agents, sans web)
     if model_name in {"mistral", "mistralai"}:
