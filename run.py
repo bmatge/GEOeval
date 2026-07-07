@@ -96,7 +96,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
     # 1) OpenAI (web_search activé)
     if model_name in {"openai", "chatgpt", "gpt"}:
-        client = llm_clients.get_openai_client_singleton()
+        client = llm_clients.client_for_model(model)
 
         def _do() -> str:
             resp = client.responses.create(
@@ -133,7 +133,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
     # 2) Mistral (Agents/Conversations + web_search) + agent singleton par model_version
     if model_name in {"mistral", "mistralai"}:
-        client = llm_clients.get_mistral_client_singleton()
+        client = llm_clients.client_for_model(model)
 
         def _do() -> str:
             agent = llm_clients.get_mistral_agent_singleton_by_model_version(
@@ -185,7 +185,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
     if model_name in {"gemini", "google"}:
         from google.genai import types
 
-        client = llm_clients.get_gemini_client_singleton()
+        client = llm_clients.client_for_model(model)
 
         def _do() -> str:
             resp = client.models.generate_content(

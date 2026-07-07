@@ -144,7 +144,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # OpenAI (sans web)
     if model_name in {"openai", "chatgpt", "gpt"}:
-        client = llm_clients.get_openai_client_singleton()
+        client = llm_clients.client_for_model(judge_model)
 
         def _do() -> str:
             resp = client.responses.create(
@@ -170,7 +170,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # Mistral (sans agents, sans web)
     if model_name in {"mistral", "mistralai"}:
-        client = llm_clients.get_mistral_client_singleton()
+        client = llm_clients.client_for_model(judge_model)
 
         def _do() -> str:
             resp = client.chat.complete(
@@ -198,7 +198,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # Gemini (sans tools)
     if model_name in {"gemini", "google"}:
-        client = llm_clients.get_gemini_client_singleton()
+        client = llm_clients.client_for_model(judge_model)
 
         def _do() -> str:
             resp = client.models.generate_content(
@@ -225,9 +225,10 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         logger.info("call_judge_llm END (%.2f s)", end - start)
         return response
 
-    # Albert (API souveraine Etalab, compatible OpenAI — chat completions, sans web)
-    if model_name in {"albert", "etalab"}:
-        client = llm_clients.get_albert_client_singleton()
+    # Albert (API souveraine Etalab) et tout endpoint compatible OpenAI
+    # (chat completions, sans web)
+    if model_name in {"albert", "etalab", "openai-compatible", "compatible-openai"}:
+        client = llm_clients.client_for_model(judge_model)
 
         def _do() -> str:
             resp = client.chat.completions.create(

@@ -20,6 +20,7 @@ from models import (
     RunEvaluation,
     RunResult,
     RunRow,
+    ScheduledRun,
     Test,
 )
 
@@ -173,8 +174,156 @@ def get_run_detail(session: Session, run_id: int) -> Optional[dict[str, Any]]:
 # -----------------------------
 # Modèles
 # -----------------------------
-def list_models(session: Session) -> list[Model]:
-    return list(session.execute(select(Model).order_by(Model.model_id)).scalars().all())
+def list_models(session: Session, active_only: bool = True) -> list[Model]:
+    stmt = select(Model).order_by(Model.model_id)
+    if active_only:
+        stmt = stmt.where(Model.is_active.is_(True))
+    return list(session.execute(stmt).scalars().all())
+
+
+def get_model(session: Session, model_id: int) -> Optional[Model]:
+    return session.get(Model, model_id)
+
+
+def model_run_refs(session: Session, model_id: int) -> int:
+    """Nombre de références au modèle dans l'historique (runs testés + évaluations juge)."""
+    n_runs = session.execute(
+        select(func.count()).select_from(RunRow).where(RunRow.tested_model_id == model_id)
+    ).scalar_one()
+    n_evals = session.execute(
+        select(func.count()).select_from(RunEvaluation).where(RunEvaluation.judge_model_id == model_id)
+    ).scalar_one()
+    return int(n_runs) + int(n_evals)
+
+
+def create_model(
+    session: Session,
+    *,
+    model_name: str,
+    model_version: str,
+    base_url: Optional[str],
+    api_key: Optional[str],
+    extra_headers: Optional[dict[str, Any]],
+) -> Model:
+    model = Model(
+        model_name=model_name,
+        model_version=model_version,
+        base_url=base_url or None,
+        api_key=api_key or None,
+        extra_headers=extra_headers or None,
+        is_active=True,
+    )
+    session.add(model)
+    session.commit()
+    return model
+
+
+def update_model(
+    session: Session,
+    model_id: int,
+    *,
+    model_name: str,
+    model_version: str,
+    base_url: Optional[str],
+    api_key: Optional[str],       # None = inchangée ; "" via clear_api_key
+    clear_api_key: bool,
+    extra_headers: Optional[dict[str, Any]],
+) -> Model:
+    model = session.get(Model, model_id)
+    if model is None:
+        raise ValueError(f"model_id={model_id} introuvable")
+    model.model_name = model_name
+    model.model_version = model_version
+    model.base_url = base_url or None
+    model.extra_headers = extra_headers or None
+    if clear_api_key:
+        model.api_key = None
+    elif api_key:  # champ laissé vide = clé existante conservée
+        model.api_key = api_key
+    session.commit()
+    return model
+
+
+def set_model_active(session: Session, model_id: int, active: bool) -> None:
+    model = session.get(Model, model_id)
+    if model is None:
+        raise ValueError(f"model_id={model_id} introuvable")
+    model.is_active = active
+    session.commit()
+
+
+def delete_model(session: Session, model_id: int) -> None:
+    """Suppression réelle, refusée si l'historique y fait référence."""
+    if model_run_refs(session, model_id):
+        raise ValueError(
+            "Ce modèle est référencé par des runs ou des évaluations : "
+            "désactive-le plutôt (l'historique doit rester intact)."
+        )
+    model = session.get(Model, model_id)
+    if model is None:
+        raise ValueError(f"model_id={model_id} introuvable")
+    session.delete(model)
+    session.commit()
+
+
+# -----------------------------
+# Runs programmés
+# -----------------------------
+def list_schedules(session: Session) -> list[ScheduledRun]:
+    return list(
+        session.execute(select(ScheduledRun).order_by(ScheduledRun.schedule_id)).scalars().all()
+    )
+
+
+def get_schedule(session: Session, schedule_id: int) -> Optional[ScheduledRun]:
+    return session.get(ScheduledRun, schedule_id)
+
+
+def create_schedule(
+    session: Session,
+    *,
+    name: str,
+    tested_models: list[str],
+    judges: list[dict[str, Any]],
+    test_ids: Optional[list[int]],
+    note: Optional[str],
+    schedule_kind: str,
+    schedule_config: dict[str, Any],
+    next_run_at: datetime,
+) -> ScheduledRun:
+    sr = ScheduledRun(
+        name=name,
+        tested_models=tested_models,
+        judges=judges,
+        test_ids=test_ids,
+        note=note,
+        schedule_kind=schedule_kind,
+        schedule_config=schedule_config,
+        enabled=True,
+        next_run_at=next_run_at,
+    )
+    session.add(sr)
+    session.commit()
+    return sr
+
+
+def set_schedule_enabled(session: Session, schedule_id: int, enabled: bool,
+                         next_run_at: Optional[datetime] = None) -> None:
+    sr = session.get(ScheduledRun, schedule_id)
+    if sr is None:
+        raise ValueError(f"schedule_id={schedule_id} introuvable")
+    sr.enabled = enabled
+    if enabled and next_run_at is not None:
+        sr.next_run_at = next_run_at
+    session.commit()
+
+
+def delete_schedule(session: Session, schedule_id: int) -> None:
+    sr = session.get(ScheduledRun, schedule_id)
+    if sr is None:
+        raise ValueError(f"schedule_id={schedule_id} introuvable")
+    session.delete(sr)
+    session.commit()
 
 
 # -----------------------------

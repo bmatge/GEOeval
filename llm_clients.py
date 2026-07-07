@@ -69,6 +69,92 @@ def get_albert_client_singleton() -> "OpenAI":
 
 
 # -----------------------------
+# Clients paramétrés par modèle (page Modèles : base_url / api_key / en-têtes)
+# -----------------------------
+# Famille de provider -> pilote quel SDK/branche utiliser. Les champs du modèle
+# priment ; vides => repli sur les variables d'environnement / défauts.
+_FAMILY_BY_NAME = {
+    "openai": "openai", "chatgpt": "openai", "gpt": "openai",
+    "albert": "albert", "etalab": "albert",
+    "openai-compatible": "generic", "compatible-openai": "generic",
+    "mistral": "mistral", "mistralai": "mistral",
+    "gemini": "gemini", "google": "gemini",
+}
+
+_CLIENTS_BY_CONFIG: dict[tuple, Any] = {}
+
+
+def provider_family(model_name: Optional[str]) -> Optional[str]:
+    return _FAMILY_BY_NAME.get((model_name or "").lower())
+
+
+def _headers_key(headers: Optional[dict]) -> str:
+    import json
+    return json.dumps(headers, sort_keys=True) if headers else ""
+
+
+def client_for_model(model: Any) -> Any:
+    """Client LLM pour un modèle (ligne de la table `models`), mis en cache par
+    configuration effective. Sans config en base, équivaut aux singletons env."""
+    family = provider_family(model.model_name)
+    if family is None:
+        raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
+
+    base_url = getattr(model, "base_url", None) or None
+    api_key = getattr(model, "api_key", None) or None
+    headers = getattr(model, "extra_headers", None) or None
+    key = (family, base_url, api_key, _headers_key(headers))
+    if key in _CLIENTS_BY_CONFIG:
+        return _CLIENTS_BY_CONFIG[key]
+
+    if family == "openai":
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=api_key or os.environ["OPENAI_API_KEY"],
+            base_url=base_url,
+            default_headers=headers,
+        )
+    elif family == "albert":
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=api_key or os.environ["ALBERT_API_KEY"],
+            base_url=base_url or os.environ.get("ALBERT_BASE_URL") or "https://albert.api.etalab.gouv.fr/v1",
+            default_headers=headers,
+        )
+    elif family == "generic":
+        # Endpoint compatible OpenAI arbitraire : URL et clé obligatoires en base.
+        if not base_url:
+            raise ValueError(
+                f"Modèle {model.model_version!r} (compatible-openai) : base_url requis (page Modèles)."
+            )
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key or "none", base_url=base_url, default_headers=headers)
+    elif family == "mistral":
+        try:
+            from mistralai import Mistral  # SDK v1.x
+        except ImportError:
+            from mistralai.client import Mistral  # SDK v2.x (namespace package)
+        kwargs: dict[str, Any] = {"api_key": api_key or os.environ["MISTRAL_API_KEY"]}
+        if base_url:
+            kwargs["server_url"] = base_url
+        client = Mistral(**kwargs)
+    elif family == "gemini":
+        from google import genai
+        from google.genai import types as genai_types
+        kwargs = {"api_key": api_key or os.environ["GEMINI_API_KEY"]}
+        if base_url or headers:
+            kwargs["http_options"] = genai_types.HttpOptions(
+                base_url=base_url or None, headers=headers or None
+            )
+        client = genai.Client(**kwargs)
+    else:  # pragma: no cover
+        raise ValueError(f"famille inconnue: {family}")
+
+    _CLIENTS_BY_CONFIG[key] = client
+    return client
+
+
+# -----------------------------
 # Mistral agent singleton (par model_version)
 # -----------------------------
 _MISTRAL_AGENT_SINGLETON_BY_MODEL_VERSION: dict[str, Any] = {}

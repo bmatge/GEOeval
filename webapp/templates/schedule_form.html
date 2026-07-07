@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Programmer un run{% endblock %}
+{% block content %}
+<h1>Programmer un run</h1>
+<p class="fr-hint-text">Le run sera lancé automatiquement à l'échéance (heure de Paris), puis
+évalué par le(s) juge(s), comme un lancement manuel.</p>
+
+<form method="post" action="/schedules/new" class="fr-mt-2w">
+  <div class="fr-input-group" style="max-width: 30rem">
+    <label class="fr-label" for="name">Nom de la planification</label>
+    <input class="fr-input" id="name" name="name" required placeholder="baseline quotidienne">
+  </div>
+
+  {% include "_run_selection.html" %}
+
+  <fieldset class="fr-fieldset fr-mt-2w" aria-labelledby="sched-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="sched-legend">Récurrence</legend>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-once" name="schedule_kind" value="once" checked>
+        <label class="fr-label" for="kind-once">Une fois, le
+          <input class="fr-input fr-ml-1w" type="datetime-local" name="once_at" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-daily" name="schedule_kind" value="daily">
+        <label class="fr-label" for="kind-daily">Chaque jour à
+          <input class="fr-input fr-ml-1w" type="time" name="daily_time" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-weekly" name="schedule_kind" value="weekly">
+        <label class="fr-label" for="kind-weekly">Chaque
+          <select class="fr-select fr-ml-1w" name="weekly_weekday" style="display:inline-block;width:auto">
+            {% for d in weekdays %}<option value="{{ loop.index0 }}">{{ d }}</option>{% endfor %}
+          </select>
+          à <input class="fr-input fr-ml-1w" type="time" name="weekly_time" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-hours" name="schedule_kind" value="every_n_hours">
+        <label class="fr-label" for="kind-hours">Toutes les
+          <input class="fr-input fr-ml-1w" type="number" name="every_hours" value="24" min="1" max="720" style="display:inline-block;width:5rem">
+          heures (première exécution : dans N heures)
+        </label>
+      </div>
+    </div>
+  </fieldset>
+
+  <button type="submit" class="fr-btn fr-mt-2w">Programmer</button>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/schedules">Annuler</a>
+</form>
+{% endblock %}

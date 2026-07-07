@@ -17,9 +17,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
+import json
+
 from db import SessionLocal
 from load import load_tests
-from webapp import services
+from webapp import scheduler, services
 from webapp.jobs import manager
 
 logging.basicConfig(
@@ -32,6 +34,7 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="GEOeval")
+scheduler.start()
 
 
 def get_db():
@@ -234,23 +237,58 @@ def prompt_update(
 # Lancer un run
 # -----------------------------
 # Providers utilisables comme modèle TESTÉ (= dispatch de run.py, avec recherche
-# web). Les autres (ex. albert) ne peuvent servir que de juge.
+# web). Les autres (albert, compatible-openai…) ne peuvent servir que de juge.
 TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google"}
 
+# Providers proposés dans la page Modèles (pilotent le dispatch du code).
+PROVIDER_CHOICES = ["chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
 
-@app.get("/launch", response_class=HTMLResponse)
-def launch_form(request: Request, db: Session = Depends(get_db)):
+
+def _run_form_context(db: Session) -> dict:
+    """Contexte commun aux formulaires « lancer » et « planifier » un run."""
     models = services.list_models(db)
-    return render(
-        request,
-        "launch.html",
-        active="launch",
+    return dict(
         models=models,
         testable_models=[
             m for m in models if (m.model_name or "").lower() in TESTABLE_PROVIDERS
         ],
-        active_tests_count=len(load_tests(db)),
+        tests=load_tests(db),
     )
+
+
+def _parse_run_selection(
+    db: Session,
+    tested_models: list[str],
+    judge_models: list[str],
+    repeats: int,
+    test_ids: list[int],
+) -> dict:
+    """Valide la sélection commune (modèles, juges, tests) et renvoie les params job."""
+    if not tested_models or not judge_models:
+        raise HTTPException(
+            status_code=400,
+            detail="Sélectionne au moins un modèle testé et un juge.",
+        )
+    all_active_ids = [t.test_id for t in load_tests(db)]
+    if not all_active_ids:
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun test actif et prêt : active ou crée des tests avant de lancer un run.",
+        )
+    if not test_ids:
+        raise HTTPException(status_code=400, detail="Sélectionne au moins un test.")
+    # Tous les tests actifs cochés => None (la planification suivra les tests
+    # créés/désactivés ensuite, au lieu de figer la liste).
+    selected: Optional[list[int]] = None if set(test_ids) >= set(all_active_ids) else test_ids
+    judges = [{"model": v, "repeats": max(1, repeats)} for v in judge_models]
+    return dict(tested_models=tested_models, judges=judges, test_ids=selected)
+
+
+@app.get("/launch", response_class=HTMLResponse)
+def launch_form(request: Request, db: Session = Depends(get_db)):
+    ctx = _run_form_context(db)
+    return render(request, "launch.html", active="launch",
+                  active_tests_count=len(ctx["tests"]), **ctx)
 
 
 @app.post("/launch")
@@ -260,22 +298,231 @@ def launch_submit(
     judge_models: list[str] = Form(default=[]),
     repeats: int = Form(1),
     note: str = Form(""),
+    test_ids: list[int] = Form(default=[]),
 ):
-    if not tested_models or not judge_models:
+    params = _parse_run_selection(db, tested_models, judge_models, repeats, test_ids)
+    job = manager.submit(dict(**params, note=note or None))
+    return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+
+# -----------------------------
+# Modèles (catalogue + accès API)
+# -----------------------------
+def _parse_headers(raw: str) -> Optional[dict]:
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    try:
+        obj = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=400, detail=f"En-têtes HTTP : JSON invalide ({exc}).")
+    if not isinstance(obj, dict) or not all(isinstance(v, str) for v in obj.values()):
         raise HTTPException(
             status_code=400,
-            detail="Sélectionne au moins un modèle testé et un juge.",
+            detail='En-têtes HTTP : objet JSON attendu, valeurs texte (ex. {"X-Api-Version": "2"}).',
         )
-    if not load_tests(db):
-        raise HTTPException(
-            status_code=400,
-            detail="Aucun test actif et prêt : active ou crée des tests avant de lancer un run.",
-        )
-    judges = [{"model": v, "repeats": max(1, repeats)} for v in judge_models]
+    return obj
+
+
+@app.get("/models", response_class=HTMLResponse)
+def models_list(request: Request, db: Session = Depends(get_db)):
+    models = services.list_models(db, active_only=False)
+    refs = {m.model_id: services.model_run_refs(db, m.model_id) for m in models}
+    return render(request, "models.html", active="models", models=models, refs=refs)
+
+
+@app.get("/models/new", response_class=HTMLResponse)
+def model_new_form(request: Request):
+    return render(request, "model_form.html", active="models",
+                  model=None, providers=PROVIDER_CHOICES)
+
+
+@app.post("/models/new")
+def model_new_submit(
+    db: Session = Depends(get_db),
+    model_name: str = Form(...),
+    model_version: str = Form(...),
+    base_url: str = Form(""),
+    api_key: str = Form(""),
+    extra_headers: str = Form(""),
+):
+    services.create_model(
+        db,
+        model_name=model_name.strip(),
+        model_version=model_version.strip(),
+        base_url=base_url.strip(),
+        api_key=api_key.strip(),
+        extra_headers=_parse_headers(extra_headers),
+    )
+    return RedirectResponse("/models", status_code=303)
+
+
+@app.get("/models/{model_id}/edit", response_class=HTMLResponse)
+def model_edit_form(model_id: int, request: Request, db: Session = Depends(get_db)):
+    model = services.get_model(db, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Modèle introuvable.")
+    return render(request, "model_form.html", active="models",
+                  model=model, providers=PROVIDER_CHOICES)
+
+
+@app.post("/models/{model_id}/edit")
+def model_edit_submit(
+    model_id: int,
+    db: Session = Depends(get_db),
+    model_name: str = Form(...),
+    model_version: str = Form(...),
+    base_url: str = Form(""),
+    api_key: str = Form(""),
+    clear_api_key: bool = Form(False),
+    extra_headers: str = Form(""),
+):
+    services.update_model(
+        db,
+        model_id,
+        model_name=model_name.strip(),
+        model_version=model_version.strip(),
+        base_url=base_url.strip(),
+        api_key=api_key.strip(),
+        clear_api_key=clear_api_key,
+        extra_headers=_parse_headers(extra_headers),
+    )
+    return RedirectResponse("/models", status_code=303)
+
+
+@app.post("/models/{model_id}/deactivate")
+def model_deactivate(model_id: int, db: Session = Depends(get_db)):
+    services.set_model_active(db, model_id, False)
+    return RedirectResponse("/models", status_code=303)
+
+
+@app.post("/models/{model_id}/reactivate")
+def model_reactivate(model_id: int, db: Session = Depends(get_db)):
+    services.set_model_active(db, model_id, True)
+    return RedirectResponse("/models", status_code=303)
+
+
+@app.post("/models/{model_id}/delete")
+def model_delete(model_id: int, db: Session = Depends(get_db)):
+    try:
+        services.delete_model(db, model_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    return RedirectResponse("/models", status_code=303)
+
+
+# -----------------------------
+# Runs programmés
+# -----------------------------
+@app.get("/schedules", response_class=HTMLResponse)
+def schedules_list(request: Request, db: Session = Depends(get_db)):
+    schedules = services.list_schedules(db)
+    return render(
+        request, "schedules.html", active="schedules",
+        schedules=schedules, describe=scheduler.describe_schedule, tz=scheduler.TZ_PARIS,
+    )
+
+
+@app.get("/schedules/new", response_class=HTMLResponse)
+def schedule_new_form(request: Request, db: Session = Depends(get_db)):
+    ctx = _run_form_context(db)
+    return render(request, "schedule_form.html", active="schedules",
+                  weekdays=scheduler.WEEKDAYS_FR, **ctx)
+
+
+@app.post("/schedules/new")
+def schedule_new_submit(
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    tested_models: list[str] = Form(default=[]),
+    judge_models: list[str] = Form(default=[]),
+    repeats: int = Form(1),
+    note: str = Form(""),
+    test_ids: list[int] = Form(default=[]),
+    schedule_kind: str = Form(...),
+    once_at: str = Form(""),
+    daily_time: str = Form(""),
+    weekly_weekday: int = Form(0),
+    weekly_time: str = Form(""),
+    every_hours: int = Form(24),
+):
+    params = _parse_run_selection(db, tested_models, judge_models, repeats, test_ids)
+
+    if schedule_kind == "once":
+        if not once_at:
+            raise HTTPException(status_code=400, detail="Indique la date et l'heure d'exécution.")
+        config = {"at": once_at}
+    elif schedule_kind == "daily":
+        if not daily_time:
+            raise HTTPException(status_code=400, detail="Indique l'heure quotidienne.")
+        config = {"time": daily_time}
+    elif schedule_kind == "weekly":
+        if not weekly_time:
+            raise HTTPException(status_code=400, detail="Indique le jour et l'heure hebdomadaires.")
+        config = {"weekday": weekly_weekday, "time": weekly_time}
+    elif schedule_kind == "every_n_hours":
+        if every_hours < 1:
+            raise HTTPException(status_code=400, detail="L'intervalle doit être d'au moins 1 heure.")
+        config = {"hours": every_hours}
+    else:
+        raise HTTPException(status_code=400, detail=f"Type de planification inconnu : {schedule_kind!r}.")
+
+    next_run = scheduler.compute_next_run(schedule_kind, config)
+    if next_run is None:
+        raise HTTPException(status_code=400, detail="La date d'exécution est déjà passée.")
+
+    services.create_schedule(
+        db,
+        name=name.strip(),
+        tested_models=params["tested_models"],
+        judges=params["judges"],
+        test_ids=params["test_ids"],
+        note=note or None,
+        schedule_kind=schedule_kind,
+        schedule_config=config,
+        next_run_at=next_run,
+    )
+    return RedirectResponse("/schedules", status_code=303)
+
+
+@app.post("/schedules/{schedule_id}/toggle")
+def schedule_toggle(schedule_id: int, db: Session = Depends(get_db)):
+    sr = services.get_schedule(db, schedule_id)
+    if sr is None:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
+    if sr.enabled:
+        services.set_schedule_enabled(db, schedule_id, False)
+    else:
+        next_run = scheduler.compute_next_run(sr.schedule_kind, sr.schedule_config)
+        if next_run is None:
+            raise HTTPException(
+                status_code=400,
+                detail="Impossible de réactiver : la date one-shot est passée. Crée une nouvelle planification.",
+            )
+        services.set_schedule_enabled(db, schedule_id, True, next_run_at=next_run)
+    return RedirectResponse("/schedules", status_code=303)
+
+
+@app.post("/schedules/{schedule_id}/run-now")
+def schedule_run_now(schedule_id: int, db: Session = Depends(get_db)):
+    sr = services.get_schedule(db, schedule_id)
+    if sr is None:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
     job = manager.submit(
-        dict(tested_models=tested_models, judges=judges, note=note or None)
+        dict(
+            tested_models=list(sr.tested_models),
+            judges=list(sr.judges),
+            note=sr.note or f"planifié : {sr.name} (manuel)",
+            test_ids=list(sr.test_ids) if sr.test_ids else None,
+        )
     )
     return RedirectResponse(f"/jobs/{job.id}", status_code=303)
+
+
+@app.post("/schedules/{schedule_id}/delete")
+def schedule_delete(schedule_id: int, db: Session = Depends(get_db)):
+    services.delete_schedule(db, schedule_id)
+    return RedirectResponse("/schedules", status_code=303)
 
 
 # -----------------------------
