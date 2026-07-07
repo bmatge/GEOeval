@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Prompts d'évaluation{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
+  <div class="fr-col"><h1>Prompts d'évaluation</h1></div>
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/prompts/new">Nouveau prompt</a></div>
+</div>
+<p class="fr-hint-text">Rubriques utilisées par les juges. Le schéma JSON de sortie est ajouté automatiquement à l'exécution.</p>
+
+{% if prompts %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>#</th><th>Nom</th><th>Type</th><th>Texte</th><th></th></tr></thead>
+    <tbody>
+      {% for p in prompts %}
+      <tr>
+        <td>{{ p.prompt_id }}</td>
+        <td>{{ p.prompt_name }}</td>
+        <td><p class="fr-badge fr-badge--sm fr-badge--blue-ecume">{{ p.prompt_type_label }}</p></td>
+        <td class="fr-text--sm">{{ p.prompt_text|truncate(120) }}</td>
+        <td><a class="fr-link" href="/prompts/{{ p.prompt_id }}/edit">Éditer</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fr-callout"><p class="fr-callout__text">Aucun prompt d'évaluation.</p></div>
+{% endif %}
+{% endblock %}

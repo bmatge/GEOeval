@@ -2,15 +2,14 @@ from __future__ import annotations
 
 import re
 from datetime import date
-from typing import Any, Optional
+from typing import Any, Callable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from models import Test, Model, RunRow, RunResult
 
-import llm_clients 
-from google.genai import types
+import llm_clients
 import time
 import logging
 logger = logging.getLogger(__name__)
@@ -184,6 +183,8 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
     # 3) Gemini (GoogleSearch activé)
     if model_name in {"gemini", "google"}:
+        from google.genai import types
+
         client = llm_clients.get_gemini_client_singleton()
 
         def _do() -> str:
@@ -222,21 +223,27 @@ def execute_run(
     tested_model: int | str,
     tests: list[Test],
     run_meta: Optional[dict[str, Any]] = None,
+    progress_cb: Optional[Callable[[int, int, str], None]] = None,
 ) -> int:
     """
     Exécute un run et écrit runs + run_results.
 
     tested_model : model_id (int) OU model_version (str, ex. 'gpt-5.2').
+    progress_cb  : callback optionnel (current, total, detail) appelé après
+                   chaque test (utilisé par l'UI pour le suivi de progression).
     Retourne run_id.
     """
     tested_model = resolve_model(session, tested_model)
 
     # 1) Appels LLM -> mémoire
+    total = len(tests)
     results: list[tuple[int, str, Optional[list[str]]]] = []
-    for t in tests:
+    for i, t in enumerate(tests, start=1):
         answer = call_tested_llm(tested_model, t.prompt)
         citations = extract_urls(answer)
         results.append((t.test_id, answer, citations if citations else None))
+        if progress_cb is not None:
+            progress_cb(i, total, f"test {t.test_id}")
 
     # 2) Écriture DB
     run_row = RunRow(tested_model_id=tested_model.model_id, run_meta=run_meta)

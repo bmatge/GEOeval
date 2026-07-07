@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}{{ "Éditer" if prompt else "Nouveau" }} prompt{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/prompts">Retour aux prompts</a>
+<h1 class="fr-mt-2w">{{ "Éditer le prompt " ~ prompt.prompt_id if prompt else "Nouveau prompt d'évaluation" }}</h1>
+
+<form method="post" action="{{ '/prompts/' ~ prompt.prompt_id ~ '/edit' if prompt else '/prompts/new' }}" class="fr-mt-2w">
+  <div class="fr-input-group">
+    <label class="fr-label" for="prompt_name">Nom</label>
+    <input class="fr-input" id="prompt_name" name="prompt_name" required
+           value="{{ prompt.prompt_name if prompt else '' }}">
+  </div>
+
+  <div class="fr-select-group">
+    <label class="fr-label" for="prompt_type_id">Type</label>
+    <select class="fr-select" id="prompt_type_id" name="prompt_type_id" required>
+      {% for pt in prompt_types %}
+      <option value="{{ pt.prompt_type_id }}" {% if prompt and prompt.prompt_type_id == pt.prompt_type_id %}selected{% endif %}>
+        {{ pt.prompt_type_label }}
+      </option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="prompt_text">Texte de la rubrique
+      <span class="fr-hint-text">Instructions données au juge (barème 0–10, critères…).</span>
+    </label>
+    <textarea class="fr-input" id="prompt_text" name="prompt_text" rows="8" required>{{ prompt.prompt_text if prompt else "" }}</textarea>
+  </div>
+
+  <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
+</form>
+{% endblock %}

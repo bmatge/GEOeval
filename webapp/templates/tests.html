@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Tests{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
+  <div class="fr-col"><h1>Tests</h1></div>
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/tests/new">Nouveau test</a></div>
+</div>
+
+{% if tests %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr><th>#</th><th>Question</th><th>Réponse attendue</th><th>État</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tests %}
+      <tr>
+        <td>{{ t.test_id }}</td>
+        <td>{{ t.prompt|truncate(90) }}</td>
+        <td>{{ (t.expected_answer or "—")|truncate(50) }}</td>
+        <td>
+          {% if t.validity_end_at is none %}
+            <p class="fr-badge fr-badge--success fr-badge--sm">actif</p>
+          {% else %}
+            <p class="fr-badge fr-badge--sm">inactif</p>
+          {% endif %}
+        </td>
+        <td>
+          <a class="fr-link fr-mr-2w" href="/tests/{{ t.test_id }}/edit">Éditer</a>
+          {% if t.validity_end_at is none %}
+          <form method="post" action="/tests/{{ t.test_id }}/deactivate" style="display:inline">
+            <button type="submit" class="fr-link">Désactiver</button>
+          </form>
+          {% else %}
+          <form method="post" action="/tests/{{ t.test_id }}/reactivate" style="display:inline">
+            <button type="submit" class="fr-link">Réactiver</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fr-callout"><p class="fr-callout__text">Aucun test. Crée-en un pour démarrer un benchmark.</p></div>
+{% endif %}
+{% endblock %}
