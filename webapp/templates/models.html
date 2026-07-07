@@ -19,6 +19,7 @@
         <th>URL de base</th>
         <th>Clé API</th>
         <th>En-têtes</th>
+        <th>Juge</th>
         <th>Historique</th>
         <th>Actions</th>
       </tr>
@@ -32,6 +33,15 @@
         <td>{% if m.base_url %}<code>{{ m.base_url }}</code>{% else %}<span class="fr-hint-text">défaut</span>{% endif %}</td>
         <td>{% if m.api_key %}•••• (en base){% else %}<span class="fr-hint-text">env</span>{% endif %}</td>
         <td>{% if m.extra_headers %}{{ m.extra_headers | length }} en-tête(s){% else %}—{% endif %}</td>
+        <td>
+          <form method="post" action="/models/{{ m.model_id }}/toggle-judge" style="display:inline">
+            <button class="fr-btn fr-btn--sm {{ 'fr-btn--secondary' if m.is_judge else 'fr-btn--tertiary' }}"
+                    title="{{ 'Retirer des juges proposés' if m.is_judge else 'Proposer comme juge' }}"
+                    aria-pressed="{{ 'true' if m.is_judge else 'false' }}">
+              {{ '✓ juge' if m.is_judge else '✗ non' }}
+            </button>
+          </form>
+        </td>
         <td>{{ refs[m.model_id] }} réf.</td>
         <td>
           <a class="fr-btn fr-btn--sm fr-btn--secondary" href="/models/{{ m.model_id }}/edit">Modifier</a>

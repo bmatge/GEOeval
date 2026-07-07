@@ -52,6 +52,8 @@ class Model(Base):
     extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     # Désactivé = masqué des formulaires (l'historique des runs reste intact).
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    # Proposé (ou non) dans la colonne « Juges » des formulaires lancer/planifier.
+    is_judge: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
 
 
 class ScheduledRun(Base):

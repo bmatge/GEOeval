@@ -1,5 +1,5 @@
 {# Sélection commune modèles testés / juges / tests — utilisée par launch.html
-   et schedule_form.html. Attend : testable_models, models, tests. #}
+   et schedule_form.html. Attend : testable_models, judgeable_models, tests. #}
 <div class="fr-grid-row fr-grid-row--gutters">
   <div class="fr-col-12 fr-col-md-6">
     <fieldset class="fr-fieldset" aria-labelledby="tested-legend">
@@ -18,7 +18,7 @@
   <div class="fr-col-12 fr-col-md-6">
     <fieldset class="fr-fieldset" aria-labelledby="judge-legend">
       <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Juges (LLM-as-a-judge)</legend>
-      {% for m in models %}
+      {% for m in judgeable_models %}
       <div class="fr-fieldset__element">
         <div class="fr-checkbox-group">
           <input type="checkbox" id="judge-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}">
