@@ -210,7 +210,8 @@ Pages disponibles :
 
 | Page | Rôle |
 | --- | --- |
-| **Tableau de bord** (`/`) | Classement des modèles par score moyen (réponse / citation) + derniers runs. |
+| **Accueil** (`/`) | Présentation : hero, « comment ça marche » (3 étapes), guide d'utilisation, compteurs. |
+| **Tableau de bord** (`/dashboard`) | Classement des modèles par score moyen (réponse / citation) + derniers runs. |
 | **Runs** (`/runs`, `/runs/{id}`) | Liste des runs et détail : question → réponse → sources → notes des juges. |
 | **Tests** (`/tests`) | Création / édition / (dé)activation des tests (questions + réponses attendues). |
 | **Prompts d'évaluation** (`/prompts`) | Gestion des rubriques utilisées par les juges. |

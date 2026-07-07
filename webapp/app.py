@@ -57,9 +57,24 @@ def render(request: Request, template: str, active: str, **ctx) -> HTMLResponse:
 
 
 # -----------------------------
-# Tableau de bord
+# Accueil (présentation)
 # -----------------------------
 @app.get("/", response_class=HTMLResponse)
+def home(request: Request, db: Session = Depends(get_db)):
+    return render(
+        request,
+        "home.html",
+        active="home",
+        n_models=len(services.list_models(db)),
+        n_tests=len(load_tests(db)),
+        n_runs=len(services.list_runs(db)),
+    )
+
+
+# -----------------------------
+# Tableau de bord
+# -----------------------------
+@app.get("/dashboard", response_class=HTMLResponse)
 def dashboard(request: Request, db: Session = Depends(get_db)):
     return render(
         request,
