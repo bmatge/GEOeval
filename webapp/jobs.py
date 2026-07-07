@@ -120,6 +120,11 @@ class JobManager:
                 # PHASE RUN
                 with SessionLocal() as session:
                     tests = load_tests(session, active_only=True, ready_only=True)
+                    if not tests:
+                        raise ValueError(
+                            "Aucun test actif et prêt : active ou crée des tests "
+                            "avant de lancer un run."
+                        )
 
                     def run_cb(cur: int, tot: int, detail: str, _tm=tm) -> None:
                         job.phase = f"RUN {_tm} · {detail}"

@@ -56,7 +56,16 @@
   </div>
   {% endif %}
 
-  <button type="submit" class="fr-btn fr-mt-2w" {% if not models %}disabled{% endif %}>Lancer le run</button>
+  {% if active_tests_count == 0 %}
+  <div class="fr-callout fr-callout--brown-caramel">
+    <p class="fr-callout__text">
+      Aucun test actif et prêt : le run n'aurait aucune question à poser.
+      <a class="fr-link" href="/tests">Active ou crée des tests</a> avant de lancer un run.
+    </p>
+  </div>
+  {% endif %}
+
+  <button type="submit" class="fr-btn fr-mt-2w" {% if not models or active_tests_count == 0 %}disabled{% endif %}>Lancer le run</button>
   <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/jobs">Voir les jobs</a>
 </form>
 {% endblock %}

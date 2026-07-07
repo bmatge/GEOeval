@@ -18,6 +18,7 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
 
 from db import SessionLocal
+from load import load_tests
 from webapp import services
 from webapp.jobs import manager
 
@@ -234,11 +235,18 @@ def prompt_update(
 # -----------------------------
 @app.get("/launch", response_class=HTMLResponse)
 def launch_form(request: Request, db: Session = Depends(get_db)):
-    return render(request, "launch.html", active="launch", models=services.list_models(db))
+    return render(
+        request,
+        "launch.html",
+        active="launch",
+        models=services.list_models(db),
+        active_tests_count=len(load_tests(db)),
+    )
 
 
 @app.post("/launch")
 def launch_submit(
+    db: Session = Depends(get_db),
     tested_models: list[str] = Form(default=[]),
     judge_models: list[str] = Form(default=[]),
     repeats: int = Form(1),
@@ -248,6 +256,11 @@ def launch_submit(
         raise HTTPException(
             status_code=400,
             detail="Sélectionne au moins un modèle testé et un juge.",
+        )
+    if not load_tests(db):
+        raise HTTPException(
+            status_code=400,
+            detail="Aucun test actif et prêt : active ou crée des tests avant de lancer un run.",
         )
     judges = [{"model": v, "repeats": max(1, repeats)} for v in judge_models]
     job = manager.submit(
