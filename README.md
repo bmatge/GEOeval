@@ -244,8 +244,10 @@ Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :
   un nom **ou** un id pour le modèle testé. `main.py` utilise maintenant les noms de modèles.
 - **Extraction de citations naïve** : simple regex sur les URLs du texte, indépendante des
   métadonnées de sources renvoyées par les API (OpenAI renvoie pourtant `web_search_call.action.sources`).
-- **Retry trop large** : `retry_exceptions = (Exception,)` réessaie même des erreurs non transitoires
-  (ex. clé API invalide, erreurs de validation).
+- ✅ **Corrigé — retry trop large** : `call_with_retry` remonte désormais immédiatement
+  (`LLMCallError`, sans retry) les erreurs non transitoires : HTTP 400/401/403/404/422 et les
+  429 « quota dur » (plan/facturation, `limit: 0`). Les vrais rate limits par minute et les
+  erreurs réseau restent réessayés avec backoff.
 - **Imports morts** dans `evaluate.py` (`Model`, `Tuple`, `List`) et un `__import__("google.genai")`
   contourné pour accéder à `types` dans la branche Gemini du juge.
 
