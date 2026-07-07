@@ -30,6 +30,32 @@ def get_model(session: Session, model_id: int) -> Model:
     return model
 
 
+def get_model_by_version(session: Session, model_version: str) -> Model:
+    stmt = select(Model).where(Model.model_version == model_version)
+    models = session.execute(stmt).scalars().all()
+    if not models:
+        raise ValueError(f"model_version={model_version!r} introuvable dans models")
+    if len(models) > 1:
+        ids = ", ".join(str(m.model_id) for m in models)
+        raise ValueError(
+            f"model_version={model_version!r} ambigu (plusieurs model_id: {ids})"
+        )
+    return models[0]
+
+
+def resolve_model(session: Session, ref: int | str) -> Model:
+    """
+    Résout un modèle depuis un model_id (int) OU un model_version (str, ex. 'gpt-5.2').
+    """
+    if isinstance(ref, bool):  # bool est un int en Python : à exclure explicitement
+        raise TypeError("ref modèle invalide (bool)")
+    if isinstance(ref, int):
+        return get_model(session, ref)
+    if isinstance(ref, str):
+        return get_model_by_version(session, ref)
+    raise TypeError(f"ref modèle invalide: {ref!r} (attendu int model_id ou str model_version)")
+
+
 # -----------------------------
 # Text helpers
 # -----------------------------
@@ -193,15 +219,17 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
 def execute_run(
     session: Session,
-    tested_model_id: int,
+    tested_model: int | str,
     tests: list[Test],
     run_meta: Optional[dict[str, Any]] = None,
 ) -> int:
     """
     Exécute un run et écrit runs + run_results.
+
+    tested_model : model_id (int) OU model_version (str, ex. 'gpt-5.2').
     Retourne run_id.
     """
-    tested_model = get_model(session, tested_model_id)
+    tested_model = resolve_model(session, tested_model)
 
     # 1) Appels LLM -> mémoire
     results: list[tuple[int, str, Optional[list[str]]]] = []
@@ -211,7 +239,7 @@ def execute_run(
         results.append((t.test_id, answer, citations if citations else None))
 
     # 2) Écriture DB
-    run_row = RunRow(tested_model_id=tested_model_id, run_meta=run_meta)
+    run_row = RunRow(tested_model_id=tested_model.model_id, run_meta=run_meta)
     session.add(run_row)
     session.flush()
     run_id = run_row.run_id

@@ -1,0 +1,11 @@
+# --- Base de données ---
+SQLAlchemy>=2.0
+psycopg2-binary>=2.9      # driver PostgreSQL (alternative: psycopg[binary])
+
+# --- Configuration ---
+python-dotenv>=1.0
+
+# --- SDK LLM (installe seulement ceux dont tu as besoin) ---
+openai>=1.40             # modèles OpenAI / GPT (API Responses + web_search)
+mistralai>=1.0           # modèles Mistral (API Agents + web_search)
+google-genai>=0.3        # modèles Gemini (GoogleSearch)

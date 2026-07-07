@@ -1,0 +1,21 @@
+# Secrets & config locale
+.env
+
+# Logs
+geoeval.log
+geoeval.log.*
+*.log
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+env/
+.mypy_cache/
+.pytest_cache/
+
+# OS / éditeurs
+.DS_Store
+.idea/
+.vscode/

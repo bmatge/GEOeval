@@ -12,7 +12,8 @@ from sqlalchemy.orm import Session, aliased
 
 from models import Model, Test, RunResult, RunEvaluation, EvaluationPrompt
 
-import llm_clients  
+import llm_clients
+from run import resolve_model
 import time
 import logging
 logger = logging.getLogger(__name__)
@@ -22,6 +23,44 @@ logger = logging.getLogger(__name__)
 class JudgeRunConfig:
     judge_model_id: int
     n_runs: int
+
+
+# -----------------------------
+# Normalisation des juges
+# -----------------------------
+# Un "juge" peut être fourni de plusieurs façons (todo.md) :
+#   - JudgeRunConfig(judge_model_id=2, n_runs=2)          (rétro-compatibilité)
+#   - {"model_id": 2, "repeats": 2}
+#   - {"model": "gpt-5.2", "repeats": 2}                  (résolution nom -> model_id)
+# Alias acceptés : "repeats" ou "n_runs" pour le nombre de passages.
+JudgeSpec = "JudgeRunConfig | dict[str, Any]"
+
+
+def _normalize_judges(
+    session: Session, judges: list[Any]
+) -> list[tuple[Model, int]]:
+    normalized: list[tuple[Model, int]] = []
+    for spec in judges:
+        if isinstance(spec, JudgeRunConfig):
+            model = resolve_model(session, spec.judge_model_id)
+            repeats = spec.n_runs
+        elif isinstance(spec, dict):
+            repeats = int(spec.get("repeats", spec.get("n_runs", 1)))
+            if "model_id" in spec:
+                model = resolve_model(session, int(spec["model_id"]))
+            elif "model" in spec:
+                model = resolve_model(session, str(spec["model"]))
+            else:
+                raise ValueError(
+                    f"Spec juge invalide {spec!r}: clé 'model' ou 'model_id' requise"
+                )
+        else:
+            raise TypeError(f"Spec juge non supportée: {spec!r}")
+
+        if repeats < 1:
+            raise ValueError(f"repeats/n_runs doit être >= 1 (reçu {repeats})")
+        normalized.append((model, repeats))
+    return normalized
 
 
 # -----------------------------
@@ -117,7 +156,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
             )
             return resp.output_text or ""
 
-        respo=nse = llm_clients.call_with_retry(
+        response = llm_clients.call_with_retry(
             _do,
             retry_exceptions=llm_clients.OPENAI_RETRY_EXCEPTIONS,
             max_retries=8,
@@ -127,7 +166,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response 
+        return response
 
     # Mistral (sans agents, sans web)
     if model_name in {"mistral", "mistralai"}:
@@ -188,15 +227,17 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     raise ValueError(f"Provider inconnu model_name={judge_model.model_name!r}")
 
-def evaluate_run(session: Session,run_id: int,judge_run_configs: list[JudgeRunConfig],) -> None:
+def evaluate_run(session: Session, run_id: int, judges: list[Any]) -> None:
     """
-    judge_run_configs: liste de configs (judge_model_id, n_runs)
-    Exemple:
-        [
-            JudgeRunConfig(judge_model_id=5, n_runs=3),
-            JudgeRunConfig(judge_model_id=4, n_runs=2),
-        ]
+    judges: liste de juges, chacun étant soit un JudgeRunConfig, soit un dict.
+    Exemples équivalents:
+        judges=[JudgeRunConfig(judge_model_id=5, n_runs=3)]
+        judges=[{"model_id": 5, "repeats": 3}]
+        judges=[{"model": "gemini-2.5-pro", "repeats": 3},
+                {"model": "gpt-5.2", "repeats": 1}]
+    Le nom de modèle est résolu en model_id via la table `models`.
     """
+    judge_specs = _normalize_judges(session, judges)
 
     ResponsePrompt = aliased(EvaluationPrompt)
     CitationPrompt = aliased(EvaluationPrompt)
@@ -212,22 +253,10 @@ def evaluate_run(session: Session,run_id: int,judge_run_configs: list[JudgeRunCo
     if not rows:
         raise ValueError(f"Aucun run_results pour run_id={run_id}")
 
-    # Préchargement des modèles juges
-    judge_model_ids = sorted({cfg.judge_model_id for cfg in judge_run_configs})
-    stmt_models = select(Model).where(Model.model_id.in_(judge_model_ids))
-    judge_models_by_id = {
-        m.model_id: m for m in session.execute(stmt_models).scalars().all()
-    }
+    # Double boucle : juge (modèle, repeats) × index de run
+    for judge_model, repeats in judge_specs:
 
-    missing = [mid for mid in judge_model_ids if mid not in judge_models_by_id]
-    if missing:
-        raise ValueError(f"judge_model_id inconnus dans models: {missing}")
-
-    # Double boucle : config (modèle, n_runs) × index de run
-    for cfg in judge_run_configs:
-        judge_model = judge_models_by_id[cfg.judge_model_id]
-
-        for judge_run_index in range(1, cfg.n_runs + 1):
+        for judge_run_index in range(1, repeats + 1):
 
             for run_result, test, response_prompt_text, citation_prompt_text in rows:
                 if not test.expected_answer:
@@ -271,7 +300,7 @@ def evaluate_run(session: Session,run_id: int,judge_run_configs: list[JudgeRunCo
                 payload = dict(
                     run_id=run_id,
                     test_id=test.test_id,
-                    judge_model_id=cfg.judge_model_id,
+                    judge_model_id=judge_model.model_id,
                     judge_run_index=judge_run_index,
                     response_quality_label=response_quality.label,
                     response_quality_score=response_quality.score,
