@@ -1,24 +1,41 @@
-# PostgreSQL local pour GEOeval.
+# Déploiement VibeLab (contrat spawn) : service web sur :3000 derrière Traefik
+# + PostgreSQL interne (non exposé). Les clés API sont lues depuis le .env du
+# dossier de déploiement (/opt/apps/<nom>/.env sur le VPS), jamais commité.
 #
-#   docker compose up -d          # démarre la base
-#   python init_db.py             # crée le schéma
-#   psql "$DATABASE_URL" -f seed.sql   # (ou via le conteneur, voir README)
-#
-# DATABASE_URL correspondant (à mettre dans .env) :
-#   postgresql+psycopg2://geoeval:geoeval@localhost:5432/geoeval
+# Pour le dev local (Postgres seul sur localhost:5432) :
+#   docker compose -f docker-compose.local.yml up -d
 
 services:
+  web:
+    build: .
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg2://geoeval:geoeval@db:5432/geoeval
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [proxy, default]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=proxy
+      - traefik.http.routers.${APP_NAME}.rule=Host(`${DOMAIN}`)
+      - traefik.http.routers.${APP_NAME}.entrypoints=websecure
+      - traefik.http.routers.${APP_NAME}.tls.certresolver=letsencrypt
+      - traefik.http.services.${APP_NAME}.loadbalancer.server.port=3000
+
   db:
     image: postgres:16
-    container_name: geoeval-postgres
+    restart: unless-stopped
     environment:
       POSTGRES_USER: geoeval
       POSTGRES_PASSWORD: geoeval
       POSTGRES_DB: geoeval
-    ports:
-      - "5432:5432"
     volumes:
-      - geoeval_pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
+    networks: [default]
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U geoeval -d geoeval"]
       interval: 5s
@@ -26,4 +43,8 @@ services:
       retries: 10
 
 volumes:
-  geoeval_pgdata:
+  pgdata:
+
+networks:
+  proxy:
+    external: true

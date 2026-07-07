@@ -162,13 +162,13 @@ pip install -r requirements.txt
 cp .env.example .env         # puis remplir DATABASE_URL + clés API
 
 # 3. Base PostgreSQL (option A : Docker fourni)
-docker compose up -d         # PostgreSQL sur localhost:5432 (user/pass/db = geoeval)
+docker compose -f docker-compose.local.yml up -d   # PostgreSQL sur localhost:5432 (user/pass/db = geoeval)
 
 # 4. Schéma + données de démarrage
 python init_db.py            # crée les 7 tables (create_all)
 psql "postgresql://geoeval:geoeval@localhost:5432/geoeval" -f seed.sql
 #   (ou, sans psql local :)
-#   docker compose exec -T db psql -U geoeval -d geoeval < seed.sql
+#   docker compose -f docker-compose.local.yml exec -T db psql -U geoeval -d geoeval < seed.sql
 
 # 5. Exécuter
 python main.py               # run complet + évaluation
@@ -186,7 +186,9 @@ python mainUnitaire.py       # smoke test OpenAI web search (sans base)
 | `.env.example`       | Modèle de configuration (à copier en `.env`).                 |
 | `init_db.py`         | Crée le schéma (`--drop` pour tout recréer).                  |
 | `seed.sql`           | Données de démarrage (models, prompts d'éval, tests d'exemple).|
-| `docker-compose.yml` | PostgreSQL local prêt à l'emploi.                             |
+| `docker-compose.local.yml` | PostgreSQL local prêt à l'emploi (dev).                 |
+| `docker-compose.yml` | Déploiement complet (web + db) au contrat VibeLab/spawn.      |
+| `Dockerfile` + `docker-entrypoint.sh` | Image de l'UI web : attente DB, schéma, seed, uvicorn `:3000`. |
 
 ---
 
@@ -244,3 +246,19 @@ Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :
   (ex. clé API invalide, erreurs de validation).
 - **Imports morts** dans `evaluate.py` (`Model`, `Tuple`, `List`) et un `__import__("google.genai")`
   contourné pour accéder à `types` dans la branche Gemini du juge.
+
+---
+
+## Déploiement (VibeLab / spawn)
+
+Le `docker-compose.yml` racine suit le contrat spawn : service `web` (uvicorn `:3000`
+derrière Traefik) + PostgreSQL interne non exposé, schéma et seed appliqués
+automatiquement au démarrage (idempotent).
+
+```bash
+ssh vps "spawn up geoeval git@github.com:bmatge/GEOeval.git"
+```
+
+Les clés API (`OPENAI_API_KEY`, `MISTRAL_API_KEY`, `GEMINI_API_KEY`) ne sont pas
+commitées : les poser dans `/opt/apps/geoeval/.env` sur le VPS (survit aux `git pull`
+de spawn), puis relancer `spawn up geoeval` pour recharger l'environnement.
