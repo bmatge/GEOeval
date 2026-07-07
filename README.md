@@ -88,7 +88,7 @@ date du jour injectée, consigne de répondre plutôt que de demander une clarif
 ### Phase ÉVALUATION (`evaluate.py`)
 
 1. Jointure `run_results × tests × evaluation_prompts` (deux alias : prompt réponse + prompt citation).
-2. Pour chaque `JudgeRunConfig(judge_model_id, n_runs)` et chaque répétition :
+2. Pour chaque juge (spécifié par `model_id` ou nom de modèle + nombre de répétitions) et chaque répétition :
    - **Qualité réponse** : le juge reçoit le prompt d'éval + `[Réponse attendue]` + `[Réponse du modèle]`.
      La réponse attendue peut contenir plusieurs variantes séparées par le token `' OU '` → on garde la
      meilleure note.
@@ -197,9 +197,10 @@ Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :
 - ✅ **Corrigé — juge OpenAI** (`evaluate.py`, branche `openai`) : l'affectation chaînée
   involontaire `respo=nse = ...` provoquait un `NameError` (variable `response` inexistante) dès
   qu'un juge OpenAI était utilisé. Remplacée par `response = ...`.
-- **`todo.md`** : la signature de `evaluate_run` doit encore évoluer pour accepter des juges par
-  **nom de modèle** (`{"model": "gpt-5.2", "repeats": 2}`) avec résolution nom → `model_id` en interne.
-- **Modèles/juges codés en dur** dans `main.py` (ids `[2,3,4]` et juge `5`) — non paramétrable en CLI.
+- ✅ **Corrigé — `todo.md`** : `evaluate_run` accepte désormais des juges par **nom de modèle**
+  (`{"model": "gpt-5.2", "repeats": 2}`) ou par id (`{"model_id": 2, "repeats": 2}`), avec
+  résolution nom → `model_id` en interne (`resolve_model`). `execute_run` accepte aussi
+  un nom **ou** un id pour le modèle testé. `main.py` utilise maintenant les noms de modèles.
 - **Extraction de citations naïve** : simple regex sur les URLs du texte, indépendante des
   métadonnées de sources renvoyées par les API (OpenAI renvoie pourtant `web_search_call.action.sources`).
 - **Retry trop large** : `retry_exceptions = (Exception,)` réessaie même des erreurs non transitoires
