@@ -23,7 +23,9 @@ INSERT INTO models (model_id, model_name, model_version) VALUES
     (2, 'chatGPT', 'gpt-5.2'),               -- modèle testé
     (3, 'mistral', 'mistral-large-latest'),  -- modèle testé
     (4, 'gemini',  'gemini-pro-latest'),     -- modèle testé
-    (5, 'gemini',  'gemini-2.5-pro')         -- juge par défaut (cf. main.py)
+    (5, 'gemini',  'gemini-2.5-pro'),        -- juge par défaut (cf. main.py)
+    (6, 'albert',  'openweight-large'),      -- juge (API souveraine Etalab, sans web)
+    (7, 'albert',  'openweight-medium')      -- juge (API souveraine Etalab, sans web)
 ON CONFLICT (model_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------

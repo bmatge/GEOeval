@@ -14,6 +14,9 @@ services:
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Albert : fourni par les secrets partagés de la plateforme (SOPS, ADR-056)
+      ALBERT_API_KEY: ${ALBERT_API_KEY:-}
+      ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
     depends_on:
       db:
         condition: service_healthy

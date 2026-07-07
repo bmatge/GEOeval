@@ -143,6 +143,8 @@ Variables d'environnement (fichier `.env`, chargé via `python-dotenv`) :
 | `OPENAI_API_KEY`  | Clé API OpenAI.                          |
 | `MISTRAL_API_KEY` | Clé API Mistral.                         |
 | `GEMINI_API_KEY`  | Clé API Google Gemini.                   |
+| `ALBERT_API_KEY`  | Clé API Albert (Etalab, juge uniquement — sans recherche web). |
+| `ALBERT_BASE_URL` | Optionnel, défaut `https://albert.api.etalab.gouv.fr/v1`. |
 
 ### Dépendances (implicites — pas de `requirements.txt`)
 

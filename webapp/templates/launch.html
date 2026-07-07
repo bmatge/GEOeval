@@ -9,7 +9,7 @@
     <div class="fr-col-12 fr-col-md-6">
       <fieldset class="fr-fieldset" aria-labelledby="tested-legend">
         <legend class="fr-fieldset__legend fr-text--bold" id="tested-legend">Modèles testés (avec recherche web)</legend>
-        {% for m in models %}
+        {% for m in testable_models %}
         <div class="fr-fieldset__element">
           <div class="fr-checkbox-group">
             <input type="checkbox" id="tested-{{ m.model_id }}" name="tested_models" value="{{ m.model_version }}">

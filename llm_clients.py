@@ -25,6 +25,7 @@ if TYPE_CHECKING:  # pour les annotations uniquement (jamais exécuté au runtim
 _OPENAI_CLIENT_SINGLETON: Optional[OpenAI] = None
 _MISTRAL_CLIENT_SINGLETON: Optional[Mistral] = None
 _GEMINI_CLIENT_SINGLETON: Optional[genai.Client] = None
+_ALBERT_CLIENT_SINGLETON: Optional[OpenAI] = None
 
 
 def get_openai_client_singleton() -> "OpenAI":
@@ -52,6 +53,19 @@ def get_gemini_client_singleton() -> "genai.Client":
         from google import genai
         _GEMINI_CLIENT_SINGLETON = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _GEMINI_CLIENT_SINGLETON
+
+
+def get_albert_client_singleton() -> "OpenAI":
+    """Albert (API souveraine Etalab/DINUM), compatible OpenAI — client dédié."""
+    global _ALBERT_CLIENT_SINGLETON
+    if _ALBERT_CLIENT_SINGLETON is None:
+        from openai import OpenAI
+        _ALBERT_CLIENT_SINGLETON = OpenAI(
+            api_key=os.environ["ALBERT_API_KEY"],
+            # `or` (et non un défaut de .get) : compose peut poser la variable vide
+            base_url=os.environ.get("ALBERT_BASE_URL") or "https://albert.api.etalab.gouv.fr/v1",
+        )
+    return _ALBERT_CLIENT_SINGLETON
 
 
 # -----------------------------
@@ -133,4 +147,5 @@ def call_with_retry(
 # -----------------------------
 OPENAI_RETRY_EXCEPTIONS = (Exception,)
 GEMINI_RETRY_EXCEPTIONS = (Exception,)
-MISTRAL_RETRY_EXCEPTIONS = (Exception,) 
+MISTRAL_RETRY_EXCEPTIONS = (Exception,)
+ALBERT_RETRY_EXCEPTIONS = (Exception,) 

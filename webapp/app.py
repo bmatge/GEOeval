@@ -233,13 +233,22 @@ def prompt_update(
 # -----------------------------
 # Lancer un run
 # -----------------------------
+# Providers utilisables comme modèle TESTÉ (= dispatch de run.py, avec recherche
+# web). Les autres (ex. albert) ne peuvent servir que de juge.
+TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google"}
+
+
 @app.get("/launch", response_class=HTMLResponse)
 def launch_form(request: Request, db: Session = Depends(get_db)):
+    models = services.list_models(db)
     return render(
         request,
         "launch.html",
         active="launch",
-        models=services.list_models(db),
+        models=models,
+        testable_models=[
+            m for m in models if (m.model_name or "").lower() in TESTABLE_PROVIDERS
+        ],
         active_tests_count=len(load_tests(db)),
     )
 

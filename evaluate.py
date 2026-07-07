@@ -223,7 +223,35 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response 
+        return response
+
+    # Albert (API souveraine Etalab, compatible OpenAI — chat completions, sans web)
+    if model_name in {"albert", "etalab"}:
+        client = llm_clients.get_albert_client_singleton()
+
+        def _do() -> str:
+            resp = client.chat.completions.create(
+                model=judge_model.model_version,
+                messages=[
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                top_p=0.95,
+            )
+            return resp.choices[0].message.content or ""
+
+        response = llm_clients.call_with_retry(
+            _do,
+            retry_exceptions=llm_clients.ALBERT_RETRY_EXCEPTIONS,
+            max_retries=8,
+            base_sleep=1.0,
+            max_sleep=30.0,
+            success_delay=0.2,
+        )
+        end = time.perf_counter()
+        logger.info("call_judge_llm END (%.2f s)", end - start)
+        return response
 
     raise ValueError(f"Provider inconnu model_name={judge_model.model_name!r}")
 
