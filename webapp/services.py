@@ -252,6 +252,16 @@ def set_model_active(session: Session, model_id: int, active: bool) -> None:
     session.commit()
 
 
+def toggle_model_judge(session: Session, model_id: int) -> bool:
+    """Inverse le flag « juge » et renvoie la nouvelle valeur."""
+    model = session.get(Model, model_id)
+    if model is None:
+        raise ValueError(f"model_id={model_id} introuvable")
+    model.is_judge = not model.is_judge
+    session.commit()
+    return model.is_judge
+
+
 def delete_model(session: Session, model_id: int) -> None:
     """Suppression réelle, refusée si l'historique y fait référence."""
     if model_run_refs(session, model_id):

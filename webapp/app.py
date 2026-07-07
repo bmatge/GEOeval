@@ -252,6 +252,7 @@ def _run_form_context(db: Session) -> dict:
         testable_models=[
             m for m in models if (m.model_name or "").lower() in TESTABLE_PROVIDERS
         ],
+        judgeable_models=[m for m in models if m.is_judge],
         tests=load_tests(db),
     )
 
@@ -387,6 +388,12 @@ def model_edit_submit(
         clear_api_key=clear_api_key,
         extra_headers=_parse_headers(extra_headers),
     )
+    return RedirectResponse("/models", status_code=303)
+
+
+@app.post("/models/{model_id}/toggle-judge")
+def model_toggle_judge(model_id: int, db: Session = Depends(get_db)):
+    services.toggle_model_judge(db, model_id)
     return RedirectResponse("/models", status_code=303)
 
 
