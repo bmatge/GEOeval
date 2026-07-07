@@ -38,7 +38,10 @@ def get_openai_client_singleton() -> "OpenAI":
 def get_mistral_client_singleton() -> "Mistral":
     global _MISTRAL_CLIENT_SINGLETON
     if _MISTRAL_CLIENT_SINGLETON is None:
-        from mistralai import Mistral
+        try:
+            from mistralai import Mistral  # SDK v1.x
+        except ImportError:
+            from mistralai.client import Mistral  # SDK v2.x (namespace package)
         _MISTRAL_CLIENT_SINGLETON = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
     return _MISTRAL_CLIENT_SINGLETON
 
