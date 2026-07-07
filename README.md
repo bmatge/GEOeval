@@ -187,6 +187,7 @@ python mainUnitaire.py       # smoke test OpenAI web search (sans base)
 | `requirements.txt`   | Dépendances Python.                                            |
 | `.env.example`       | Modèle de configuration (à copier en `.env`).                 |
 | `init_db.py`         | Crée le schéma (`--drop` pour tout recréer).                  |
+| `migrations.sql`     | Migrations idempotentes (colonnes ajoutées aux tables existantes). |
 | `seed.sql`           | Données de démarrage (models, prompts d'éval, tests d'exemple).|
 | `docker-compose.local.yml` | PostgreSQL local prêt à l'emploi (dev).                 |
 | `docker-compose.yml` | Déploiement complet (web + db) au contrat VibeLab/spawn.      |
@@ -213,7 +214,9 @@ Pages disponibles :
 | **Runs** (`/runs`, `/runs/{id}`) | Liste des runs et détail : question → réponse → sources → notes des juges. |
 | **Tests** (`/tests`) | Création / édition / (dé)activation des tests (questions + réponses attendues). |
 | **Prompts d'évaluation** (`/prompts`) | Gestion des rubriques utilisées par les juges. |
-| **Lancer un run** (`/launch`) | Choix des modèles testés + juges + répétitions → exécution en tâche de fond. |
+| **Modèles** (`/models`) | Catalogue : ajout/édition/désactivation, URL de base, clé API (stockée masquée, repli sur l'env), en-têtes HTTP JSON. Provider « compatible-openai » pour brancher tout endpoint /chat/completions comme juge. |
+| **Lancer un run** (`/launch`) | Choix des modèles testés + juges + répétitions + tests à inclure → exécution en tâche de fond. |
+| **Planification** (`/schedules`) | Runs programmés : one-shot à date/heure, quotidien, hebdomadaire ou toutes les N heures (heure de Paris). Stockés en base (survivent aux redéploiements), scheduler intégré (poll 30 s). |
 | **Jobs** (`/jobs`, `/jobs/{id}`) | Suivi live d'un run (barre de progression + journal en temps réel). |
 
 Détails d'implémentation :

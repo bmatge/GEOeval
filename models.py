@@ -6,7 +6,7 @@ from decimal import Decimal
 from typing import Optional, Any
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Text, TIMESTAMP, ForeignKey, func, Numeric, Integer
+from sqlalchemy import Boolean, Text, TIMESTAMP, ForeignKey, func, Numeric, Integer
 from sqlalchemy.dialects.postgresql import JSONB
 
 
@@ -42,8 +42,40 @@ class Model(Base):
     __tablename__ = "models"
 
     model_id: Mapped[int] = mapped_column(primary_key=True)
-    model_name: Mapped[str] = mapped_column(Text, nullable=False)      # ex: "chatGPT"
+    model_name: Mapped[str] = mapped_column(Text, nullable=False)      # ex: "chatGPT" (provider, pilote le dispatch)
     model_version: Mapped[str] = mapped_column(Text, nullable=False)   # ex: "gpt-5.2" (id modèle API)
+
+    # Config d'accès optionnelle (page Modèles). Vide => repli sur les
+    # variables d'environnement / défauts du provider (llm_clients).
+    base_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    # Désactivé = masqué des formulaires (l'historique des runs reste intact).
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+
+
+class ScheduledRun(Base):
+    """Run programmé (one-shot ou récurrent), exécuté par webapp/scheduler.py."""
+    __tablename__ = "scheduled_runs"
+
+    schedule_id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+
+    tested_models: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)   # list[str] model_version
+    judges: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)          # [{"model": str, "repeats": int}]
+    test_ids: Mapped[Optional[list[Any]]] = mapped_column(JSONB, nullable=True)  # None = tous les tests actifs
+    note: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+    schedule_kind: Mapped[str] = mapped_column(Text, nullable=False)          # once | daily | weekly | every_n_hours
+    schedule_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_job_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
 
 
 class RunRow(Base):

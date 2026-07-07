@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier' if model else 'Ajouter' }} un modèle{% endblock %}
+{% block content %}
+<h1>{{ 'Modifier' if model else 'Ajouter' }} un modèle</h1>
+
+<form method="post" action="{{ '/models/%d/edit' % model.model_id if model else '/models/new' }}" class="fr-mt-2w" style="max-width: 40rem">
+  <div class="fr-select-group">
+    <label class="fr-label" for="model_name">Provider
+      <span class="fr-hint-text">Pilote le connecteur utilisé. « compatible-openai » = tout endpoint
+      /chat/completions compatible OpenAI (utilisable comme juge uniquement).</span>
+    </label>
+    <select class="fr-select" id="model_name" name="model_name" required>
+      {% for p in providers %}
+      <option value="{{ p }}" {% if model and model.model_name == p %}selected{% endif %}>{{ p }}</option>
+      {% endfor %}
+      {% if model and model.model_name not in providers %}
+      <option value="{{ model.model_name }}" selected>{{ model.model_name }}</option>
+      {% endif %}
+    </select>
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="model_version">Identifiant du modèle (côté API)
+      <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large</span>
+    </label>
+    <input class="fr-input" id="model_version" name="model_version" required
+           value="{{ model.model_version if model else '' }}">
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="base_url">URL de base (optionnel)
+      <span class="fr-hint-text">Vide = défaut du provider. Obligatoire pour « compatible-openai ».</span>
+    </label>
+    <input class="fr-input" id="base_url" name="base_url" type="url"
+           placeholder="https://exemple.fr/v1" value="{{ model.base_url or '' if model else '' }}">
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="api_key">Clé API (optionnel)
+      <span class="fr-hint-text">
+        {% if model and model.api_key %}Une clé est enregistrée (masquée). Laisse vide pour la conserver, saisis pour la remplacer.
+        {% else %}Vide = variable d'environnement du provider (OPENAI_API_KEY, MISTRAL_API_KEY…).{% endif %}
+      </span>
+    </label>
+    <input class="fr-input" id="api_key" name="api_key" type="password" autocomplete="off"
+           placeholder="{{ '••••••••' if model and model.api_key else '' }}">
+  </div>
+  {% if model and model.api_key %}
+  <div class="fr-checkbox-group fr-mb-2w">
+    <input type="checkbox" id="clear_api_key" name="clear_api_key" value="true">
+    <label class="fr-label" for="clear_api_key">Effacer la clé enregistrée (revenir à la variable d'environnement)</label>
+  </div>
+  {% endif %}
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="extra_headers">En-têtes HTTP additionnels (JSON, optionnel)
+      <span class="fr-hint-text">Objet JSON clé→valeur, ex. {"X-Api-Version": "2"}. Appliqués aux
+      providers OpenAI-compatibles et Gemini (ignorés par Mistral).</span>
+    </label>
+    <textarea class="fr-input" id="extra_headers" name="extra_headers" rows="3">{{ model.extra_headers | tojson if model and model.extra_headers else '' }}</textarea>
+  </div>
+
+  <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if model else 'Ajouter' }}</button>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/models">Annuler</a>
+</form>
+{% endblock %}

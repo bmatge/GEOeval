@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Planification{% endblock %}
+{% block content %}
+<h1>Runs programmés</h1>
+<p class="fr-hint-text">Les planifications sont stockées en base et survivent aux redéploiements.
+Heures affichées en heure de Paris.</p>
+
+<a class="fr-btn fr-mb-2w" href="/schedules/new">Programmer un run</a>
+
+{% if not schedules %}
+<div class="fr-callout">
+  <p class="fr-callout__text">Aucun run programmé pour l'instant.</p>
+</div>
+{% else %}
+<div class="fr-table fr-table--no-scroll">
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th>
+        <th>Récurrence</th>
+        <th>Modèles testés</th>
+        <th>Juges</th>
+        <th>Tests</th>
+        <th>Prochaine exécution</th>
+        <th>Dernière</th>
+        <th>État</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for s in schedules %}
+      <tr {% if not s.enabled %}style="opacity:.55"{% endif %}>
+        <td>{{ s.name }}</td>
+        <td>{{ describe(s.schedule_kind, s.schedule_config) }}</td>
+        <td>{% for v in s.tested_models %}<code>{{ v }}</code>{{ ", " if not loop.last }}{% endfor %}</td>
+        <td>{% for j in s.judges %}<code>{{ j.model }}</code>{% if j.repeats > 1 %}×{{ j.repeats }}{% endif %}{{ ", " if not loop.last }}{% endfor %}</td>
+        <td>{% if s.test_ids %}#{{ s.test_ids | join(', #') }}{% else %}tous les actifs{% endif %}</td>
+        <td>{% if s.next_run_at %}{{ s.next_run_at.astimezone(tz).strftime('%d/%m %H:%M') }}{% else %}—{% endif %}</td>
+        <td>
+          {% if s.last_run_at %}{{ s.last_run_at.astimezone(tz).strftime('%d/%m %H:%M') }}
+            {% if s.last_job_id %}<a class="fr-link fr-link--sm" href="/jobs/{{ s.last_job_id }}">job</a>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>{% if s.enabled %}<span class="fr-badge fr-badge--success fr-badge--sm">actif</span>{% else %}<span class="fr-badge fr-badge--sm">inactif</span>{% endif %}</td>
+        <td>
+          <form method="post" action="/schedules/{{ s.schedule_id }}/run-now" style="display:inline">
+            <button class="fr-btn fr-btn--sm fr-btn--secondary">Lancer maintenant</button>
+          </form>
+          <form method="post" action="/schedules/{{ s.schedule_id }}/toggle" style="display:inline">
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary">{{ 'Désactiver' if s.enabled else 'Réactiver' }}</button>
+          </form>
+          <form method="post" action="/schedules/{{ s.schedule_id }}/delete" style="display:inline"
+                onsubmit="return confirm('Supprimer la planification « {{ s.name }} » ?')">
+            <button class="fr-btn fr-btn--sm fr-btn--tertiary">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<p class="fr-hint-text fr-mt-2w">Nota : l'historique détaillé d'un job (logs) vit en mémoire et est
+remis à zéro à chaque redéploiement ; les runs et leurs évaluations restent en base.</p>
+{% endblock %}

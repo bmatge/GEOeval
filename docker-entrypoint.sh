@@ -17,6 +17,9 @@ done
 echo "[entrypoint] création du schéma (init_db.py)..."
 python init_db.py
 
+echo "[entrypoint] migrations idempotentes (migrations.sql)..."
+psql -v ON_ERROR_STOP=1 -q -f migrations.sql
+
 echo "[entrypoint] seed idempotente (seed.sql)..."
 psql -v ON_ERROR_STOP=1 -q -f seed.sql
 

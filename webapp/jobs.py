@@ -115,15 +115,16 @@ class JobManager:
             tested_models: list[str] = job.params["tested_models"]
             judges: list[dict[str, Any]] = job.params["judges"]
             note: Optional[str] = job.params.get("note") or None
+            test_ids: Optional[list[int]] = job.params.get("test_ids") or None
 
             for tm in tested_models:
                 # PHASE RUN
                 with SessionLocal() as session:
-                    tests = load_tests(session, active_only=True, ready_only=True)
+                    tests = load_tests(session, test_ids=test_ids, active_only=True, ready_only=True)
                     if not tests:
                         raise ValueError(
-                            "Aucun test actif et prêt : active ou crée des tests "
-                            "avant de lancer un run."
+                            "Aucun test actif et prêt (dans la sélection) : active ou "
+                            "crée des tests avant de lancer un run."
                         )
 
                     def run_cb(cur: int, tot: int, detail: str, _tm=tm) -> None:
