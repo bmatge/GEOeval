@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}Job {{ job.id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/jobs">Retour aux jobs</a>
+<h1 class="fr-mt-2w">Job <code>{{ job.id }}</code></h1>
+
+<div id="status-badge" class="fr-mb-2w"></div>
+
+<p><strong>Phase :</strong> <span id="phase">{{ job.phase or "…" }}</span></p>
+
+<progress id="bar" class="fr-mb-1w" value="{{ job.current }}" max="{{ job.total or 1 }}" style="width:100%; height:1rem;"></progress>
+<p><span id="counter">{{ job.current }}/{{ job.total }}</span> · <span id="pct">{{ job.pct }}</span> %</p>
+
+<div id="error" class="fr-mt-2w"></div>
+<div id="run-links" class="fr-mt-2w"></div>
+
+<h2 class="fr-mt-4w">Journal</h2>
+<pre id="log" class="fr-px-2w fr-py-1w" style="max-height:360px; overflow:auto; background:var(--background-alt-grey); border-radius:.25rem; font-size:.8rem;">{{ job.log|join("\n") }}</pre>
+
+{% endblock %}
+{% block scripts %}
+<script>
+const JOB_ID = {{ job.id|tojson }};
+
+function badge(status) {
+  const map = {
+    done:    ['fr-badge--success', 'terminé'],
+    error:   ['fr-badge--error', 'erreur'],
+    running: ['fr-badge--info', 'en cours'],
+    queued:  ['', 'en file'],
+  };
+  const [cls, label] = map[status] || ['', status];
+  return `<p class="fr-badge ${cls}">${label}</p>`;
+}
+
+async function poll() {
+  try {
+    const res = await fetch(`/api/jobs/${JOB_ID}`);
+    if (!res.ok) return;
+    const j = await res.json();
+
+    document.getElementById('status-badge').innerHTML = badge(j.status);
+    document.getElementById('phase').textContent = j.phase || '…';
+    document.getElementById('counter').textContent = `${j.current}/${j.total}`;
+    document.getElementById('pct').textContent = j.pct;
+    const bar = document.getElementById('bar');
+    bar.value = j.current; bar.max = j.total || 1;
+
+    const log = document.getElementById('log');
+    const atBottom = log.scrollTop + log.clientHeight >= log.scrollHeight - 20;
+    log.textContent = (j.log || []).join('\n');
+    if (atBottom) log.scrollTop = log.scrollHeight;
+
+    if (j.status === 'error' && j.error) {
+      document.getElementById('error').innerHTML =
+        `<div class="fr-alert fr-alert--error"><p>${j.error}</p></div>`;
+    }
+    if (j.run_ids && j.run_ids.length) {
+      document.getElementById('run-links').innerHTML =
+        'Runs : ' + j.run_ids.map(id => `<a class="fr-link fr-mr-2w" href="/runs/${id}">#${id}</a>`).join('');
+    }
+
+    if (j.status === 'done' || j.status === 'error') return; // stop polling
+    setTimeout(poll, 1500);
+  } catch (e) {
+    setTimeout(poll, 3000);
+  }
+}
+poll();
+</script>
+{% endblock %}

@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="fr" data-fr-scheme="system">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}GEOeval{% endblock %} — GEOeval</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.0/dist/dsfr.min.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.0/dist/utility/utility.min.css">
+</head>
+<body>
+<header role="banner" class="fr-header">
+  <div class="fr-header__body">
+    <div class="fr-container">
+      <div class="fr-header__body-row">
+        <div class="fr-header__brand fr-enlarge-link">
+          <div class="fr-header__brand-top">
+            <div class="fr-header__logo">
+              <p class="fr-logo">République<br>Française</p>
+            </div>
+          </div>
+          <div class="fr-header__service">
+            <a href="/" title="Accueil — GEOeval">
+              <p class="fr-header__service-title">GEOeval</p>
+            </a>
+            <p class="fr-header__service-tagline">Banc d'essai LLM avec recherche web</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="fr-header__menu fr-modal">
+    <div class="fr-container">
+      <nav class="fr-nav" role="navigation" aria-label="Menu principal">
+        <ul class="fr-nav__list">
+          {% set items = [
+            ('dashboard', '/', 'Tableau de bord'),
+            ('runs', '/runs', 'Runs'),
+            ('tests', '/tests', 'Tests'),
+            ('prompts', '/prompts', 'Prompts d\'évaluation'),
+            ('launch', '/launch', 'Lancer un run')
+          ] %}
+          {% for key, url, label in items %}
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="{{ url }}"
+               {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>
+          </li>
+          {% endfor %}
+        </ul>
+      </nav>
+    </div>
+  </div>
+</header>
+
+<main role="main" id="contenu">
+  <div class="fr-container fr-py-4w">
+    {% block content %}{% endblock %}
+  </div>
+</main>
+
+<footer class="fr-footer" role="contentinfo">
+  <div class="fr-container">
+    <div class="fr-footer__bottom">
+      <p class="fr-footer__bottom-copy fr-py-2w">
+        GEOeval — outil interne de benchmark LLM. Interface DSFR.
+      </p>
+    </div>
+  </div>
+</footer>
+
+<script type="module" src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.0/dist/dsfr.module.min.js"></script>
+<script nomodule src="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.0/dist/dsfr.nomodule.min.js"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

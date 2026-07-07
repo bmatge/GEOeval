@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Jobs{% endblock %}
+{% block content %}
+<h1>Jobs</h1>
+{% if jobs %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>ID</th><th>Statut</th><th>Modèles testés</th><th>Progression</th><th></th></tr></thead>
+    <tbody>
+      {% for j in jobs %}
+      <tr>
+        <td><code>{{ j.id }}</code></td>
+        <td>
+          {% if j.status == 'done' %}<p class="fr-badge fr-badge--success fr-badge--sm">terminé</p>
+          {% elif j.status == 'error' %}<p class="fr-badge fr-badge--error fr-badge--sm">erreur</p>
+          {% elif j.status == 'running' %}<p class="fr-badge fr-badge--info fr-badge--sm">en cours</p>
+          {% else %}<p class="fr-badge fr-badge--sm">en file</p>{% endif %}
+        </td>
+        <td>{{ j.params.tested_models|join(", ") }}</td>
+        <td>{{ j.current }}/{{ j.total }} ({{ j.pct }} %)</td>
+        <td><a class="fr-link" href="/jobs/{{ j.id }}">Suivi</a></td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fr-callout"><p class="fr-callout__text">Aucun job. <a href="/launch">Lancer un run</a>.</p></div>
+{% endif %}
+{% endblock %}

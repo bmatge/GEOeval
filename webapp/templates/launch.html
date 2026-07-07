@@ -1,0 +1,62 @@
+{% extends "base.html" %}
+{% block title %}Lancer un run{% endblock %}
+{% block content %}
+<h1>Lancer un run</h1>
+<p class="fr-hint-text">Chaque modèle testé est interrogé sur tous les tests actifs, puis évalué par le(s) juge(s).</p>
+
+<form method="post" action="/launch" class="fr-mt-2w">
+  <div class="fr-grid-row fr-grid-row--gutters">
+    <div class="fr-col-12 fr-col-md-6">
+      <fieldset class="fr-fieldset" aria-labelledby="tested-legend">
+        <legend class="fr-fieldset__legend fr-text--bold" id="tested-legend">Modèles testés (avec recherche web)</legend>
+        {% for m in models %}
+        <div class="fr-fieldset__element">
+          <div class="fr-checkbox-group">
+            <input type="checkbox" id="tested-{{ m.model_id }}" name="tested_models" value="{{ m.model_version }}">
+            <label class="fr-label" for="tested-{{ m.model_id }}">{{ m.model_name }} · <code>{{ m.model_version }}</code></label>
+          </div>
+        </div>
+        {% endfor %}
+      </fieldset>
+    </div>
+
+    <div class="fr-col-12 fr-col-md-6">
+      <fieldset class="fr-fieldset" aria-labelledby="judge-legend">
+        <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Juges (LLM-as-a-judge)</legend>
+        {% for m in models %}
+        <div class="fr-fieldset__element">
+          <div class="fr-checkbox-group">
+            <input type="checkbox" id="judge-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}">
+            <label class="fr-label" for="judge-{{ m.model_id }}">{{ m.model_name }} · <code>{{ m.model_version }}</code></label>
+          </div>
+        </div>
+        {% endfor %}
+      </fieldset>
+    </div>
+  </div>
+
+  <div class="fr-grid-row fr-grid-row--gutters">
+    <div class="fr-col-12 fr-col-md-3">
+      <div class="fr-input-group">
+        <label class="fr-label" for="repeats">Répétitions par juge</label>
+        <input class="fr-input" type="number" id="repeats" name="repeats" value="1" min="1" max="10">
+      </div>
+    </div>
+    <div class="fr-col-12 fr-col-md-9">
+      <div class="fr-input-group">
+        <label class="fr-label" for="note">Note (run_meta)</label>
+        <input class="fr-input" id="note" name="note" value="baseline">
+      </div>
+    </div>
+  </div>
+
+  {% if not models %}
+  <div class="fr-callout fr-callout--brown-caramel">
+    <p class="fr-callout__text">Aucun modèle dans la table <code>models</code>. Exécute d'abord <code>seed.sql</code>.</p>
+  </div>
+  {% endif %}
+
+  <button type="submit" class="fr-btn fr-mt-2w" {% if not models %}disabled{% endif %}>Lancer le run</button>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/jobs">Voir les jobs</a>
+</form>
+{% endblock %}

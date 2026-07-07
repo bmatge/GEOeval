@@ -190,6 +190,43 @@ python mainUnitaire.py       # smoke test OpenAI web search (sans base)
 
 ---
 
+## Interface web (UI DSFR)
+
+Une UI complète est fournie (FastAPI + Jinja2 + **Système de Design de l'État** / DSFR).
+Elle réutilise directement le cœur Python (`db.py`, `models.py`, `run.py`, `evaluate.py`).
+
+```bash
+python run_web.py            # http://127.0.0.1:8000
+python run_web.py --reload   # rechargement auto (dev)
+# ou : uvicorn webapp.app:app --reload
+```
+
+Pages disponibles :
+
+| Page | Rôle |
+| --- | --- |
+| **Tableau de bord** (`/`) | Classement des modèles par score moyen (réponse / citation) + derniers runs. |
+| **Runs** (`/runs`, `/runs/{id}`) | Liste des runs et détail : question → réponse → sources → notes des juges. |
+| **Tests** (`/tests`) | Création / édition / (dé)activation des tests (questions + réponses attendues). |
+| **Prompts d'évaluation** (`/prompts`) | Gestion des rubriques utilisées par les juges. |
+| **Lancer un run** (`/launch`) | Choix des modèles testés + juges + répétitions → exécution en tâche de fond. |
+| **Jobs** (`/jobs`, `/jobs/{id}`) | Suivi live d'un run (barre de progression + journal en temps réel). |
+
+Détails d'implémentation :
+
+- **`webapp/app.py`** — routes FastAPI. **`webapp/services.py`** — requêtes/agrégations.
+  **`webapp/jobs.py`** — exécution des runs en tâche de fond (un worker unique sérialise les
+  runs ; les logs GEOeval sont capturés par job et affichés en direct via polling `/api/jobs/{id}`).
+- Les runs longs (N modèles × M tests + juges) tournent **hors requête HTTP** : l'UI reste réactive
+  et suit la progression grâce aux callbacks `progress_cb` ajoutés à `execute_run` / `evaluate_run`.
+- **DSFR chargé via CDN** (jsDelivr) pour simplifier. Pour un usage hors-ligne / production, vendorer
+  les assets DSFR dans un dossier `static/` et servir localement.
+- **Imports LLM paresseux** : les SDK `openai` / `mistralai` / `google-genai` ne sont chargés que
+  lorsqu'un provider est réellement appelé → l'UI et le CLI démarrent en n'installant que les SDK utiles
+  (ex. Mistral + Gemini, sans OpenAI).
+
+---
+
 ## Limitations connues / dette technique
 
 Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :

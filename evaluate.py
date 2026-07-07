@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Tuple, List
+from typing import Any, Callable, Tuple, List
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -227,7 +227,12 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     raise ValueError(f"Provider inconnu model_name={judge_model.model_name!r}")
 
-def evaluate_run(session: Session, run_id: int, judges: list[Any]) -> None:
+def evaluate_run(
+    session: Session,
+    run_id: int,
+    judges: list[Any],
+    progress_cb: Callable[[int, int, str], None] | None = None,
+) -> None:
     """
     judges: liste de juges, chacun étant soit un JudgeRunConfig, soit un dict.
     Exemples équivalents:
@@ -236,6 +241,9 @@ def evaluate_run(session: Session, run_id: int, judges: list[Any]) -> None:
         judges=[{"model": "gemini-2.5-pro", "repeats": 3},
                 {"model": "gpt-5.2", "repeats": 1}]
     Le nom de modèle est résolu en model_id via la table `models`.
+
+    progress_cb: callback optionnel (current, total, detail) appelé après chaque
+                 couple (juge, test) évalué (utilisé par l'UI).
     """
     judge_specs = _normalize_judges(session, judges)
 
@@ -252,6 +260,10 @@ def evaluate_run(session: Session, run_id: int, judges: list[Any]) -> None:
     rows = session.execute(stmt).all()
     if not rows:
         raise ValueError(f"Aucun run_results pour run_id={run_id}")
+
+    n_evaluable = sum(1 for _, test, _, _ in rows if test.expected_answer)
+    total = sum(repeats for _, repeats in judge_specs) * n_evaluable
+    done = 0
 
     # Double boucle : juge (modèle, repeats) × index de run
     for judge_model, repeats in judge_specs:
@@ -325,5 +337,13 @@ def evaluate_run(session: Session, run_id: int, judges: list[Any]) -> None:
                 )
 
                 session.execute(upsert)
+
+                done += 1
+                if progress_cb is not None:
+                    progress_cb(
+                        done,
+                        total,
+                        f"juge {judge_model.model_version} #{judge_run_index} · test {test.test_id}",
+                    )
 
 

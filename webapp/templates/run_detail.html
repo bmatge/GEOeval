@@ -1,0 +1,58 @@
+{% extends "base.html" %}
+{% block title %}Run {{ run.run_id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/runs">Retour aux runs</a>
+<h1 class="fr-mt-2w">Run {{ run.run_id }}</h1>
+<ul class="fr-badge-group">
+  <li><p class="fr-badge fr-badge--blue-ecume">{{ run.model_name }} · {{ run.model_version }}</p></li>
+  {% if run.started_at %}<li><p class="fr-badge">{{ run.started_at.strftime("%Y-%m-%d %H:%M") }}</p></li>{% endif %}
+  {% if run.run_meta and run.run_meta.note %}<li><p class="fr-badge fr-badge--green-emeraude">{{ run.run_meta.note }}</p></li>{% endif %}
+</ul>
+
+{% for res in run.results %}
+<div class="fr-card fr-card--no-arrow fr-mt-3w">
+  <div class="fr-card__body">
+    <div class="fr-card__content">
+      <h3 class="fr-card__title">Test {{ res.test_id }}</h3>
+      <p class="fr-text--bold fr-mb-1v">Question</p>
+      <p>{{ res.prompt }}</p>
+
+      {% if res.expected_answer %}
+      <p class="fr-text--bold fr-mb-1v">Réponse attendue</p>
+      <p class="fr-text--sm">{{ res.expected_answer }}</p>
+      {% endif %}
+
+      <p class="fr-text--bold fr-mb-1v">Réponse du modèle</p>
+      <div class="fr-px-2w fr-py-1w" style="white-space:pre-wrap; background:var(--background-alt-grey); border-radius:.25rem;">{{ res.raw_answer }}</div>
+
+      {% if res.raw_citations %}
+      <p class="fr-text--bold fr-mt-2w fr-mb-1v">Sources citées</p>
+      <ul>{% for c in res.raw_citations %}<li><a class="fr-link" href="{{ c }}" target="_blank" rel="noopener">{{ c }}</a></li>{% endfor %}</ul>
+      {% endif %}
+
+      {% if res.evals %}
+      <p class="fr-text--bold fr-mt-2w fr-mb-1v">Notes des juges</p>
+      <div class="fr-table fr-table--sm">
+        <table>
+          <thead><tr><th>Juge</th><th>#</th><th>Réponse</th><th>Citation</th><th>Commentaires</th></tr></thead>
+          <tbody>
+            {% for e in res.evals %}
+            <tr>
+              <td><code>{{ e.judge_version }}</code></td>
+              <td>{{ e.judge_run_index }}</td>
+              <td><strong>{{ "%.2f"|format(e.response_score) if e.response_score is not none else "—" }}</strong></td>
+              <td>{{ "%.2f"|format(e.citation_score) if e.citation_score is not none else "—" }}</td>
+              <td class="fr-text--xs">{{ e.response_label }}{% if e.citation_label %} · {{ e.citation_label }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+      <p class="fr-text--sm fr-mt-2w"><em>Pas encore évalué.</em></p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+{% endfor %}
+{% endblock %}

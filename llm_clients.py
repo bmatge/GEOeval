@@ -4,19 +4,20 @@ from __future__ import annotations
 import os
 import random
 import time
-from typing import Callable, Optional, Tuple, Type, Any
+from typing import Callable, Optional, Tuple, Type, Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
-from openai import OpenAI
-from openai import APIError, RateLimitError, APITimeoutError
-
-from mistralai import Mistral
-
-from google import genai
-from google.genai import errors as genai_errors
+# NB : les SDK LLM (openai, mistralai, google-genai) sont importés PARESSEUSEMENT
+# dans les fonctions de création de client ci-dessous. On peut ainsi n'installer
+# que les SDK des providers réellement utilisés (ex. Mistral + Gemini sans OpenAI).
 
 load_dotenv()
+
+if TYPE_CHECKING:  # pour les annotations uniquement (jamais exécuté au runtime)
+    from openai import OpenAI
+    from mistralai import Mistral
+    from google import genai
 
 # -----------------------------
 # Client singletons (process-wide)
@@ -26,23 +27,26 @@ _MISTRAL_CLIENT_SINGLETON: Optional[Mistral] = None
 _GEMINI_CLIENT_SINGLETON: Optional[genai.Client] = None
 
 
-def get_openai_client_singleton() -> OpenAI:
+def get_openai_client_singleton() -> "OpenAI":
     global _OPENAI_CLIENT_SINGLETON
     if _OPENAI_CLIENT_SINGLETON is None:
+        from openai import OpenAI
         _OPENAI_CLIENT_SINGLETON = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
     return _OPENAI_CLIENT_SINGLETON
 
 
-def get_mistral_client_singleton() -> Mistral:
+def get_mistral_client_singleton() -> "Mistral":
     global _MISTRAL_CLIENT_SINGLETON
     if _MISTRAL_CLIENT_SINGLETON is None:
+        from mistralai import Mistral
         _MISTRAL_CLIENT_SINGLETON = Mistral(api_key=os.environ["MISTRAL_API_KEY"])
     return _MISTRAL_CLIENT_SINGLETON
 
 
-def get_gemini_client_singleton() -> genai.Client:
+def get_gemini_client_singleton() -> "genai.Client":
     global _GEMINI_CLIENT_SINGLETON
     if _GEMINI_CLIENT_SINGLETON is None:
+        from google import genai
         _GEMINI_CLIENT_SINGLETON = genai.Client(api_key=os.environ["GEMINI_API_KEY"])
     return _GEMINI_CLIENT_SINGLETON
 
