@@ -187,3 +187,26 @@ CREATE INDEX IF NOT EXISTS ix_runs_perimeter_id            ON runs(perimeter_id)
 --  cost_eur étant alors la conversion à l'ingestion via USD_EUR_RATE)
 -- ---------------------------------------------------------------------
 ALTER TABLE usage ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12, 6);
+
+-- ---------------------------------------------------------------------
+-- EPIC-001 Phase 2 (ADR-080 §2.2) : web search paramétrable par modèle
+-- ---------------------------------------------------------------------
+ALTER TABLE models ADD COLUMN IF NOT EXISTS search_config JSONB;
+
+-- Bascule one-shot des modèles testés vers OpenRouter (ADR-080 §6.1) sur les
+-- bases EXISTANTES : désactive les lignes directes historiques (2/3/4) tant que
+-- les équivalents openrouter n'existent pas encore (ils sont posés par seed.sql,
+-- rejoué juste APRÈS ce fichier → la garde devient fausse aux boots suivants,
+-- un admin peut donc réactiver une ligne legacy sans qu'elle soit re-désactivée).
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM models
+        WHERE model_name = 'openrouter'
+          AND model_version IN ('openai/gpt-5.2', 'mistralai/mistral-large-2512', 'google/gemini-2.5-pro')
+    ) THEN
+        UPDATE models SET is_active = FALSE
+        WHERE model_name IN ('chatGPT', 'mistral', 'gemini')
+          AND model_version IN ('gpt-5.2', 'mistral-large-latest', 'gemini-pro-latest');
+    END IF;
+END $$;

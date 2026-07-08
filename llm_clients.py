@@ -257,6 +257,50 @@ class LLMUsage:
     cost_usd: Optional[Decimal] = None
 
 
+def citations_from_openrouter_message(message: Any) -> list[str]:
+    """URLs des annotations `url_citation` d'un message OpenRouter (ADR-080 §2.4).
+
+    Format standardisé quel que soit le moteur (natif ou Exa) ; dédoublonné,
+    ordre d'apparition conservé. Tolère objets SDK et dicts.
+    """
+    annotations = getattr(message, "annotations", None) or []
+    urls: list[str] = []
+    for a in annotations:
+        if isinstance(a, dict):
+            kind = a.get("type")
+            citation = a.get("url_citation") or {}
+            url = citation.get("url")
+        else:
+            kind = getattr(a, "type", None)
+            citation = getattr(a, "url_citation", None)
+            url = getattr(citation, "url", None) if citation is not None else None
+        if kind == "url_citation" and url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def openrouter_web_extra_body(search_config: Optional[dict]) -> dict:
+    """extra_body OpenRouter (plugin web + usage réel) depuis models.search_config.
+
+    Config vide ou engine="off" → pas de plugin (aucune recherche web).
+    `allowed_domains` (nom ADR-080) est mappé sur `include_domains` (nom API).
+    """
+    extra_body: dict[str, Any] = {"usage": {"include": True}}
+    sc = search_config or {}
+    engine = (sc.get("engine") or "off").lower()
+    if engine == "off":
+        return extra_body
+    plugin: dict[str, Any] = {"id": "web", "engine": engine}
+    if sc.get("max_results"):
+        plugin["max_results"] = int(sc["max_results"])
+    if sc.get("allowed_domains"):
+        plugin["include_domains"] = list(sc["allowed_domains"])
+    extra_body["plugins"] = [plugin]
+    if sc.get("search_context_size"):
+        extra_body["web_search_options"] = {"search_context_size": sc["search_context_size"]}
+    return extra_body
+
+
 def usage_from_openrouter_response(resp: Any) -> Optional[LLMUsage]:
     """Extrait un LLMUsage de la réponse chat.completions d'OpenRouter (best-effort)."""
     u = getattr(resp, "usage", None)
