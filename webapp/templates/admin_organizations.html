@@ -1,0 +1,49 @@
+{% extends "base.html" %}
+{% block title %}Admin — organisations{% endblock %}
+{% block content %}
+<h1>Administration plateforme — organisations</h1>
+<p class="fr-hint-text">Réservé aux administrateurs plateforme (groupe <code>lab-team</code>).</p>
+
+<h2 class="fr-mt-4w">Créer une organisation</h2>
+<form method="post" action="/admin/organizations/new" class="fr-mt-2w" style="max-width:40rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="name">Nom</label>
+    <input class="fr-input" id="name" name="name" required>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="slug">Slug (dans l'URL)
+      <span class="fr-hint-text">Minuscules, chiffres et tirets uniquement. Non modifiable ensuite.</span>
+    </label>
+    <input class="fr-input" id="slug" name="slug" pattern="[a-z0-9][a-z0-9\-]{1,63}" required>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="first_admin_email">Premier admin (optionnel)
+      <span class="fr-hint-text">Email d'un utilisateur — sera provisionné et posé en <code>org_admin</code>.</span>
+    </label>
+    <input class="fr-input" id="first_admin_email" name="first_admin_email" type="email">
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Créer</button>
+</form>
+
+<h2 class="fr-mt-6w">Organisations existantes</h2>
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Nom</th><th>Slug</th><th>Créée le</th><th></th></tr></thead>
+    <tbody>
+      {% for o in orgs %}
+      <tr>
+        <td>{{ o.name }}</td>
+        <td><code>{{ o.slug }}</code></td>
+        <td>{{ o.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <a class="fr-link fr-mr-2w" href="/o/{{ o.slug }}/">ouvrir</a>
+          <a class="fr-link" href="/o/{{ o.slug }}/settings">paramètres</a>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-mt-4w"><a class="fr-link" href="/admin/audit">Journal d'audit global →</a></p>
+{% endblock %}

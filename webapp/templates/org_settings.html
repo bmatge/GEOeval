@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+{% block title %}Paramètres — {{ org.name }}{% endblock %}
+{% block content %}
+<h1>Paramètres de l'organisation</h1>
+
+<div class="fr-grid-row fr-grid-row--gutters fr-mt-3w">
+  <div class="fr-col-12 fr-col-md-8">
+    <div class="fr-card fr-card--no-arrow">
+      <div class="fr-card__body">
+        <div class="fr-card__content">
+          <h2 class="fr-card__title">Nom</h2>
+          <form method="post" action="{{ url_prefix }}/settings/rename" class="fr-mt-2w">
+            <div class="fr-input-group">
+              <label class="fr-label" for="name">Libellé affiché</label>
+              <input class="fr-input" id="name" name="name" required value="{{ org.name }}">
+            </div>
+            <button type="submit" class="fr-btn fr-mt-2w">Renommer</button>
+          </form>
+          <p class="fr-hint-text fr-mt-2w">Slug (dans l'URL) : <code>{{ org.slug }}</code>. Non modifiable après création.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<h2 class="fr-mt-6w">Membres</h2>
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Email</th><th>Rôle</th><th>Depuis</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for m in members %}
+      <tr>
+        <td>{{ m.email }}</td>
+        <td>
+          <form method="post" action="{{ url_prefix }}/members/{{ m.user_id }}/role" style="display:inline">
+            <select name="role" class="fr-select fr-select--sm" onchange="this.form.submit()">
+              {% for r in roles %}
+              <option value="{{ r }}" {% if m.role == r %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+            </select>
+          </form>
+        </td>
+        <td>{{ m.created_at.strftime("%Y-%m-%d") }}</td>
+        <td>
+          <form method="post" action="{{ url_prefix }}/members/{{ m.user_id }}/remove" style="display:inline"
+                onsubmit="return confirm('Retirer ce membre de l\'organisation ?');">
+            <button type="submit" class="fr-btn fr-btn--sm fr-btn--secondary">Retirer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="fr-mt-6w">Inviter</h2>
+<form method="post" action="{{ url_prefix }}/invitations" class="fr-grid-row fr-grid-row--gutters">
+  <div class="fr-col-12 fr-col-md-6">
+    <div class="fr-input-group">
+      <label class="fr-label" for="inv-email">Email à inviter</label>
+      <input class="fr-input" id="inv-email" name="email" type="email" required>
+    </div>
+  </div>
+  <div class="fr-col-12 fr-col-md-3">
+    <div class="fr-select-group">
+      <label class="fr-label" for="inv-role">Rôle</label>
+      <select class="fr-select" id="inv-role" name="role">
+        {% for r in roles %}<option value="{{ r }}" {% if r == 'editor' %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="fr-col-12 fr-col-md-3 fr-mt-md-6w">
+    <button type="submit" class="fr-btn">Générer un lien</button>
+  </div>
+</form>
+
+<div class="fr-callout fr-callout--brown-caramel fr-mt-2w">
+  <p class="fr-callout__text">
+    <strong>Rappel infra</strong> : après avoir généré une invitation, pense à ajouter l'email
+    dans la whitelist du gate via la skill <code>vibelab-access</code>.
+    Sans ça, l'invité verra une page « accès refusé » au niveau de la passerelle.
+  </p>
+</div>
+
+<h2 class="fr-mt-6w">Invitations en attente / historique</h2>
+{% if invitations %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Email</th><th>Rôle</th><th>Envoyée le</th><th>État</th><th>Lien / actions</th></tr></thead>
+    <tbody>
+      {% for inv in invitations %}
+      <tr>
+        <td>{{ inv.email }}</td>
+        <td>{{ inv.role }}</td>
+        <td>{{ inv.created_at.strftime("%Y-%m-%d %H:%M") }}</td>
+        <td>
+          {% if inv.accepted_at %}
+            <p class="fr-badge fr-badge--success fr-badge--sm">acceptée</p>
+          {% else %}
+            <p class="fr-badge fr-badge--sm">en attente</p>
+          {% endif %}
+        </td>
+        <td>
+          {% if not inv.accepted_at %}
+          <details>
+            <summary class="fr-link">afficher le lien</summary>
+            <input class="fr-input fr-mt-1w" readonly onclick="this.select()"
+                   value="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_prefix }}/accept-invite?token={{ inv.token }}">
+          </details>
+          <form method="post" action="{{ url_prefix }}/invitations/{{ inv.id }}/revoke" style="display:inline"
+                onsubmit="return confirm('Révoquer cette invitation ?');">
+            <button type="submit" class="fr-btn fr-btn--sm fr-btn--tertiary">Révoquer</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="fr-hint-text">Aucune invitation.</p>
+{% endif %}
+
+<p class="fr-mt-6w"><a class="fr-link" href="{{ url_prefix }}/audit">Voir le journal d'audit →</a></p>
+
+{% endblock %}

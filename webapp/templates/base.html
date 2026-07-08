@@ -63,6 +63,18 @@
                {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>
           </li>
           {% endfor %}
+          {% if role == 'org_admin' or (user and user.is_platform_admin) %}
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="{{ url_prefix }}/settings"
+               {% if active == 'settings' %}aria-current="page"{% endif %}>Paramètres</a>
+          </li>
+          {% endif %}
+          {% if user and user.is_platform_admin %}
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="/admin/organizations"
+               {% if active == 'admin' %}aria-current="page"{% endif %}>Admin plateforme</a>
+          </li>
+          {% endif %}
         </ul>
       </nav>
     </div>

@@ -63,6 +63,50 @@ class Membership(Base):
 
 
 # =====================================================================
+# ADR-077 §5 — invitations (PR#13). Token unique, TTL 30 j, acceptable
+# uniquement par l'utilisateur qui présente l'email invité (matché sur
+# X-Gate-Email).
+# =====================================================================
+class Invitation(Base):
+    __tablename__ = "invitations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    email: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    invited_by: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    accepted_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+
+# =====================================================================
+# ADR-077 §6 — audit log (PR#13). Trace toute action d'écriture d'un
+# utilisateur sur une entité (tests, modèles, invitations, memberships).
+# `entity_id` peut être NULL (créations, actions d'org).
+# =====================================================================
+class AuditLog(Base):
+    __tablename__ = "audit_log"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    org_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("organizations.id"), nullable=True
+    )
+    action: Mapped[str] = mapped_column(Text, nullable=False)
+    entity_type: Mapped[str] = mapped_column(Text, nullable=False)
+    entity_id: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    meta_json: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+
+
+# =====================================================================
 # Domaine benchmark — tests, modèles, runs, évaluations, prompts, planif.
 # Toutes les entités porteuses de données métier ont un `organization_id`
 # pour l'isolation par org.

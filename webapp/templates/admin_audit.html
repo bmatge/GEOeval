@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Admin — audit global{% endblock %}
+{% block content %}
+<h1>Journal d'audit — global</h1>
+<p class="fr-hint-text">Toutes les orgs. Réservé aux administrateurs plateforme.</p>
+
+{% if entries %}
+<div class="fr-table">
+  <table>
+    <thead>
+      <tr><th>Date</th><th>Org</th><th>Utilisateur</th><th>Action</th><th>Entité</th><th>ID</th><th>Détail</th></tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ e.at.strftime("%Y-%m-%d %H:%M:%S") }}</td>
+        <td><code>{{ e.org_slug }}</code></td>
+        <td>{{ e.actor }}</td>
+        <td><code>{{ e.action }}</code></td>
+        <td>{{ e.entity_type }}</td>
+        <td>{{ e.entity_id if e.entity_id is not none else "—" }}</td>
+        <td>
+          {% if e.meta %}
+          <details><summary class="fr-link">meta</summary>
+            <pre style="font-size:.8rem;">{{ e.meta | tojson(indent=2) }}</pre>
+          </details>
+          {% else %}—{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% if next_page is not none %}
+<p class="fr-mt-2w"><a class="fr-btn fr-btn--secondary" href="?page={{ next_page }}">Page suivante →</a></p>
+{% endif %}
+{% else %}
+<div class="fr-callout"><p class="fr-callout__text">Aucune entrée d'audit à afficher.</p></div>
+{% endif %}
+
+<p class="fr-mt-4w"><a class="fr-link" href="/admin/organizations">← Retour aux organisations</a></p>
+{% endblock %}

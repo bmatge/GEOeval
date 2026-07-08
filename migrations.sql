@@ -62,3 +62,12 @@ CREATE INDEX IF NOT EXISTS ix_scheduled_runs_organization_id ON scheduled_runs(o
 -- Sync des séquences (l'INSERT explicite de l'id=1 ne les fait pas avancer).
 SELECT setval(pg_get_serial_sequence('organizations', 'id'),
               GREATEST((SELECT COALESCE(MAX(id), 1) FROM organizations), 1));
+
+-- ---------------------------------------------------------------------
+-- ADR-077 §5–6 (PR#13) : index pratiques pour la vue audit et lookup
+-- des invitations par token / par org.
+-- ---------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS ix_invitations_org_id  ON invitations(org_id);
+CREATE INDEX IF NOT EXISTS ix_invitations_email   ON invitations(email);
+CREATE INDEX IF NOT EXISTS ix_audit_log_org_at    ON audit_log(org_id, at DESC);
+CREATE INDEX IF NOT EXISTS ix_audit_log_user_at   ON audit_log(user_id, at DESC);

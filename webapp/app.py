@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from load import load_tests
-from webapp import scheduler, services, tenancy
+from webapp import audit, scheduler, services, tenancy
 from webapp.auth import CurrentUser, GateAuthMiddleware
 from webapp.deps import (
     get_db,
@@ -797,3 +797,342 @@ def job_status(job_id: str, ctx=Depends(require_org)):
     if job is None or int(job.params.get("organization_id", -1)) != org.id:
         raise HTTPException(status_code=404, detail="job introuvable")
     return JSONResponse(job.as_dict())
+
+
+# =====================================================================
+# PR#13 — Paramètres d'organisation, membres, invitations, audit
+# =====================================================================
+from sqlalchemy import select as _sel  # noqa: E402
+from models import AuditLog as _AuditLog, User as _User  # noqa: E402
+
+
+@app.get("/o/{org_slug}/settings", response_class=HTMLResponse)
+def org_settings(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+):
+    org, role = ctx
+    return render(
+        request,
+        "org_settings.html",
+        active="settings",
+        org=org,
+        role=role,
+        members=tenancy.list_members(db, org.id),
+        invitations=tenancy.list_invitations(db, org.id),
+        roles=tenancy.ROLES,
+    )
+
+
+@app.post("/o/{org_slug}/settings/rename")
+def org_rename(
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+):
+    org, _ = ctx
+    old = org.name
+    tenancy.rename_org(db, org.id, name=name)
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="rename",
+        entity_type="organization",
+        entity_id=org.id,
+        meta={"old": old, "new": name},
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
+
+
+@app.post("/o/{org_slug}/members/{user_id}/role")
+def member_change_role(
+    user_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    role: str = Form(...),
+):
+    org, _ = ctx
+    try:
+        tenancy.set_membership_role(db, user_id=user_id, org_id=org.id, role=role)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="set_role",
+        entity_type="membership",
+        entity_id=user_id,
+        meta={"role": role},
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
+
+
+@app.post("/o/{org_slug}/members/{user_id}/remove")
+def member_remove(
+    user_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    if user_id == user.id:
+        raise HTTPException(status_code=400, detail="Impossible de te retirer toi-même.")
+    tenancy.remove_membership(db, user_id=user_id, org_id=org.id)
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="remove",
+        entity_type="membership",
+        entity_id=user_id,
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
+
+
+@app.post("/o/{org_slug}/invitations")
+def invitation_create(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    email: str = Form(...),
+    role: str = Form(...),
+):
+    org, _ = ctx
+    if role not in tenancy.ROLES:
+        raise HTTPException(status_code=400, detail=f"Rôle invalide : {role!r}.")
+    inv = tenancy.create_invitation(
+        db, org_id=org.id, email=email, role=role, invited_by=user.id
+    )
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="create",
+        entity_type="invitation",
+        entity_id=inv.id,
+        meta={"email": inv.email, "role": role},
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
+
+
+@app.post("/o/{org_slug}/invitations/{inv_id}/revoke")
+def invitation_revoke(
+    inv_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    try:
+        tenancy.revoke_invitation(db, org.id, inv_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="revoke",
+        entity_type="invitation",
+        entity_id=inv_id,
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
+
+
+@app.get("/o/{org_slug}/accept-invite", response_class=HTMLResponse)
+def accept_invite_form(
+    org_slug: str,
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    db: Session = Depends(get_db),
+    token: str = "",
+):
+    """Landing d'acceptation d'invitation.
+
+    Volontairement PAS derrière `require_org` : un invité qui n'est pas encore
+    membre doit pouvoir atterrir sur cette page (sinon 404 avant qu'il puisse
+    confirmer). L'org est résolue à la volée, sans vérif de membership.
+    """
+    org = tenancy.get_org_by_slug(db, org_slug)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation introuvable.")
+    return render(
+        request,
+        "accept_invite.html",
+        active="settings",
+        org=org,
+        role=None,
+        token=token,
+        current_email=user.email,
+    )
+
+
+@app.post("/o/{org_slug}/accept-invite")
+def accept_invite_submit(
+    org_slug: str,
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    token: str = Form(...),
+):
+    org = tenancy.get_org_by_slug(db, org_slug)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation introuvable.")
+    try:
+        m = tenancy.accept_invitation(db, token=token, current_email=user.email)
+    except ValueError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    if m.org_id != org.id:
+        raise HTTPException(status_code=400, detail="Token pour une autre organisation.")
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="accept",
+        entity_type="invitation",
+        entity_id=None,
+        meta={"role": m.role},
+    )
+    return RedirectResponse(f"/o/{org.slug}/", status_code=303)
+
+
+@app.get("/o/{org_slug}/audit", response_class=HTMLResponse)
+def org_audit_view(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    page: int = 0,
+):
+    org, role = ctx
+    PAGE_SIZE = 50
+    rows = db.execute(
+        _sel(_AuditLog, _User.email)
+        .outerjoin(_User, _User.id == _AuditLog.user_id)
+        .where(_AuditLog.org_id == org.id)
+        .order_by(_AuditLog.at.desc())
+        .offset(page * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    ).all()
+    entries = [
+        dict(
+            id=al.id, at=al.at, action=al.action, entity_type=al.entity_type,
+            entity_id=al.entity_id, meta=al.meta_json, actor=email or "—",
+        )
+        for al, email in rows
+    ]
+    return render(
+        request, "audit.html", active="settings", org=org, role=role,
+        entries=entries, page=page, next_page=page + 1 if len(entries) == PAGE_SIZE else None,
+    )
+
+
+# =====================================================================
+# Admin plateforme — création d'org, audit global
+# =====================================================================
+@app.get("/admin/organizations", response_class=HTMLResponse)
+def admin_orgs(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    orgs = tenancy.list_all_orgs(db)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_organizations.html",
+        context={
+            "active": "admin",
+            "user": user,
+            "url_prefix": "",
+            "orgs": orgs,
+            "roles": tenancy.ROLES,
+        },
+    )
+
+
+@app.post("/admin/organizations/new")
+def admin_org_create(
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    slug: str = Form(...),
+    first_admin_email: str = Form(""),
+):
+    try:
+        org = tenancy.create_org(db, name=name, slug=slug, created_by=user.id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="create",
+        entity_type="organization",
+        entity_id=org.id,
+        meta={"slug": org.slug},
+    )
+
+    # Premier admin optionnel : pose ou crée l'user + son membership org_admin.
+    first_admin_email = (first_admin_email or "").strip().lower()
+    if first_admin_email:
+        from webapp.auth import load_or_provision_user  # local import
+
+        with SessionLocal() as bs:
+            cu = load_or_provision_user(bs, first_admin_email, groups=[])
+            try:
+                tenancy.add_membership(bs, user_id=cu.id, org_id=org.id, role="org_admin")
+            except Exception:
+                pass  # déjà membre — idempotent
+        audit.record(
+            db,
+            user_id=user.id,
+            org_id=org.id,
+            action="add_admin",
+            entity_type="membership",
+            entity_id=None,
+            meta={"email": first_admin_email},
+        )
+    return RedirectResponse("/admin/organizations", status_code=303)
+
+
+@app.get("/admin/audit", response_class=HTMLResponse)
+def admin_audit_view(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    page: int = 0,
+):
+    from models import Organization  # local — cycle-safe
+    PAGE_SIZE = 50
+    rows = db.execute(
+        _sel(_AuditLog, _User.email, Organization.slug)
+        .outerjoin(_User, _User.id == _AuditLog.user_id)
+        .outerjoin(Organization, Organization.id == _AuditLog.org_id)
+        .order_by(_AuditLog.at.desc())
+        .offset(page * PAGE_SIZE)
+        .limit(PAGE_SIZE)
+    ).all()
+    entries = [
+        dict(
+            id=al.id, at=al.at, action=al.action, entity_type=al.entity_type,
+            entity_id=al.entity_id, meta=al.meta_json, actor=email or "—",
+            org_slug=slug or "—",
+        )
+        for al, email, slug in rows
+    ]
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_audit.html",
+        context={
+            "active": "admin",
+            "user": user,
+            "url_prefix": "",
+            "entries": entries,
+            "page": page,
+            "next_page": page + 1 if len(entries) == PAGE_SIZE else None,
+        },
+    )
