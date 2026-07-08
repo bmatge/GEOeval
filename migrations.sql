@@ -77,3 +77,21 @@ CREATE INDEX IF NOT EXISTS ix_audit_log_user_at   ON audit_log(user_id, at DESC)
 -- ---------------------------------------------------------------------
 CREATE UNIQUE INDEX IF NOT EXISTS uq_org_credentials_org_model
     ON org_credentials(organization_id, model_id);
+
+-- ---------------------------------------------------------------------
+-- ADR-078 §3-5 (PR#15) : pricing versionné, usage row-par-appel, budget.
+-- ---------------------------------------------------------------------
+CREATE INDEX IF NOT EXISTS ix_model_pricing_active
+    ON model_pricing(model_id) WHERE effective_to IS NULL;
+CREATE INDEX IF NOT EXISTS ix_usage_org_ts
+    ON usage(organization_id, ts DESC);
+CREATE INDEX IF NOT EXISTS ix_usage_run_id
+    ON usage(run_id);
+
+-- Seed de pricing par défaut (indicatif — l'admin plateforme peut versionner).
+-- Prix approximatifs en €/M tokens (fixture, à ajuster).
+INSERT INTO model_pricing (model_id, input_price_per_1m_tokens, output_price_per_1m_tokens)
+SELECT model_id, 5.00, 15.00 FROM models
+WHERE NOT EXISTS (
+    SELECT 1 FROM model_pricing p WHERE p.model_id = models.model_id
+);

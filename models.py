@@ -255,6 +255,75 @@ class RunEvaluation(Base):
     citation_quality_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     citation_quality_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
 
+# =====================================================================
+# ADR-078 §3-5 (PR#15) — pricing versionné, usage row-par-appel, budget.
+# =====================================================================
+class ModelPricing(Base):
+    """Prix par 1M tokens (€) — versionné par (effective_from, effective_to).
+
+    Une seule row active par model_id à un instant t (effective_to IS NULL ou > now()).
+    L'édition crée une NOUVELLE row et clôt l'ancienne (traçabilité, ADR-076).
+    """
+    __tablename__ = "model_pricing"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    model_id: Mapped[int] = mapped_column(
+        ForeignKey("models.model_id"), nullable=False
+    )
+    input_price_per_1m_tokens: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    output_price_per_1m_tokens: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    currency: Mapped[str] = mapped_column(Text, nullable=False, default="EUR", server_default="EUR")
+    effective_from: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    effective_to: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+
+
+class UsageRecord(Base):
+    """Consommation row-par-appel LLM. `billed_to` = 'platform' | 'byok' (ADR-078 §5)."""
+    __tablename__ = "usage"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
+    model_id: Mapped[int] = mapped_column(
+        ForeignKey("models.model_id"), nullable=False
+    )
+    run_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("runs.run_id"), nullable=True
+    )
+    kind: Mapped[str] = mapped_column(Text, nullable=False)  # 'tested' | 'judge'
+    billed_to: Mapped[str] = mapped_column(Text, nullable=False)  # 'platform' | 'byok'
+    ts: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    cost_eur: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"), server_default="0")
+
+
+class Budget(Base):
+    """Plafond mensuel par org (€/mois). Soft-stop : refuse un nouveau scan si
+    spent + estimate > cap, mais laisse aller au bout un scan en cours."""
+    __tablename__ = "budgets"
+
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), primary_key=True
+    )
+    monthly_cap_eur: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    currency: Mapped[str] = mapped_column(Text, nullable=False, default="EUR", server_default="EUR")
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(),
+        onupdate=func.now(),
+    )
+    updated_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
+
 class PromptType(Base):
     __tablename__ = "prompt_types"
 

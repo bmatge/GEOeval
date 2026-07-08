@@ -256,6 +256,25 @@ def call_judge_llm(judge_model: Model, user_prompt: str, organization_id: Option
 
     raise ValueError(f"Provider inconnu model_name={judge_model.model_name!r}")
 
+def _record_judge_usage(session, org_id, model_id, run_id, prompt, resp):
+    """Enregistre l'usage d'un appel juge (heuristique tokens). Best-effort."""
+    if org_id is None:
+        return
+    try:
+        from webapp import credentials, usage
+        cred = credentials.get_for_model(session, org_id, model_id)
+        billed = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+        usage.record(
+            session,
+            org_id=org_id, model_id=model_id, run_id=run_id,
+            kind="judge", billed_to=billed,
+            input_tokens=max(1, len(prompt or "") // 4),
+            output_tokens=max(1, len(resp or "") // 4),
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("usage judge non enregistré (run=%s model=%s)", run_id, model_id)
+
+
 def evaluate_run(
     session: Session,
     run_id: int,
@@ -325,6 +344,10 @@ def evaluate_run(
                     judge_model, response_quality_user_prompt, organization_id=organization_id
                 )
                 response_quality = parse_judge_output(response_quality_raw)
+                _record_judge_usage(
+                    session, organization_id, judge_model.model_id, run_id,
+                    response_quality_user_prompt, response_quality_raw,
+                )
 
                 # 2) Qualité citation
                 citation_quality_prompt = build_prompt_json_guardrails(citation_prompt_text)
@@ -338,6 +361,10 @@ def evaluate_run(
                     judge_model, citation_quality_user_prompt, organization_id=organization_id
                 )
                 citation_quality = parse_judge_output(citation_quality_raw)
+                _record_judge_usage(
+                    session, organization_id, judge_model.model_id, run_id,
+                    citation_quality_user_prompt, citation_quality_raw,
+                )
 
                 payload = dict(
                     run_id=run_id,

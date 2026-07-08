@@ -237,17 +237,7 @@ def execute_run(
     """
     tested_model = resolve_model(session, tested_model)
 
-    # 1) Appels LLM -> mémoire
-    total = len(tests)
-    results: list[tuple[int, str, Optional[list[str]]]] = []
-    for i, t in enumerate(tests, start=1):
-        answer = call_tested_llm(tested_model, t.prompt, organization_id=organization_id)
-        citations = extract_urls(answer)
-        results.append((t.test_id, answer, citations if citations else None))
-        if progress_cb is not None:
-            progress_cb(i, total, f"test {t.test_id}")
-
-    # 2) Écriture DB
+    # 1) Créer d'abord RunRow (on connaîtra run_id pour attacher l'usage).
     run_row = RunRow(
         tested_model_id=tested_model.model_id,
         organization_id=organization_id,
@@ -257,15 +247,39 @@ def execute_run(
     session.flush()
     run_id = run_row.run_id
 
-    for test_id, raw_answer, raw_citations in results:
+    # 2) Appels LLM + tracking usage (heuristique tokens : len/4)
+    from webapp import credentials, usage  # local — évite le cycle
+    cred = credentials.get_for_model(session, organization_id, tested_model.model_id)
+    billed_to = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+
+    total = len(tests)
+    for i, t in enumerate(tests, start=1):
+        answer = call_tested_llm(tested_model, t.prompt, organization_id=organization_id)
+        citations = extract_urls(answer)
         session.add(
             RunResult(
                 run_id=run_id,
-                test_id=test_id,
-                raw_answer=raw_answer,
-                raw_citations=raw_citations,
+                test_id=t.test_id,
+                raw_answer=answer,
+                raw_citations=citations if citations else None,
             )
         )
+        # Usage row-par-appel (best-effort — jamais bloquant).
+        try:
+            usage.record(
+                session,
+                org_id=organization_id,
+                model_id=tested_model.model_id,
+                run_id=run_id,
+                kind="tested",
+                billed_to=billed_to,
+                input_tokens=max(1, len(t.prompt or "") // 4),
+                output_tokens=max(1, len(answer or "") // 4),
+            )
+        except Exception:  # noqa: BLE001
+            logger.exception("usage.record échoué (run=%s test=%s)", run_id, t.test_id)
+        if progress_cb is not None:
+            progress_cb(i, total, f"test {t.test_id}")
 
     return run_id
 

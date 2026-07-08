@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Admin — pricing{% endblock %}
+{% block content %}
+<h1>Administration — pricing des modèles</h1>
+<p class="fr-hint-text">
+  Prix en €/million de tokens. L'édition <strong>crée une nouvelle version</strong> et clôt
+  l'ancienne (traçabilité — ADR-076). Les runs anciens continuent d'utiliser leur prix
+  d'époque.
+</p>
+
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr>
+        <th>Modèle</th><th>Prix input (€/M tok)</th><th>Prix output (€/M tok)</th>
+        <th>En vigueur depuis</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      <tr>
+        <td>{{ e.model_name }} · <code>{{ e.model_version }}</code></td>
+        <td>{{ "%.4f"|format(e.pricing.input_price_per_1m_tokens) if e.pricing else '—' }}</td>
+        <td>{{ "%.4f"|format(e.pricing.output_price_per_1m_tokens) if e.pricing else '—' }}</td>
+        <td>{{ e.pricing.effective_from.strftime("%Y-%m-%d %H:%M") if e.pricing else '—' }}</td>
+        <td>
+          <form method="post" action="/admin/pricing/{{ e.model_id }}" style="display:flex; gap:.5rem;">
+            <input class="fr-input" name="input_price" type="number" step="0.0001" min="0" required
+                   placeholder="input" style="width:8rem;">
+            <input class="fr-input" name="output_price" type="number" step="0.0001" min="0" required
+                   placeholder="output" style="width:8rem;">
+            <button type="submit" class="fr-btn fr-btn--sm">Mettre à jour</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-mt-4w"><a class="fr-link" href="/admin/organizations">← Retour organisations</a></p>
+{% endblock %}

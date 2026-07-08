@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from load import load_tests
-from webapp import audit, credentials, scheduler, services, tenancy
+from webapp import audit, budget, credentials, pricing, scheduler, services, tenancy
 from webapp.auth import CurrentUser, GateAuthMiddleware
 from webapp.deps import (
     get_db,
@@ -455,8 +455,11 @@ def _parse_run_selection(
 def launch_form(request: Request, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
     org, role = ctx
     fctx = _run_form_context(db, org.id)
+    b = budget.get_budget(db, org.id)
+    spent = budget.current_month_spent(db, org.id)
     return render(request, "launch.html", active="launch", org=org, role=role,
-                  active_tests_count=len(fctx["tests"]), **fctx)
+                  active_tests_count=len(fctx["tests"]),
+                  budget=b, month_spent=spent, **fctx)
 
 
 @app.post("/o/{org_slug}/launch")
@@ -471,6 +474,26 @@ def launch_submit(
 ):
     org, _ = ctx
     params = _parse_run_selection(db, org.id, tested_models, judge_models, repeats, test_ids)
+
+    # Devis + check budget (ADR-078 §3-5, soft-stop).
+    tests_for_estimate = load_tests(
+        db,
+        test_ids=params["test_ids"],
+        active_only=True,
+        ready_only=True,
+        organization_id=org.id,
+    )
+    estimate = pricing.estimate_scan_cost(
+        db,
+        org_id=org.id,
+        tests=tests_for_estimate,
+        tested_models=params["tested_models"],
+        judges=params["judges"],
+    )
+    check = budget.check_budget(db, org_id=org.id, estimate_eur=estimate["total_eur"])
+    if not check.ok:
+        raise HTTPException(status_code=402, detail=check.reason)
+
     job = manager.submit(dict(**params, note=note or None, organization_id=org.id))
     return RedirectResponse(f"/o/{org.slug}/jobs/{job.id}", status_code=303)
 
@@ -773,6 +796,20 @@ def schedule_new_submit(
     next_run = scheduler.compute_next_run(schedule_kind, config)
     if next_run is None:
         raise HTTPException(status_code=400, detail="La date d'exécution est déjà passée.")
+
+    # Devis prévisionnel + check budget (soft-stop, ADR-078).
+    tests_for_estimate = load_tests(
+        db,
+        test_ids=params["test_ids"],
+        active_only=True, ready_only=True, organization_id=org.id,
+    )
+    estimate = pricing.estimate_scan_cost(
+        db, org_id=org.id, tests=tests_for_estimate,
+        tested_models=params["tested_models"], judges=params["judges"],
+    )
+    check = budget.check_budget(db, org_id=org.id, estimate_eur=estimate["total_eur"])
+    if not check.ok:
+        raise HTTPException(status_code=402, detail=check.reason)
 
     services.create_schedule(
         db,
@@ -1215,3 +1252,92 @@ def admin_audit_view(
             "next_page": page + 1 if len(entries) == PAGE_SIZE else None,
         },
     )
+
+
+# =====================================================================
+# PR#15 — Budget par org + admin pricing
+# =====================================================================
+from decimal import Decimal as _Decimal  # noqa: E402
+
+
+@app.get("/o/{org_slug}/budget", response_class=HTMLResponse)
+def org_budget_view(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+):
+    org, role = ctx
+    b = budget.get_budget(db, org.id)
+    spent = budget.current_month_spent(db, org.id)
+    pct = None
+    if b is not None and b.monthly_cap_eur:
+        pct = min(100, int((spent / _Decimal(str(b.monthly_cap_eur))) * 100))
+    return render(
+        request, "org_budget.html", active="settings", org=org, role=role,
+        budget=b, month_spent=spent, pct=pct,
+    )
+
+
+@app.post("/o/{org_slug}/budget")
+def org_budget_set(
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    monthly_cap_eur: str = Form(...),
+):
+    org, _ = ctx
+    try:
+        cap = _Decimal(monthly_cap_eur.replace(",", "."))
+        if cap < 0:
+            raise ValueError("négatif")
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Cap invalide : {e}")
+    budget.set_cap(db, org_id=org.id, cap_eur=cap, updated_by=user.id)
+    audit.record(
+        db,
+        user_id=user.id, org_id=org.id, action="set_cap",
+        entity_type="budget", entity_id=org.id, meta={"cap_eur": str(cap)},
+    )
+    return RedirectResponse(f"/o/{org.slug}/budget", status_code=303)
+
+
+@app.get("/admin/pricing", response_class=HTMLResponse)
+def admin_pricing_view(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    entries = pricing.list_pricing(db)
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_pricing.html",
+        context={
+            "active": "admin", "user": user, "url_prefix": "",
+            "entries": entries,
+        },
+    )
+
+
+@app.post("/admin/pricing/{model_id}")
+def admin_pricing_set(
+    model_id: int,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    input_price: str = Form(...),
+    output_price: str = Form(...),
+):
+    try:
+        ip = _Decimal(input_price.replace(",", "."))
+        op = _Decimal(output_price.replace(",", "."))
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(status_code=400, detail=f"Prix invalide : {e}")
+    pricing.set_pricing(
+        db, model_id=model_id, input_eur_per_1m=ip, output_eur_per_1m=op,
+    )
+    audit.record(
+        db,
+        user_id=user.id, org_id=None, action="set_pricing",
+        entity_type="model_pricing", entity_id=model_id,
+        meta={"input": str(ip), "output": str(op)},
+    )
+    return RedirectResponse("/admin/pricing", status_code=303)

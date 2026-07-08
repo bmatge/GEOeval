@@ -26,4 +26,10 @@ Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_
   <button type="submit" class="fr-btn fr-mt-2w" {% if not models or active_tests_count == 0 %}disabled{% endif %}>Lancer le run</button>
   <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/jobs">Voir les jobs</a>
 </form>
+
+<p class="fr-hint-text fr-mt-3w">
+  <strong>Budget</strong> : consommé ce mois-ci
+  {{ "%.4f"|format(month_spent) }} €{% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} €{% else %} (pas de plafond posé){% endif %}.
+  Un scan dépassant le plafond sera <em>refusé</em> (soft-stop, ADR-078 §5).
+</p>
 {% endblock %}
