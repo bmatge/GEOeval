@@ -31,6 +31,7 @@ from webapp import (
     credentials,
     gold,
     ground_truth,
+    org_models,
     perimeters,
     pricing,
     scheduler,
@@ -630,12 +631,30 @@ TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemin
 PROVIDER_CHOICES = ["openrouter", "chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
 
 
-def _run_form_context(db: Session, org_id: int, perimeter_id: Optional[int] = None) -> dict:
+def _is_unrestricted(role: Optional[str], is_platform_admin: bool) -> bool:
+    """True si le rôle échappe à l'allowlist org_models (S4.2) :
+    org_admin de l'org ou admin plateforme voient tout le catalogue actif."""
+    return is_platform_admin or role == "org_admin"
+
+
+def _run_form_context(
+    db: Session,
+    org_id: int,
+    perimeter_id: Optional[int] = None,
+    *,
+    role: Optional[str] = None,
+    is_platform_admin: bool = False,
+) -> dict:
     """Contexte commun aux formulaires « lancer » et « planifier » un run.
 
     Si `perimeter_id` est fourni, seules les questions de ce périmètre sont exposées.
+    L'allowlist org_models (EPIC-001 S4.2) restreint les modèles proposés
+    (testés ET notateurs) aux rôles editor/viewer — les org_admin et admins
+    plateforme voient tout le catalogue actif.
     """
     models = services.list_models(db)
+    if not _is_unrestricted(role, is_platform_admin):
+        models = org_models.filter_models(db, org_id, models)
     judges = [m for m in models if m.is_judge]
     judge_kappa: dict[int, Optional[float]] = {}
     for j in judges:
@@ -660,6 +679,20 @@ def _run_form_context(db: Session, org_id: int, perimeter_id: Optional[int] = No
     )
 
 
+def _allowed_model_versions(
+    db: Session, org_id: int, role: Optional[str], is_platform_admin: bool
+) -> Optional[set[str]]:
+    """`model_version` autorisées pour la soumission d'un run ; None = tout.
+
+    Garde-fou serveur de l'allowlist (S4.2) : le filtrage du formulaire ne
+    suffit pas, un POST forgé doit aussi être refusé pour un editor/viewer.
+    """
+    if _is_unrestricted(role, is_platform_admin):
+        return None
+    allowed = org_models.filter_models(db, org_id, services.list_models(db))
+    return {m.model_version for m in allowed}
+
+
 def _parse_run_selection(
     db: Session,
     org_id: int,
@@ -668,13 +701,25 @@ def _parse_run_selection(
     judge_models: list[str],
     repeats: int,
     test_ids: list[int],
+    allowed_versions: Optional[set[str]] = None,
 ) -> dict:
-    """Valide la sélection (modèles, juges, tests) restreinte au périmètre."""
+    """Valide la sélection (modèles, juges, tests) restreinte au périmètre.
+
+    `allowed_versions` (S4.2) : si fourni, toute IA (testée ou notatrice)
+    hors de l'allowlist de l'org est refusée en 403.
+    """
     if not tested_models or not judge_models:
         raise HTTPException(
             status_code=400,
             detail="Sélectionne au moins une IA évaluée et un notateur.",
         )
+    if allowed_versions is not None:
+        forbidden = (set(tested_models) | set(judge_models)) - allowed_versions
+        if forbidden:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Modèles non autorisés pour cette organisation : {sorted(forbidden)}",
+            )
     peri = perimeters.get_by_id(db, org_id, perimeter_id)
     if peri is None:
         raise HTTPException(status_code=400, detail="Périmètre invalide.")
@@ -706,11 +751,15 @@ def launch_form(
     request: Request,
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
     perimeter_id: int = 0,
 ):
     org, role = ctx
     peri = perimeters.get_by_id(db, org.id, perimeter_id) if perimeter_id > 0 else None
-    fctx = _run_form_context(db, org.id, perimeter_id=peri.id if peri else None)
+    fctx = _run_form_context(
+        db, org.id, perimeter_id=peri.id if peri else None,
+        role=role, is_platform_admin=user.is_platform_admin,
+    )
     b = budget.get_budget(db, org.id)
     spent = budget.current_month_spent(db, org.id)
     return render(request, "launch.html", active="launch", org=org, role=role,
@@ -723,6 +772,7 @@ def launch_form(
 def launch_submit(
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
     perimeter_id: int = Form(...),
     tested_models: list[str] = Form(default=[]),
     judge_models: list[str] = Form(default=[]),
@@ -730,8 +780,11 @@ def launch_submit(
     note: str = Form(""),
     test_ids: list[int] = Form(default=[]),
 ):
-    org, _ = ctx
-    params = _parse_run_selection(db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids)
+    org, role = ctx
+    params = _parse_run_selection(
+        db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids,
+        allowed_versions=_allowed_model_versions(db, org.id, role, user.is_platform_admin),
+    )
 
     tests_for_estimate = load_tests(
         db, test_ids=params["test_ids"], active_only=True, ready_only=True,
@@ -1053,11 +1106,15 @@ def schedule_new_form(
     request: Request,
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
     perimeter_id: int = 0,
 ):
     org, role = ctx
     peri = perimeters.get_by_id(db, org.id, perimeter_id) if perimeter_id > 0 else None
-    fctx = _run_form_context(db, org.id, perimeter_id=peri.id if peri else None)
+    fctx = _run_form_context(
+        db, org.id, perimeter_id=peri.id if peri else None,
+        role=role, is_platform_admin=user.is_platform_admin,
+    )
     return render(request, "schedule_form.html", active="schedules", org=org, role=role,
                   weekdays=scheduler.WEEKDAYS_FR,
                   selected_perimeter=peri, **fctx)
@@ -1067,6 +1124,7 @@ def schedule_new_form(
 def schedule_new_submit(
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
     perimeter_id: int = Form(...),
     name: str = Form(...),
     tested_models: list[str] = Form(default=[]),
@@ -1081,8 +1139,11 @@ def schedule_new_submit(
     weekly_time: str = Form(""),
     every_hours: int = Form(24),
 ):
-    org, _ = ctx
-    params = _parse_run_selection(db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids)
+    org, role = ctx
+    params = _parse_run_selection(
+        db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids,
+        allowed_versions=_allowed_model_versions(db, org.id, role, user.is_platform_admin),
+    )
 
     if schedule_kind == "once":
         if not once_at:
@@ -1251,6 +1312,57 @@ def org_settings(
         invitations=tenancy.list_invitations(db, org.id),
         roles=tenancy.ROLES,
     )
+
+
+# ---- Allowlist de modèles (EPIC-001 Phase 4, S4.2 — org_admin) -------
+@app.get("/o/{org_slug}/settings/models", response_class=HTMLResponse)
+def org_models_page(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+):
+    org, role = ctx
+    catalog = services.list_models(db)  # catalogue global actif
+    allowed = org_models.allowed_model_ids(db, org.id)  # None = héritage
+    inherits = allowed is None
+    checked_ids = {m.model_id for m in catalog} if inherits else allowed
+    return render(
+        request, "org_models.html", active="settings", org=org, role=role,
+        catalog=catalog, checked_ids=checked_ids, inherits=inherits,
+        testable_providers=TESTABLE_PROVIDERS,
+    )
+
+
+@app.post("/o/{org_slug}/settings/models")
+def org_models_save(
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    model_ids: list[int] = Form(default=[]),
+):
+    org, _ = ctx
+    org_models.replace_allowlist(db, org.id, set(model_ids))
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="set_allowlist", entity_type="org_models", entity_id=None,
+        meta={"model_ids": sorted(set(model_ids))},
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings/models", status_code=303)
+
+
+@app.post("/o/{org_slug}/settings/models/reset")
+def org_models_reset(
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    org_models.clear_allowlist(db, org.id)
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="clear_allowlist", entity_type="org_models", entity_id=None,
+    )
+    return RedirectResponse(f"/o/{org.slug}/settings/models", status_code=303)
 
 
 @app.post("/o/{org_slug}/settings/rename")
