@@ -50,12 +50,13 @@
           {% set items = [
             ('home', url_prefix ~ '/', 'Accueil'),
             ('dashboard', url_prefix ~ '/dashboard', 'Tableau de bord'),
+            ('perimeters', url_prefix ~ '/perimeters', 'Périmètres'),
             ('runs', url_prefix ~ '/runs', 'Runs'),
-            ('tests', url_prefix ~ '/tests', 'Tests'),
-            ('prompts', url_prefix ~ '/prompts', 'Prompts d\'évaluation'),
+            ('tests', url_prefix ~ '/tests', 'Questions'),
+            ('prompts', url_prefix ~ '/prompts', 'Grilles de notation'),
             ('models', url_prefix ~ '/models', 'Modèles'),
-            ('launch', url_prefix ~ '/launch', 'Lancer un run'),
-            ('schedules', url_prefix ~ '/schedules', 'Planification')
+            ('launch', url_prefix ~ '/launch', 'Lancer une évaluation'),
+            ('schedules', url_prefix ~ '/schedules', 'Programmations')
           ] %}
           {% for key, url, label in items %}
           <li class="fr-nav__item">

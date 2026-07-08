@@ -106,20 +106,8 @@ UPDATE models SET is_sovereign = TRUE WHERE model_name = 'albert';
 CREATE INDEX IF NOT EXISTS ix_test_ground_truth_active
     ON test_ground_truth(test_id) WHERE valid_to IS NULL;
 
--- Prompt juge « conformité » (schéma labels catégoriels ADR-079 §3).
-INSERT INTO evaluation_prompts (prompt_id, prompt_type_id, prompt_name, prompt_text)
-VALUES (
-    3, 1, 'response_quality_reference',
-    'Tu évalues la CONFORMITÉ d''une réponse de modèle à une VÉRITÉ DE RÉFÉRENCE ' ||
-    'sourcée. Pas d''opinion : compare uniquement à la référence fournie. ' ||
-    'Attribue un label parmi : ' ||
-    '"conforme" (réponse alignée avec la référence, complète et sans erreur), ' ||
-    '"partiel" (réponse partiellement conforme — omissions ou imprécisions), ' ||
-    '"non_conforme" (réponse contradictoire avec la référence), ' ||
-    '"hors_sujet" (réponse sans lien avec la question). ' ||
-    'Attribue AUSSI un score numérique 0-10 (10=parfaitement conforme, 0=hors sujet).'
-)
-ON CONFLICT (prompt_id) DO NOTHING;
+-- Prompt juge « conformité » (schéma labels catégoriels ADR-079 §3) — déplacé
+-- dans seed.sql pour ne pas casser un boot fresh (prompt_types seed y vit).
 
 -- ---------------------------------------------------------------------
 -- ADR-079 §2, §5-6 (PR#17) : gold set humain + métriques d'accord.
@@ -128,3 +116,67 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_gold_annotations_test_run_annotator
     ON gold_annotations(test_id, run_id, annotator_email);
 CREATE INDEX IF NOT EXISTS ix_gold_annotations_run_id
     ON gold_annotations(run_id);
+
+-- ---------------------------------------------------------------------
+-- PR#18 : Périmètre (objet intermédiaire org → tests). Chaque question
+-- est rattachée à un périmètre. Backfill vers un périmètre « Général »
+-- créé automatiquement par organisation.
+-- ---------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS uq_perimeters_org_slug
+    ON perimeters(organization_id, slug);
+CREATE INDEX IF NOT EXISTS ix_perimeters_org_id ON perimeters(organization_id);
+
+ALTER TABLE tests           ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
+ALTER TABLE scheduled_runs  ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
+ALTER TABLE runs            ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
+
+INSERT INTO perimeters (organization_id, name, slug, description)
+SELECT o.id, 'Général', 'general', 'Périmètre par défaut créé automatiquement.'
+FROM organizations o
+WHERE NOT EXISTS (
+    SELECT 1 FROM perimeters p WHERE p.organization_id = o.id AND p.slug = 'general'
+);
+
+UPDATE tests t
+SET perimeter_id = p.id
+FROM perimeters p
+WHERE t.perimeter_id IS NULL
+  AND p.organization_id = t.organization_id
+  AND p.slug = 'general';
+
+UPDATE scheduled_runs sr
+SET perimeter_id = p.id
+FROM perimeters p
+WHERE sr.perimeter_id IS NULL
+  AND p.organization_id = sr.organization_id
+  AND p.slug = 'general';
+
+UPDATE runs r
+SET perimeter_id = p.id
+FROM perimeters p
+WHERE r.perimeter_id IS NULL
+  AND p.organization_id = r.organization_id
+  AND p.slug = 'general';
+
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'tests_perimeter_id_fkey') THEN
+        ALTER TABLE tests ADD CONSTRAINT tests_perimeter_id_fkey
+            FOREIGN KEY (perimeter_id) REFERENCES perimeters(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'scheduled_runs_perimeter_id_fkey') THEN
+        ALTER TABLE scheduled_runs ADD CONSTRAINT scheduled_runs_perimeter_id_fkey
+            FOREIGN KEY (perimeter_id) REFERENCES perimeters(id);
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'runs_perimeter_id_fkey') THEN
+        ALTER TABLE runs ADD CONSTRAINT runs_perimeter_id_fkey
+            FOREIGN KEY (perimeter_id) REFERENCES perimeters(id);
+    END IF;
+END $$;
+
+ALTER TABLE tests           ALTER COLUMN perimeter_id SET NOT NULL;
+ALTER TABLE scheduled_runs  ALTER COLUMN perimeter_id SET NOT NULL;
+
+CREATE INDEX IF NOT EXISTS ix_tests_perimeter_id           ON tests(perimeter_id);
+CREATE INDEX IF NOT EXISTS ix_scheduled_runs_perimeter_id  ON scheduled_runs(perimeter_id);
+CREATE INDEX IF NOT EXISTS ix_runs_perimeter_id            ON runs(perimeter_id);

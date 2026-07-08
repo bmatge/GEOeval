@@ -31,6 +31,7 @@ from webapp import (
     credentials,
     gold,
     ground_truth,
+    perimeters,
     pricing,
     scheduler,
     services,
@@ -223,28 +224,177 @@ def run_detail(run_id: int, request: Request, ctx=Depends(require_org), db: Sess
 
 
 # =====================================================================
+# Périmètres (PR#18) — objet intermédiaire org → questions
+# =====================================================================
+@app.get("/o/{org_slug}/perimeters", response_class=HTMLResponse)
+def perimeters_list(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+    org, role = ctx
+    plist = perimeters.list_for_org(db, org.id)
+    counts = {p.id: perimeters.count_tests(db, p.id) for p in plist}
+    return render(
+        request, "perimeters.html", active="perimeters", org=org, role=role,
+        perimeters=plist, counts=counts,
+    )
+
+
+@app.get("/o/{org_slug}/perimeters/new", response_class=HTMLResponse)
+def perimeter_new_form(
+    request: Request, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)
+):
+    org, role = ctx
+    return render(
+        request, "perimeter_form.html", active="perimeters", org=org, role=role,
+        perimeter=None,
+    )
+
+
+@app.post("/o/{org_slug}/perimeters/new")
+def perimeter_create(
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+    slug: str = Form(...),
+    kind: str = Form(""),
+    home_url: str = Form(""),
+    description: str = Form(""),
+):
+    org, _ = ctx
+    try:
+        p = perimeters.create(
+            db, org_id=org.id,
+            name=name, slug=slug, kind=kind or None,
+            home_url=home_url or None, description=description or None,
+            created_by=user.id,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="create", entity_type="perimeter", entity_id=p.id,
+        meta={"slug": p.slug, "name": p.name},
+    )
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{p.id}", status_code=303)
+
+
+@app.get("/o/{org_slug}/perimeters/{perimeter_id}", response_class=HTMLResponse)
+def perimeter_detail(
+    perimeter_id: int, request: Request,
+    ctx=Depends(require_org), db: Session = Depends(get_db),
+):
+    org, role = ctx
+    p = perimeters.get_by_id(db, org.id, perimeter_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    return render(
+        request, "perimeter_detail.html", active="perimeters", org=org, role=role,
+        perimeter=p,
+        tests=services.list_tests(db, org.id, perimeter_id=p.id),
+        all_perimeters=perimeters.list_for_org(db, org.id),
+    )
+
+
+@app.get("/o/{org_slug}/perimeters/{perimeter_id}/edit", response_class=HTMLResponse)
+def perimeter_edit_form(
+    perimeter_id: int, request: Request,
+    ctx=Depends(require_role("editor")), db: Session = Depends(get_db),
+):
+    org, role = ctx
+    p = perimeters.get_by_id(db, org.id, perimeter_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    return render(
+        request, "perimeter_form.html", active="perimeters", org=org, role=role,
+        perimeter=p,
+    )
+
+
+@app.post("/o/{org_slug}/perimeters/{perimeter_id}/edit")
+def perimeter_edit_submit(
+    perimeter_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+    kind: str = Form(""),
+    home_url: str = Form(""),
+    description: str = Form(""),
+):
+    org, _ = ctx
+    try:
+        perimeters.update(
+            db, org_id=org.id, perimeter_id=perimeter_id,
+            name=name, kind=kind or None,
+            home_url=home_url or None, description=description or None,
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="update", entity_type="perimeter", entity_id=perimeter_id,
+    )
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
+
+
+@app.post("/o/{org_slug}/perimeters/{perimeter_id}/delete")
+def perimeter_delete(
+    perimeter_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    try:
+        perimeters.delete(db, org.id, perimeter_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="delete", entity_type="perimeter", entity_id=perimeter_id,
+    )
+    return RedirectResponse(f"/o/{org.slug}/perimeters", status_code=303)
+
+
+# =====================================================================
 # Tests (par org — édition = editor+)
 # =====================================================================
 @app.get("/o/{org_slug}/tests", response_class=HTMLResponse)
-def tests(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+def tests(
+    request: Request, ctx=Depends(require_org), db: Session = Depends(get_db),
+    perimeter: str = "",
+):
     org, role = ctx
+    # Filtre optionnel par slug de périmètre.
+    peri_id: Optional[int] = None
+    peri_obj = None
+    if perimeter:
+        peri_obj = perimeters.get_by_slug(db, org.id, perimeter)
+        peri_id = peri_obj.id if peri_obj else -1
     return render(
         request, "tests.html", active="tests", org=org, role=role,
-        tests=services.list_tests(db, org.id),
+        tests=services.list_tests(db, org.id, perimeter_id=peri_id),
+        all_perimeters=perimeters.list_for_org(db, org.id),
+        current_perimeter=peri_obj,
     )
 
 
 @app.get("/o/{org_slug}/tests/new", response_class=HTMLResponse)
-def test_new(request: Request, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
+def test_new(
+    request: Request,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    perimeter_id: int = 0,
+):
     org, role = ctx
+    default_peri = None
+    if perimeter_id > 0:
+        default_peri = perimeters.get_by_id(db, org.id, perimeter_id)
     return render(
-        request,
-        "test_form.html",
-        active="tests",
-        org=org,
-        role=role,
+        request, "test_form.html", active="tests", org=org, role=role,
         test=None,
         prompts=services.list_prompts(db),
+        all_perimeters=perimeters.list_for_org(db, org.id),
+        default_perimeter=default_peri,
     )
 
 
@@ -252,21 +402,23 @@ def test_new(request: Request, ctx=Depends(require_role("editor")), db: Session 
 def test_create(
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    perimeter_id: int = Form(...),
     prompt: str = Form(...),
     expected_answer: str = Form(""),
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
 ):
     org, _ = ctx
+    peri = perimeters.get_by_id(db, org.id, perimeter_id)
+    if peri is None:
+        raise HTTPException(status_code=400, detail="Périmètre invalide.")
     services.create_test(
-        db,
-        org.id,
-        prompt=prompt,
-        expected_answer=expected_answer,
+        db, org.id, perimeter_id=perimeter_id,
+        prompt=prompt, expected_answer=expected_answer,
         response_quality_prompt_id=_opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=_opt_int(citation_quality_prompt_id),
     )
-    return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 
 @app.get("/o/{org_slug}/tests/{test_id}/edit", response_class=HTMLResponse)
@@ -276,13 +428,11 @@ def test_edit(test_id: int, request: Request, ctx=Depends(require_role("editor")
     if test is None:
         raise HTTPException(status_code=404, detail=f"Test {test_id} introuvable")
     return render(
-        request,
-        "test_form.html",
-        active="tests",
-        org=org,
-        role=role,
+        request, "test_form.html", active="tests", org=org, role=role,
         test=test,
         prompts=services.list_prompts(db),
+        all_perimeters=perimeters.list_for_org(db, org.id),
+        default_perimeter=None,
     )
 
 
@@ -291,22 +441,30 @@ def test_update(
     test_id: int,
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    perimeter_id: int = Form(...),
     prompt: str = Form(...),
     expected_answer: str = Form(""),
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
 ):
     org, _ = ctx
+    # Déplacement éventuel de périmètre.
+    peri = perimeters.get_by_id(db, org.id, perimeter_id)
+    if peri is None:
+        raise HTTPException(status_code=400, detail="Périmètre invalide.")
+    test = services.get_test(db, org.id, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Test introuvable.")
+    if test.perimeter_id != perimeter_id:
+        test.perimeter_id = perimeter_id
+        db.commit()
     services.update_test(
-        db,
-        org.id,
-        test_id,
-        prompt=prompt,
-        expected_answer=expected_answer,
+        db, org.id, test_id,
+        prompt=prompt, expected_answer=expected_answer,
         response_quality_prompt_id=_opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=_opt_int(citation_quality_prompt_id),
     )
-    return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 
 @app.post("/o/{org_slug}/tests/{test_id}/deactivate")
@@ -472,15 +630,23 @@ TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemin
 PROVIDER_CHOICES = ["chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
 
 
-def _run_form_context(db: Session, org_id: int) -> dict:
-    """Contexte commun aux formulaires « lancer » et « planifier » un run."""
+def _run_form_context(db: Session, org_id: int, perimeter_id: Optional[int] = None) -> dict:
+    """Contexte commun aux formulaires « lancer » et « planifier » un run.
+
+    Si `perimeter_id` est fourni, seules les questions de ce périmètre sont exposées.
+    """
     models = services.list_models(db)
     judges = [m for m in models if m.is_judge]
-    # Précompute kappa vs gold set pour affichage inline (ADR-079 §6).
     judge_kappa: dict[int, Optional[float]] = {}
     for j in judges:
         ag = agreement.compute_agreement_vs_gold(db, j.model_id)
         judge_kappa[j.model_id] = ag.get("response_kappa")
+    all_peri = perimeters.list_for_org(db, org_id)
+    tests_for_form = (
+        load_tests(db, organization_id=org_id)
+        if perimeter_id is None
+        else [t for t in load_tests(db, organization_id=org_id) if t.perimeter_id == perimeter_id]
+    )
     return dict(
         models=models,
         testable_models=[
@@ -489,45 +655,67 @@ def _run_form_context(db: Session, org_id: int) -> dict:
         judgeable_models=judges,
         judge_kappa=judge_kappa,
         kappa_threshold=0.6,
-        tests=load_tests(db, organization_id=org_id),
+        tests=tests_for_form,
+        all_perimeters=all_peri,
     )
 
 
 def _parse_run_selection(
     db: Session,
     org_id: int,
+    perimeter_id: int,
     tested_models: list[str],
     judge_models: list[str],
     repeats: int,
     test_ids: list[int],
 ) -> dict:
-    """Valide la sélection commune (modèles, juges, tests) et renvoie les params job."""
+    """Valide la sélection (modèles, juges, tests) restreinte au périmètre."""
     if not tested_models or not judge_models:
         raise HTTPException(
             status_code=400,
-            detail="Sélectionne au moins un modèle testé et un juge.",
+            detail="Sélectionne au moins une IA évaluée et un notateur.",
         )
-    all_active_ids = [t.test_id for t in load_tests(db, organization_id=org_id)]
+    peri = perimeters.get_by_id(db, org_id, perimeter_id)
+    if peri is None:
+        raise HTTPException(status_code=400, detail="Périmètre invalide.")
+    peri_tests = [
+        t for t in load_tests(db, organization_id=org_id) if t.perimeter_id == perimeter_id
+    ]
+    all_active_ids = [t.test_id for t in peri_tests]
     if not all_active_ids:
         raise HTTPException(
             status_code=400,
-            detail="Aucun test actif et prêt : active ou crée des tests avant de lancer un run.",
+            detail="Aucune question active et prête dans ce périmètre.",
         )
     if not test_ids:
-        raise HTTPException(status_code=400, detail="Sélectionne au moins un test.")
+        raise HTTPException(status_code=400, detail="Sélectionne au moins une question.")
+    # Vérif : les test_ids demandés appartiennent au périmètre.
+    invalid = set(test_ids) - set(all_active_ids)
+    if invalid:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Questions hors du périmètre {peri.name!r} : {sorted(invalid)}",
+        )
     selected: Optional[list[int]] = None if set(test_ids) >= set(all_active_ids) else test_ids
     judges = [{"model": v, "repeats": max(1, repeats)} for v in judge_models]
     return dict(tested_models=tested_models, judges=judges, test_ids=selected)
 
 
 @app.get("/o/{org_slug}/launch", response_class=HTMLResponse)
-def launch_form(request: Request, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
+def launch_form(
+    request: Request,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    perimeter_id: int = 0,
+):
     org, role = ctx
-    fctx = _run_form_context(db, org.id)
+    peri = perimeters.get_by_id(db, org.id, perimeter_id) if perimeter_id > 0 else None
+    fctx = _run_form_context(db, org.id, perimeter_id=peri.id if peri else None)
     b = budget.get_budget(db, org.id)
     spent = budget.current_month_spent(db, org.id)
     return render(request, "launch.html", active="launch", org=org, role=role,
                   active_tests_count=len(fctx["tests"]),
+                  selected_perimeter=peri,
                   budget=b, month_spent=spent, **fctx)
 
 
@@ -535,6 +723,7 @@ def launch_form(request: Request, ctx=Depends(require_role("editor")), db: Sessi
 def launch_submit(
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    perimeter_id: int = Form(...),
     tested_models: list[str] = Form(default=[]),
     judge_models: list[str] = Form(default=[]),
     repeats: int = Form(1),
@@ -542,28 +731,24 @@ def launch_submit(
     test_ids: list[int] = Form(default=[]),
 ):
     org, _ = ctx
-    params = _parse_run_selection(db, org.id, tested_models, judge_models, repeats, test_ids)
+    params = _parse_run_selection(db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids)
 
-    # Devis + check budget (ADR-078 §3-5, soft-stop).
     tests_for_estimate = load_tests(
-        db,
-        test_ids=params["test_ids"],
-        active_only=True,
-        ready_only=True,
+        db, test_ids=params["test_ids"], active_only=True, ready_only=True,
         organization_id=org.id,
     )
     estimate = pricing.estimate_scan_cost(
-        db,
-        org_id=org.id,
-        tests=tests_for_estimate,
-        tested_models=params["tested_models"],
-        judges=params["judges"],
+        db, org_id=org.id, tests=tests_for_estimate,
+        tested_models=params["tested_models"], judges=params["judges"],
     )
     check = budget.check_budget(db, org_id=org.id, estimate_eur=estimate["total_eur"])
     if not check.ok:
         raise HTTPException(status_code=402, detail=check.reason)
 
-    job = manager.submit(dict(**params, note=note or None, organization_id=org.id))
+    job = manager.submit(dict(
+        **params, note=note or None,
+        organization_id=org.id, perimeter_id=perimeter_id,
+    ))
     return RedirectResponse(f"/o/{org.slug}/jobs/{job.id}", status_code=303)
 
 
@@ -816,17 +1001,25 @@ def schedules_list(request: Request, ctx=Depends(require_org), db: Session = Dep
 
 
 @app.get("/o/{org_slug}/schedules/new", response_class=HTMLResponse)
-def schedule_new_form(request: Request, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
+def schedule_new_form(
+    request: Request,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    perimeter_id: int = 0,
+):
     org, role = ctx
-    fctx = _run_form_context(db, org.id)
+    peri = perimeters.get_by_id(db, org.id, perimeter_id) if perimeter_id > 0 else None
+    fctx = _run_form_context(db, org.id, perimeter_id=peri.id if peri else None)
     return render(request, "schedule_form.html", active="schedules", org=org, role=role,
-                  weekdays=scheduler.WEEKDAYS_FR, **fctx)
+                  weekdays=scheduler.WEEKDAYS_FR,
+                  selected_perimeter=peri, **fctx)
 
 
 @app.post("/o/{org_slug}/schedules/new")
 def schedule_new_submit(
     ctx=Depends(require_role("editor")),
     db: Session = Depends(get_db),
+    perimeter_id: int = Form(...),
     name: str = Form(...),
     tested_models: list[str] = Form(default=[]),
     judge_models: list[str] = Form(default=[]),
@@ -841,7 +1034,7 @@ def schedule_new_submit(
     every_hours: int = Form(24),
 ):
     org, _ = ctx
-    params = _parse_run_selection(db, org.id, tested_models, judge_models, repeats, test_ids)
+    params = _parse_run_selection(db, org.id, perimeter_id, tested_models, judge_models, repeats, test_ids)
 
     if schedule_kind == "once":
         if not once_at:
@@ -883,6 +1076,7 @@ def schedule_new_submit(
     services.create_schedule(
         db,
         org.id,
+        perimeter_id=perimeter_id,
         name=name.strip(),
         tested_models=params["tested_models"],
         judges=params["judges"],
@@ -931,6 +1125,7 @@ def schedule_run_now(
     job = manager.submit(
         dict(
             organization_id=org.id,
+            perimeter_id=sr.perimeter_id,
             tested_models=list(sr.tested_models),
             judges=list(sr.judges),
             note=sr.note or f"planifié : {sr.name} (manuel)",

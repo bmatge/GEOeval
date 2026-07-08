@@ -223,6 +223,7 @@ def execute_run(
     tested_model: int | str,
     tests: list[Test],
     organization_id: int,
+    perimeter_id: Optional[int] = None,
     run_meta: Optional[dict[str, Any]] = None,
     progress_cb: Optional[Callable[[int, int, str], None]] = None,
 ) -> int:
@@ -231,6 +232,7 @@ def execute_run(
 
     tested_model    : model_id (int) OU model_version (str, ex. 'gpt-5.2').
     organization_id : organisation propriétaire du run (ADR-077).
+    perimeter_id    : périmètre ciblé par ce run (PR#18), optionnel pour compat.
     progress_cb     : callback optionnel (current, total, detail) appelé après
                       chaque test (utilisé par l'UI pour le suivi de progression).
     Retourne run_id.
@@ -241,6 +243,7 @@ def execute_run(
     run_row = RunRow(
         tested_model_id=tested_model.model_id,
         organization_id=organization_id,
+        perimeter_id=perimeter_id,
         run_meta=run_meta,
     )
     session.add(run_row)

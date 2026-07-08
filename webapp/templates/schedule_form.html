@@ -1,13 +1,36 @@
 {% extends "base.html" %}
-{% block title %}Programmer un run{% endblock %}
+{% block title %}Programmer une évaluation{% endblock %}
 {% block content %}
-<h1>Programmer un run</h1>
-<p class="fr-hint-text">Le run sera lancé automatiquement à l'échéance (heure de Paris), puis
-évalué par le(s) juge(s), comme un lancement manuel.</p>
+<h1>Programmer une évaluation</h1>
+<p class="fr-hint-text">L'évaluation sera lancée automatiquement à l'échéance (heure de Paris),
+puis notée par les notateurs, comme un lancement manuel.</p>
+
+{% if not selected_perimeter %}
+<div class="fr-callout">
+  <p class="fr-callout__title">Choisis d'abord un périmètre</p>
+</div>
+<form method="get" action="{{ url_prefix }}/schedules/new" class="fr-mt-2w" style="max-width:30rem;">
+  <div class="fr-select-group">
+    <label class="fr-label" for="perimeter_id">Périmètre</label>
+    <select class="fr-select" id="perimeter_id" name="perimeter_id" required>
+      <option value="">— sélectionne —</option>
+      {% for p in all_perimeters %}
+      <option value="{{ p.id }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Continuer</button>
+</form>
+{% else %}
+<div class="fr-callout fr-callout--green-emeraude">
+  <p class="fr-callout__title">Périmètre : {{ selected_perimeter.name }}</p>
+  <p class="fr-callout__text"><a class="fr-link" href="{{ url_prefix }}/schedules/new">Changer</a></p>
+</div>
 
 <form method="post" action="{{ url_prefix }}/schedules/new" class="fr-mt-2w">
+  <input type="hidden" name="perimeter_id" value="{{ selected_perimeter.id }}">
   <div class="fr-input-group" style="max-width: 30rem">
-    <label class="fr-label" for="name">Nom de la planification</label>
+    <label class="fr-label" for="name">Nom de la programmation</label>
     <input class="fr-input" id="name" name="name" required placeholder="baseline quotidienne">
   </div>
 
@@ -60,4 +83,5 @@
   <button type="submit" class="fr-btn fr-mt-2w">Programmer</button>
   <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/schedules">Annuler</a>
 </form>
+{% endif %}
 {% endblock %}

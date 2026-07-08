@@ -117,21 +117,28 @@ class JobManager:
             note: Optional[str] = job.params.get("note") or None
             test_ids: Optional[list[int]] = job.params.get("test_ids") or None
             organization_id: int = int(job.params["organization_id"])
+            perimeter_id: Optional[int] = job.params.get("perimeter_id")
+            if perimeter_id is not None:
+                perimeter_id = int(perimeter_id)
 
             for tm in tested_models:
                 # PHASE RUN
                 with SessionLocal() as session:
-                    tests = load_tests(
+                    all_tests = load_tests(
                         session,
                         test_ids=test_ids,
                         active_only=True,
                         ready_only=True,
                         organization_id=organization_id,
                     )
+                    # Filtrage périmètre (les scans planifiés sont scopés).
+                    tests = (
+                        [t for t in all_tests if t.perimeter_id == perimeter_id]
+                        if perimeter_id is not None else all_tests
+                    )
                     if not tests:
                         raise ValueError(
-                            "Aucun test actif et prêt (dans la sélection) : active ou "
-                            "crée des tests avant de lancer un run."
+                            "Aucune question active et prête (dans le périmètre / la sélection)."
                         )
 
                     def run_cb(cur: int, tot: int, detail: str, _tm=tm) -> None:
@@ -143,6 +150,7 @@ class JobManager:
                         tested_model=tm,
                         tests=tests,
                         organization_id=organization_id,
+                        perimeter_id=perimeter_id,
                         run_meta={"note": note} if note else None,
                         progress_cb=run_cb,
                     )

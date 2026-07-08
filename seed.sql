@@ -64,6 +64,17 @@ INSERT INTO evaluation_prompts (prompt_id, prompt_type_id, prompt_name, prompt_t
         'Attribue un score de 0 à 10 : 10 = sources fiables, pertinentes, vérifiables et directement ' ||
         'liées aux affirmations ; 0 = aucune source, sources non pertinentes ou non fiables. ' ||
         'Le champ "label" résume en une phrase courte la justification de la note.'
+    ),
+    (
+        3, 1, 'response_quality_reference',
+        'Tu évalues la CONFORMITÉ d''une réponse de modèle à une VÉRITÉ DE RÉFÉRENCE ' ||
+        'sourcée. Pas d''opinion : compare uniquement à la référence fournie. ' ||
+        'Attribue un label parmi : ' ||
+        '"conforme" (réponse alignée avec la référence, complète et sans erreur), ' ||
+        '"partiel" (réponse partiellement conforme — omissions ou imprécisions), ' ||
+        '"non_conforme" (réponse contradictoire avec la référence), ' ||
+        '"hors_sujet" (réponse sans lien avec la question). ' ||
+        'Attribue AUSSI un score numérique 0-10 (10=parfaitement conforme, 0=hors sujet).'
     )
 ON CONFLICT (prompt_id) DO NOTHING;
 
@@ -74,13 +85,17 @@ ON CONFLICT (prompt_id) DO NOTHING;
 --      (evaluate.py garde la meilleure note parmi les variantes).
 --    - validity_end_at NULL       => test "actif" (active_only dans load_tests).
 -- ---------------------------------------------------------------------
+-- Le périmètre « Général » de l'org 1 est créé par migrations.sql (rejouées
+-- avant seed.sql par docker-entrypoint.sh). On le résout par sous-requête pour
+-- rester robuste à son id auto-incrémenté.
 INSERT INTO tests
-    (test_id, organization_id, prompt, expected_answer,
+    (test_id, organization_id, perimeter_id, prompt, expected_answer,
      response_quality_prompt_id, citation_quality_prompt_id,
      validity_start_at, validity_end_at)
 VALUES
     (
         1, 1,
+        (SELECT id FROM perimeters WHERE organization_id = 1 AND slug = 'general'),
         'Quelle est la capitale de l''Australie ?',
         'Canberra',
         1, 2,
@@ -88,6 +103,7 @@ VALUES
     ),
     (
         2, 1,
+        (SELECT id FROM perimeters WHERE organization_id = 1 AND slug = 'general'),
         'En quelle année a été signé le traité de Rome instituant la CEE ?',
         '1957 OU en 1957 OU le 25 mars 1957',
         1, 2,

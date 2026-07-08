@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Éditer' if perimeter else 'Nouveau' }} périmètre{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/perimeters">Retour aux périmètres</a>
+<h1 class="fr-mt-2w">{{ 'Éditer le périmètre ' ~ perimeter.name if perimeter else 'Nouveau périmètre' }}</h1>
+
+<form method="post" action="{{ (url_prefix ~ '/perimeters/' ~ perimeter.id ~ '/edit') if perimeter else (url_prefix ~ '/perimeters/new') }}"
+      class="fr-mt-2w" style="max-width:40rem;">
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="name">Nom
+      <span class="fr-hint-text">Ex. « Site ADEME », « Thématique énergie », « Marketplace Q4 ».</span>
+    </label>
+    <input class="fr-input" id="name" name="name" required value="{{ perimeter.name if perimeter else '' }}">
+  </div>
+
+  {% if not perimeter %}
+  <div class="fr-input-group">
+    <label class="fr-label" for="slug">Slug
+      <span class="fr-hint-text">Minuscules, chiffres, tirets — utilisé pour identifier le périmètre.</span>
+    </label>
+    <input class="fr-input" id="slug" name="slug" required pattern="[a-z0-9][a-z0-9\-]{0,63}">
+  </div>
+  {% endif %}
+
+  <div class="fr-select-group">
+    <label class="fr-label" for="kind">Type <span class="fr-hint-text">(optionnel)</span></label>
+    <select class="fr-select" id="kind" name="kind">
+      <option value="">— non spécifié —</option>
+      <option value="site"  {% if perimeter and perimeter.kind == 'site' %}selected{% endif %}>Site (URL / domaine)</option>
+      <option value="topic" {% if perimeter and perimeter.kind == 'topic' %}selected{% endif %}>Thématique / sujet</option>
+      <option value="product" {% if perimeter and perimeter.kind == 'product' %}selected{% endif %}>Produit</option>
+    </select>
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="home_url">URL de référence <span class="fr-hint-text">(optionnel — utile pour un site)</span></label>
+    <input class="fr-input" id="home_url" name="home_url" type="url"
+           placeholder="https://exemple.fr"
+           value="{{ perimeter.home_url if perimeter and perimeter.home_url else '' }}">
+  </div>
+
+  <div class="fr-input-group">
+    <label class="fr-label" for="description">Description <span class="fr-hint-text">(optionnel)</span></label>
+    <textarea class="fr-input" id="description" name="description" rows="3">{{ perimeter.description if perimeter and perimeter.description else '' }}</textarea>
+  </div>
+
+  <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if perimeter else 'Créer' }}</button>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/perimeters">Annuler</a>
+</form>
+{% endblock %}
