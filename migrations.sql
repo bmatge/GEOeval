@@ -95,3 +95,28 @@ SELECT model_id, 5.00, 15.00 FROM models
 WHERE NOT EXISTS (
     SELECT 1 FROM model_pricing p WHERE p.model_id = models.model_id
 );
+
+-- ---------------------------------------------------------------------
+-- ADR-079 (PR#16) : is_sovereign sur models + index partiel sur la version
+-- courante de la vérité de référence.
+-- ---------------------------------------------------------------------
+ALTER TABLE models ADD COLUMN IF NOT EXISTS is_sovereign BOOLEAN NOT NULL DEFAULT FALSE;
+UPDATE models SET is_sovereign = TRUE WHERE model_name = 'albert';
+
+CREATE INDEX IF NOT EXISTS ix_test_ground_truth_active
+    ON test_ground_truth(test_id) WHERE valid_to IS NULL;
+
+-- Prompt juge « conformité » (schéma labels catégoriels ADR-079 §3).
+INSERT INTO evaluation_prompts (prompt_id, prompt_type_id, prompt_name, prompt_text)
+VALUES (
+    3, 1, 'response_quality_reference',
+    'Tu évalues la CONFORMITÉ d''une réponse de modèle à une VÉRITÉ DE RÉFÉRENCE ' ||
+    'sourcée. Pas d''opinion : compare uniquement à la référence fournie. ' ||
+    'Attribue un label parmi : ' ||
+    '"conforme" (réponse alignée avec la référence, complète et sans erreur), ' ||
+    '"partiel" (réponse partiellement conforme — omissions ou imprécisions), ' ||
+    '"non_conforme" (réponse contradictoire avec la référence), ' ||
+    '"hors_sujet" (réponse sans lien avec la question). ' ||
+    'Attribue AUSSI un score numérique 0-10 (10=parfaitement conforme, 0=hors sujet).'
+)
+ON CONFLICT (prompt_id) DO NOTHING;

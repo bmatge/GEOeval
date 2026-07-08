@@ -184,6 +184,10 @@ class Model(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     # Proposé (ou non) dans la colonne « Juges » des formulaires lancer/planifier.
     is_judge: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    # Juge « souverain » (ADR-079 §6) — hébergé par une infra publique (Albert).
+    is_sovereign: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
 
 
 class ScheduledRun(Base):
@@ -338,3 +342,26 @@ class EvaluationPrompt(Base):
     prompt_type_id: Mapped[int] = mapped_column(ForeignKey("prompt_types.prompt_type_id"), nullable=False)
     prompt_name: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# =====================================================================
+# ADR-079 §1 (PR#16) — vérité de référence versionnée pour un test.
+# Résolution par date via valid_from/valid_to (une seule row active à un
+# instant t). L'édition crée une NOUVELLE version et clôt l'ancienne.
+# =====================================================================
+class TestGroundTruth(Base):
+    __tablename__ = "test_ground_truth"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    reference_answer: Mapped[str] = mapped_column(Text, nullable=False)
+    reference_urls: Mapped[Optional[list[Any]]] = mapped_column(JSONB, nullable=True)
+    valid_from: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    valid_to: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

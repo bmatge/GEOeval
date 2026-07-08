@@ -15,7 +15,7 @@
     <tbody>
       {% for t in tests %}
       <tr>
-        <td>{{ t.test_id }}</td>
+        <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
         <td>{{ t.prompt|truncate(90) }}</td>
         <td>{{ (t.expected_answer or "—")|truncate(50) }}</td>
         <td>

@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from load import load_tests
-from webapp import audit, budget, credentials, pricing, scheduler, services, tenancy
+from webapp import audit, budget, credentials, ground_truth, pricing, scheduler, services, tenancy
 from webapp.auth import CurrentUser, GateAuthMiddleware
 from webapp.deps import (
     get_db,
@@ -310,6 +310,56 @@ def test_reactivate(test_id: int, ctx=Depends(require_role("editor")), db: Sessi
     org, _ = ctx
     services.reactivate_test(db, org.id, test_id)
     return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
+
+
+# ---- Vérité de référence (ADR-079 §1) --------------------------------
+@app.get("/o/{org_slug}/tests/{test_id}", response_class=HTMLResponse)
+def test_detail(
+    test_id: int,
+    request: Request,
+    ctx=Depends(require_org),
+    db: Session = Depends(get_db),
+):
+    org, role = ctx
+    test = services.get_test(db, org.id, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail=f"Test {test_id} introuvable")
+    versions = ground_truth.list_versions(db, test_id)
+    return render(
+        request, "test_detail.html", active="tests", org=org, role=role,
+        test=test, gt_versions=versions,
+    )
+
+
+@app.post("/o/{org_slug}/tests/{test_id}/ground-truth")
+def test_ground_truth_create(
+    test_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    reference_answer: str = Form(...),
+    reference_urls: str = Form(""),
+    notes: str = Form(""),
+):
+    org, _ = ctx
+    test = services.get_test(db, org.id, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Test introuvable")
+    urls = [u.strip() for u in reference_urls.replace("\n", ",").split(",") if u.strip()]
+    row = ground_truth.create_new_version(
+        db,
+        test_id=test_id,
+        reference_answer=reference_answer,
+        reference_urls=urls,
+        created_by=user.id,
+        notes=notes or None,
+    )
+    audit.record(
+        db, user_id=user.id, org_id=org.id, action="create",
+        entity_type="test_ground_truth", entity_id=row.id,
+        meta={"test_id": test_id, "version": row.version},
+    )
+    return RedirectResponse(f"/o/{org.slug}/tests/{test_id}", status_code=303)
 
 
 # =====================================================================

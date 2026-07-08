@@ -66,6 +66,10 @@ def _normalize_judges(
 # -----------------------------
 # Judge parsing
 # -----------------------------
+# Labels catégoriels ADR-079 §3 (mode conformité).
+CONFORMITY_LABELS = ("conforme", "partiel", "non_conforme", "hors_sujet")
+
+
 @dataclass(frozen=True)
 class JudgeResult:
     label: str
@@ -92,6 +96,9 @@ class JudgeResult:
 
         score_dec = score_dec.quantize(Decimal("0.01"))
         return JudgeResult(label=label.strip(), score=score_dec)
+
+    def is_conformity(self) -> bool:
+        return self.label in CONFORMITY_LABELS
 
 
 def build_prompt_json_guardrails(base_prompt: str) -> str:
@@ -314,6 +321,21 @@ def evaluate_run(
     total = sum(repeats for _, repeats in judge_specs) * n_evaluable
     done = 0
 
+    # Résolution vérité de référence par test au moment du run (ADR-079 §1).
+    from models import RunRow  # local — cycle-safe
+    from webapp import ground_truth as _gt
+
+    run_row = session.get(RunRow, run_id)
+    run_ts = run_row.started_at if run_row else None
+
+    # Prompt « conformité » (ADR-079 §3) chargé si présent.
+    conformity_prompt_row = session.execute(
+        select(EvaluationPrompt).where(
+            EvaluationPrompt.prompt_name == "response_quality_reference"
+        )
+    ).scalar_one_or_none()
+    conformity_prompt_text = conformity_prompt_row.prompt_text if conformity_prompt_row else None
+
     # Double boucle : juge (modèle, repeats) × index de run
     for judge_model, repeats in judge_specs:
 
@@ -328,17 +350,31 @@ def evaluate_run(
                         f"Test {test.test_id}: prompts manquants ou invalides"
                     )
 
-                # 1) Qualité réponse
-                response_quality_prompt = build_prompt_json_guardrails(response_prompt_text)
-                response_quality_user_prompt = (
-                    f"{response_quality_prompt}\n\n"
-                    "=== DONNÉES À ÉVALUER ===\n"
-                    f"[Réponse attendue]\n{test.expected_answer}\n\n"
-                    f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
-                    "Instruction: le champ [Réponse attendue] peut contenir plusieurs variantes "
-                    "séparées par le token ' OU '. "
-                    "Évaluer chaque variante indépendamment et conserver la meilleure note.\n"
-                )
+                gt_row = _gt.get_at(session, test.test_id, run_ts)
+                use_conformity = gt_row is not None and conformity_prompt_text is not None
+
+                # 1) Qualité réponse — conformité si vérité présente, opinion sinon.
+                if use_conformity:
+                    response_quality_prompt = build_prompt_json_guardrails(conformity_prompt_text)
+                    urls_str = ", ".join(gt_row.reference_urls or []) or "(aucune)"
+                    response_quality_user_prompt = (
+                        f"{response_quality_prompt}\n\n"
+                        "=== DONNÉES À ÉVALUER ===\n"
+                        f"[Vérité de référence]\n{gt_row.reference_answer}\n"
+                        f"[Sources de référence] {urls_str}\n\n"
+                        f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
+                    )
+                else:
+                    response_quality_prompt = build_prompt_json_guardrails(response_prompt_text)
+                    response_quality_user_prompt = (
+                        f"{response_quality_prompt}\n\n"
+                        "=== DONNÉES À ÉVALUER ===\n"
+                        f"[Réponse attendue]\n{test.expected_answer}\n\n"
+                        f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
+                        "Instruction: le champ [Réponse attendue] peut contenir plusieurs variantes "
+                        "séparées par le token ' OU '. "
+                        "Évaluer chaque variante indépendamment et conserver la meilleure note.\n"
+                    )
 
                 response_quality_raw = call_judge_llm(
                     judge_model, response_quality_user_prompt, organization_id=organization_id
