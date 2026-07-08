@@ -93,16 +93,50 @@ def _headers_key(headers: Optional[dict]) -> str:
     return json.dumps(headers, sort_keys=True) if headers else ""
 
 
-def client_for_model(model: Any) -> Any:
-    """Client LLM pour un modèle (ligne de la table `models`), mis en cache par
-    configuration effective. Sans config en base, équivaut aux singletons env."""
+def _byok_override(model: Any, organization_id: Optional[int]) -> tuple[Optional[str], Optional[str], Optional[dict]]:
+    """Cherche une clé BYOK active pour (org, modèle). Renvoie (base_url, api_key, headers) ou (None, None, None)."""
+    if organization_id is None:
+        return (None, None, None)
+    # Import local pour éviter un cycle au chargement.
+    try:
+        from db import SessionLocal
+        from models import OrgCredential
+        from webapp.crypto import decrypt_secret
+    except Exception:  # noqa: BLE001
+        return (None, None, None)
+
+    from sqlalchemy import select
+    with SessionLocal() as session:
+        cred = session.execute(
+            select(OrgCredential).where(
+                OrgCredential.organization_id == organization_id,
+                OrgCredential.model_id == model.model_id,
+                OrgCredential.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if cred is None:
+            return (None, None, None)
+        api_key = decrypt_secret(cred.api_key_encrypted)
+        return (cred.base_url or None, api_key, cred.extra_headers or None)
+
+
+def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
+    """Client LLM pour un modèle avec résolution en cascade des credentials.
+
+    Ordre de résolution (ADR-078 §2) :
+        org_credentials (BYOK, si organization_id fourni)
+        → models.api_key / base_url / headers (config plateforme)
+        → variables d'environnement du provider.
+    Mis en cache par configuration effective.
+    """
     family = provider_family(model.model_name)
     if family is None:
         raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
 
-    base_url = getattr(model, "base_url", None) or None
-    api_key = getattr(model, "api_key", None) or None
-    headers = getattr(model, "extra_headers", None) or None
+    byok_base, byok_key, byok_headers = _byok_override(model, organization_id)
+    base_url = byok_base or getattr(model, "base_url", None) or None
+    api_key = byok_key or getattr(model, "api_key", None) or None
+    headers = byok_headers or getattr(model, "extra_headers", None) or None
     key = (family, base_url, api_key, _headers_key(headers))
     if key in _CLIENTS_BY_CONFIG:
         return _CLIENTS_BY_CONFIG[key]

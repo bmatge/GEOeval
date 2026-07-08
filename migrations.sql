@@ -71,3 +71,9 @@ CREATE INDEX IF NOT EXISTS ix_invitations_org_id  ON invitations(org_id);
 CREATE INDEX IF NOT EXISTS ix_invitations_email   ON invitations(email);
 CREATE INDEX IF NOT EXISTS ix_audit_log_org_at    ON audit_log(org_id, at DESC);
 CREATE INDEX IF NOT EXISTS ix_audit_log_user_at   ON audit_log(user_id, at DESC);
+
+-- ---------------------------------------------------------------------
+-- ADR-078 §1–2 (PR#14) : BYOK par org. Une seule clé active (org, modèle).
+-- ---------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS uq_org_credentials_org_model
+    ON org_credentials(organization_id, model_id);

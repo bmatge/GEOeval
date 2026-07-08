@@ -155,7 +155,13 @@ class JobManager:
                         job.phase = f"ÉVAL {_tm} (run {_rid}) · {detail}"
                         job.current, job.total = cur, tot
 
-                    evaluate_run(session, run_id=run_id, judges=judges, progress_cb=eval_cb)
+                    evaluate_run(
+                        session,
+                        run_id=run_id,
+                        judges=judges,
+                        organization_id=organization_id,
+                        progress_cb=eval_cb,
+                    )
                     session.commit()
 
             job.phase = "terminé"

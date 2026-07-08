@@ -21,6 +21,8 @@ services:
       # local via docker-compose, DEV_FAKE_EMAIL simule un user connu.
       DEV_FAKE_EMAIL: ${DEV_FAKE_EMAIL:-}
       DEV_FAKE_GROUPS: ${DEV_FAKE_GROUPS:-}
+      # Fernet BYOK (ADR-078, PR#14) — voir .env.example pour la génération.
+      GEOEVAL_KEY_SECRET: ${GEOEVAL_KEY_SECRET:-}
     depends_on:
       db:
         condition: service_healthy

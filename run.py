@@ -88,7 +88,7 @@ def build_instructions() -> str:
 # -----------------------------
 # LLM call (tested model)
 # -----------------------------
-def call_tested_llm(model: Model, prompt: str) -> str:
+def call_tested_llm(model: Model, prompt: str, organization_id: Optional[int] = None) -> str:
     logger.info("call_tested_llm START %s", model.model_version)
     start = time.perf_counter()
     instructions = build_instructions()
@@ -96,7 +96,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
     # 1) OpenAI (web_search activé)
     if model_name in {"openai", "chatgpt", "gpt"}:
-        client = llm_clients.client_for_model(model)
+        client = llm_clients.client_for_model(model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.responses.create(
@@ -133,7 +133,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
 
     # 2) Mistral (Agents/Conversations + web_search) + agent singleton par model_version
     if model_name in {"mistral", "mistralai"}:
-        client = llm_clients.client_for_model(model)
+        client = llm_clients.client_for_model(model, organization_id=organization_id)
 
         def _do() -> str:
             agent = llm_clients.get_mistral_agent_singleton_by_model_version(
@@ -185,7 +185,7 @@ def call_tested_llm(model: Model, prompt: str) -> str:
     if model_name in {"gemini", "google"}:
         from google.genai import types
 
-        client = llm_clients.client_for_model(model)
+        client = llm_clients.client_for_model(model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.models.generate_content(
@@ -241,7 +241,7 @@ def execute_run(
     total = len(tests)
     results: list[tuple[int, str, Optional[list[str]]]] = []
     for i, t in enumerate(tests, start=1):
-        answer = call_tested_llm(tested_model, t.prompt)
+        answer = call_tested_llm(tested_model, t.prompt, organization_id=organization_id)
         citations = extract_urls(answer)
         results.append((t.test_id, answer, citations if citations else None))
         if progress_cb is not None:

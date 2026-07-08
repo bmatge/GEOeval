@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Callable, Tuple, List
+from typing import Any, Callable, Optional, Tuple, List
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -132,7 +132,7 @@ def parse_judge_output(raw: str) -> JudgeResult:
 # -----------------------------
 # LLM judge call
 # -----------------------------
-def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
+def call_judge_llm(judge_model: Model, user_prompt: str, organization_id: Optional[int] = None) -> str:
     logger.info("call_judge_llm START %s", judge_model.model_version)
     start = time.perf_counter()
     system_text = (
@@ -144,7 +144,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # OpenAI (sans web)
     if model_name in {"openai", "chatgpt", "gpt"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.responses.create(
@@ -170,7 +170,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # Mistral (sans agents, sans web)
     if model_name in {"mistral", "mistralai"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.chat.complete(
@@ -198,7 +198,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # Gemini (sans tools)
     if model_name in {"gemini", "google"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.models.generate_content(
@@ -228,7 +228,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
     # Albert (API souveraine Etalab) et tout endpoint compatible OpenAI
     # (chat completions, sans web)
     if model_name in {"albert", "etalab", "openai-compatible", "compatible-openai"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.chat.completions.create(
@@ -260,6 +260,7 @@ def evaluate_run(
     session: Session,
     run_id: int,
     judges: list[Any],
+    organization_id: Optional[int] = None,
     progress_cb: Callable[[int, int, str], None] | None = None,
 ) -> None:
     """
@@ -321,7 +322,7 @@ def evaluate_run(
                 )
 
                 response_quality_raw = call_judge_llm(
-                    judge_model, response_quality_user_prompt
+                    judge_model, response_quality_user_prompt, organization_id=organization_id
                 )
                 response_quality = parse_judge_output(response_quality_raw)
 
@@ -334,7 +335,7 @@ def evaluate_run(
                 )
 
                 citation_quality_raw = call_judge_llm(
-                    judge_model, citation_quality_user_prompt
+                    judge_model, citation_quality_user_prompt, organization_id=organization_id
                 )
                 citation_quality = parse_judge_output(citation_quality_raw)
 

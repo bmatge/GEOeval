@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from load import load_tests
-from webapp import audit, scheduler, services, tenancy
+from webapp import audit, credentials, scheduler, services, tenancy
 from webapp.auth import CurrentUser, GateAuthMiddleware
 from webapp.deps import (
     get_db,
@@ -499,8 +499,87 @@ def models_list(request: Request, ctx=Depends(require_org), db: Session = Depend
     org, role = ctx
     models = services.list_models(db, active_only=False)
     refs = {m.model_id: services.model_run_refs(db, m.model_id) for m in models}
+    creds = credentials.list_for_org(db, org.id)
+    creds_by_model = {c.model_id: c for c in creds}
     return render(request, "models.html", active="models", org=org, role=role,
-                  models=models, refs=refs)
+                  models=models, refs=refs, creds_by_model=creds_by_model)
+
+
+# ---- BYOK : configuration par org (org_admin+) --------------------
+@app.get("/o/{org_slug}/credentials/{model_id}/edit", response_class=HTMLResponse)
+def credential_edit_form(
+    model_id: int,
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+):
+    org, role = ctx
+    model = services.get_model(db, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Modèle introuvable.")
+    cred = credentials.get_for_model(db, org.id, model_id)
+    return render(
+        request, "credential_form.html", active="models", org=org, role=role,
+        model=model, cred=cred,
+    )
+
+
+@app.post("/o/{org_slug}/credentials/{model_id}/edit")
+def credential_edit_submit(
+    model_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    base_url: str = Form(""),
+    api_key: str = Form(""),
+    clear_api_key: bool = Form(False),
+    extra_headers: str = Form(""),
+    is_active: bool = Form(False),
+):
+    org, _ = ctx
+    model = services.get_model(db, model_id)
+    if model is None:
+        raise HTTPException(status_code=404, detail="Modèle introuvable.")
+    credentials.upsert(
+        db,
+        org_id=org.id,
+        model_id=model_id,
+        base_url=base_url.strip() or None,
+        api_key=api_key.strip() or None,
+        clear_api_key=clear_api_key,
+        extra_headers=_parse_headers(extra_headers),
+        is_active=is_active,
+    )
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="upsert",
+        entity_type="org_credential",
+        entity_id=model_id,
+        meta={"model_version": model.model_version, "clear": clear_api_key},
+    )
+    return RedirectResponse(f"/o/{org.slug}/models", status_code=303)
+
+
+@app.post("/o/{org_slug}/credentials/{model_id}/delete")
+def credential_delete(
+    model_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    credentials.delete(db, org.id, model_id)
+    audit.record(
+        db,
+        user_id=user.id,
+        org_id=org.id,
+        action="delete",
+        entity_type="org_credential",
+        entity_id=model_id,
+    )
+    return RedirectResponse(f"/o/{org.slug}/models", status_code=303)
 
 
 @app.get("/o/{org_slug}/models/new", response_class=HTMLResponse)

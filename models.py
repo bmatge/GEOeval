@@ -138,6 +138,36 @@ class Test(Base):
     )
 
 
+class OrgCredential(Base):
+    """Clé d'accès BYOK d'une org sur un modèle du catalogue (ADR-078 §1-2).
+
+    L'`api_key_encrypted` est un blob Fernet (webapp/crypto.py). Résolution en
+    cascade dans llm_clients.client_for_model() :
+        org_credentials (BYOK) → models.api_key (plateforme) → env.
+    """
+    __tablename__ = "org_credentials"
+    __table_args__ = (
+        {"info": {"unique_org_model": ("organization_id", "model_id")}},
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
+    model_id: Mapped[int] = mapped_column(
+        ForeignKey("models.model_id"), nullable=False
+    )
+    base_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    api_key_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class Model(Base):
     __tablename__ = "models"
 
