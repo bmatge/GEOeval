@@ -17,6 +17,13 @@
             <div class="fr-header__logo">
               <p class="fr-logo">République<br>Française</p>
             </div>
+            {% if org %}
+            <div class="fr-header__navbar">
+              <button class="fr-btn--menu fr-btn" data-fr-opened="false"
+                      aria-controls="modal-menu" aria-haspopup="menu"
+                      id="button-menu" title="Menu">Menu</button>
+            </div>
+            {% endif %}
           </div>
           <div class="fr-header__service">
             <a href="{{ (url_prefix ~ '/') if org else '/' }}" title="Accueil — GEOeval">
@@ -46,9 +53,11 @@
     </div>
   </div>
   {% if org %}
-  <div class="fr-header__menu fr-modal">
+  <div class="fr-header__menu fr-modal" id="modal-menu" aria-labelledby="button-menu">
     <div class="fr-container">
-      <nav class="fr-nav" role="navigation" aria-label="Menu principal">
+      <button class="fr-btn--close fr-btn" aria-controls="modal-menu" title="Fermer">Fermer</button>
+      <div class="fr-header__menu-links"></div>
+      <nav class="fr-nav" id="navigation" role="navigation" aria-label="Menu principal">
         <ul class="fr-nav__list">
 
           {# --- Utiliser (toujours visible) --- #}
