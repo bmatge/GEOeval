@@ -18,13 +18,13 @@
         </td>
         <td>{{ j.params.tested_models|join(", ") }}</td>
         <td>{{ j.current }}/{{ j.total }} ({{ j.pct }} %)</td>
-        <td><a class="fr-link" href="/jobs/{{ j.id }}">Suivi</a></td>
+        <td><a class="fr-link" href="{{ url_prefix }}/jobs/{{ j.id }}">Suivi</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<div class="fr-callout"><p class="fr-callout__text">Aucun job. <a href="/launch">Lancer un run</a>.</p></div>
+<div class="fr-callout"><p class="fr-callout__text">Aucun job. <a href="{{ url_prefix }}/launch">Lancer un run</a>.</p></div>
 {% endif %}
 {% endblock %}

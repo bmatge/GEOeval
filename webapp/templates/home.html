@@ -13,8 +13,8 @@
       indépendants. Objectif : suivre dans le temps la fiabilité des réponses et la qualité
       des citations.
     </p>
-    <a class="fr-btn fr-btn--lg" href="/dashboard">Voir le classement</a>
-    <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="/launch">Lancer un run</a>
+    <a class="fr-btn fr-btn--lg" href="{{ url_prefix }}/dashboard">Voir le classement</a>
+    <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="{{ url_prefix }}/launch">Lancer un run</a>
   </div>
   <div class="fr-col-12 fr-col-md-4">
     <div class="fr-tile fr-tile--no-border" style="text-align:center">
@@ -44,7 +44,7 @@
       <div class="fr-card__body">
         <div class="fr-card__content">
           <h3 class="fr-card__title">1 · Des questions en base</h3>
-          <p class="fr-card__desc">Chaque <a class="fr-link" href="/tests">test</a> est une question
+          <p class="fr-card__desc">Chaque <a class="fr-link" href="{{ url_prefix }}/tests">test</a> est une question
           factuelle avec sa réponse attendue (plusieurs variantes possibles). On peut les créer,
           modifier, désactiver — l'historique reste comparable.</p>
         </div>
@@ -82,15 +82,15 @@
 <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
   <div class="fr-col-12 fr-col-md-6">
     <ol>
-      <li><strong><a class="fr-link" href="/models">Modèles</a></strong> — déclare ou ajuste les
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/models">Modèles</a></strong> — déclare ou ajuste les
         modèles (URL, clé API, rôle juge ou non). Tout endpoint compatible OpenAI peut devenir
         juge sans code.</li>
-      <li><strong><a class="fr-link" href="/tests">Tests</a></strong> — crée tes questions et
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/tests">Tests</a></strong> — crée tes questions et
         réponses attendues, active/désactive celles à inclure.</li>
-      <li><strong><a class="fr-link" href="/launch">Lancer un run</a></strong> — coche modèles
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/launch">Lancer un run</a></strong> — coche modèles
         testés, juges et questions ; suis la progression en direct dans
-        <a class="fr-link" href="/jobs">Jobs</a>.</li>
-      <li><strong><a class="fr-link" href="/schedules">Planification</a></strong> — programme des
+        <a class="fr-link" href="{{ url_prefix }}/jobs">Jobs</a>.</li>
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/schedules">Planification</a></strong> — programme des
         runs récurrents (quotidien, hebdo…) pour mesurer la <em>cohérence dans le temps</em>,
         l'intérêt principal du banc d'essai.</li>
     </ol>
@@ -99,8 +99,8 @@
     <div class="fr-callout">
       <h3 class="fr-callout__title">Lire les résultats</h3>
       <p class="fr-callout__text">
-        Le <a class="fr-link" href="/dashboard">tableau de bord</a> classe les modèles par score
-        moyen (réponse / citation). Chaque <a class="fr-link" href="/runs">run</a> se déplie
+        Le <a class="fr-link" href="{{ url_prefix }}/dashboard">tableau de bord</a> classe les modèles par score
+        moyen (réponse / citation). Chaque <a class="fr-link" href="{{ url_prefix }}/runs">run</a> se déplie
         jusqu'au détail : question → réponse du modèle → sources citées → notes et
         justifications de chaque juge.
       </p>

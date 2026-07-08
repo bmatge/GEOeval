@@ -10,6 +10,15 @@
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
+-- 0) Organisation seed (ADR-077) — les tests/runs préexistants y sont
+--    rattachés par migrations.sql (backfill). Le catalogue de modèles et
+--    les prompts d'évaluation restent globaux (non rattachés à une org).
+-- ---------------------------------------------------------------------
+INSERT INTO organizations (id, name, slug)
+VALUES (1, 'Bertrand', 'bertrand')
+ON CONFLICT (id) DO NOTHING;
+
+-- ---------------------------------------------------------------------
 -- 1) Catalogue des modèles
 --    model_name = provider reconnu par le dispatch (run.py / evaluate.py) :
 --        OpenAI  -> "openai" | "chatgpt" | "gpt"
@@ -66,19 +75,19 @@ ON CONFLICT (prompt_id) DO NOTHING;
 --    - validity_end_at NULL       => test "actif" (active_only dans load_tests).
 -- ---------------------------------------------------------------------
 INSERT INTO tests
-    (test_id, prompt, expected_answer,
+    (test_id, organization_id, prompt, expected_answer,
      response_quality_prompt_id, citation_quality_prompt_id,
      validity_start_at, validity_end_at)
 VALUES
     (
-        1,
+        1, 1,
         'Quelle est la capitale de l''Australie ?',
         'Canberra',
         1, 2,
         now(), NULL
     ),
     (
-        2,
+        2, 1,
         'En quelle année a été signé le traité de Rome instituant la CEE ?',
         '1957 OU en 1957 OU le 25 mars 1957',
         1, 2,
@@ -90,6 +99,7 @@ ON CONFLICT (test_id) DO NOTHING;
 -- 5) Resynchronisation des séquences d'auto-incrément
 --    (nécessaire car on a inséré des ids explicites)
 -- ---------------------------------------------------------------------
+SELECT setval(pg_get_serial_sequence('organizations',     'id'),             (SELECT COALESCE(MAX(id),             1) FROM organizations));
 SELECT setval(pg_get_serial_sequence('models',             'model_id'),       (SELECT COALESCE(MAX(model_id),       1) FROM models));
 SELECT setval(pg_get_serial_sequence('prompt_types',       'prompt_type_id'), (SELECT COALESCE(MAX(prompt_type_id), 1) FROM prompt_types));
 SELECT setval(pg_get_serial_sequence('evaluation_prompts', 'prompt_id'),      (SELECT COALESCE(MAX(prompt_id),      1) FROM evaluation_prompts));

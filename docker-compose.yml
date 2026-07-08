@@ -17,6 +17,10 @@ services:
       # Albert : fourni par les secrets partagés de la plateforme (SOPS, ADR-056)
       ALBERT_API_KEY: ${ALBERT_API_KEY:-}
       ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
+      # Auth (ADR-077, PR#12) : en prod, le gate injecte X-Gate-*. En dev
+      # local via docker-compose, DEV_FAKE_EMAIL simule un user connu.
+      DEV_FAKE_EMAIL: ${DEV_FAKE_EMAIL:-}
+      DEV_FAKE_GROUPS: ${DEV_FAKE_GROUPS:-}
     depends_on:
       db:
         condition: service_healthy

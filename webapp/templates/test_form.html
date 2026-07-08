@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ "Éditer" if test else "Nouveau" }} test{% endblock %}
 {% block content %}
-<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/tests">Retour aux tests</a>
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/tests">Retour aux tests</a>
 <h1 class="fr-mt-2w">{{ "Éditer le test " ~ test.test_id if test else "Nouveau test" }}</h1>
 
-<form method="post" action="{{ '/tests/' ~ test.test_id ~ '/edit' if test else '/tests/new' }}" class="fr-mt-2w">
+<form method="post" action="{{ (url_prefix ~ '/tests/' ~ test.test_id ~ '/edit') if test else (url_prefix ~ '/tests/new') }}" class="fr-mt-2w">
   <div class="fr-input-group">
     <label class="fr-label" for="prompt">Question (prompt)
       <span class="fr-hint-text">La question posée au modèle testé.</span>

@@ -7,7 +7,7 @@
   vides, le code utilise les variables d'environnement et les défauts du provider.
 </p>
 
-<a class="fr-btn fr-mb-2w" href="/models/new">Ajouter un modèle</a>
+<a class="fr-btn fr-mb-2w" href="{{ url_prefix }}/models/new">Ajouter un modèle</a>
 
 <div class="fr-table fr-table--no-scroll">
   <table>
@@ -34,7 +34,7 @@
         <td>{% if m.api_key %}•••• (en base){% else %}<span class="fr-hint-text">env</span>{% endif %}</td>
         <td>{% if m.extra_headers %}{{ m.extra_headers | length }} en-tête(s){% else %}—{% endif %}</td>
         <td>
-          <form method="post" action="/models/{{ m.model_id }}/toggle-judge" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/toggle-judge" style="display:inline">
             <button class="fr-btn fr-btn--sm {{ 'fr-btn--secondary' if m.is_judge else 'fr-btn--tertiary' }}"
                     title="{{ 'Retirer des juges proposés' if m.is_judge else 'Proposer comme juge' }}"
                     aria-pressed="{{ 'true' if m.is_judge else 'false' }}">
@@ -44,18 +44,18 @@
         </td>
         <td>{{ refs[m.model_id] }} réf.</td>
         <td>
-          <a class="fr-btn fr-btn--sm fr-btn--secondary" href="/models/{{ m.model_id }}/edit">Modifier</a>
+          <a class="fr-btn fr-btn--sm fr-btn--secondary" href="{{ url_prefix }}/models/{{ m.model_id }}/edit">Modifier</a>
           {% if m.is_active %}
-          <form method="post" action="/models/{{ m.model_id }}/deactivate" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/deactivate" style="display:inline">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary">Désactiver</button>
           </form>
           {% else %}
-          <form method="post" action="/models/{{ m.model_id }}/reactivate" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/reactivate" style="display:inline">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary">Réactiver</button>
           </form>
           {% endif %}
           {% if refs[m.model_id] == 0 %}
-          <form method="post" action="/models/{{ m.model_id }}/delete" style="display:inline"
+          <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/delete" style="display:inline"
                 onsubmit="return confirm('Supprimer définitivement {{ m.model_version }} ?')">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary">Supprimer</button>
           </form>

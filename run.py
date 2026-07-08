@@ -222,15 +222,17 @@ def execute_run(
     session: Session,
     tested_model: int | str,
     tests: list[Test],
+    organization_id: int,
     run_meta: Optional[dict[str, Any]] = None,
     progress_cb: Optional[Callable[[int, int, str], None]] = None,
 ) -> int:
     """
     Exécute un run et écrit runs + run_results.
 
-    tested_model : model_id (int) OU model_version (str, ex. 'gpt-5.2').
-    progress_cb  : callback optionnel (current, total, detail) appelé après
-                   chaque test (utilisé par l'UI pour le suivi de progression).
+    tested_model    : model_id (int) OU model_version (str, ex. 'gpt-5.2').
+    organization_id : organisation propriétaire du run (ADR-077).
+    progress_cb     : callback optionnel (current, total, detail) appelé après
+                      chaque test (utilisé par l'UI pour le suivi de progression).
     Retourne run_id.
     """
     tested_model = resolve_model(session, tested_model)
@@ -246,7 +248,11 @@ def execute_run(
             progress_cb(i, total, f"test {t.test_id}")
 
     # 2) Écriture DB
-    run_row = RunRow(tested_model_id=tested_model.model_id, run_meta=run_meta)
+    run_row = RunRow(
+        tested_model_id=tested_model.model_id,
+        organization_id=organization_id,
+        run_meta=run_meta,
+    )
     session.add(run_row)
     session.flush()
     run_id = run_row.run_id

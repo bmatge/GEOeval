@@ -3,14 +3,14 @@
 {% block content %}
 <h1>Lancer un run</h1>
 <p class="fr-hint-text">Chaque modèle testé est interrogé sur les tests sélectionnés, puis évalué par le(s) juge(s).
-Pour un lancement différé ou récurrent, voir <a class="fr-link" href="/schedules">Planification</a>.</p>
+Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_prefix }}/schedules">Planification</a>.</p>
 
-<form method="post" action="/launch" class="fr-mt-2w">
+<form method="post" action="{{ url_prefix }}/launch" class="fr-mt-2w">
   {% include "_run_selection.html" %}
 
   {% if not models %}
   <div class="fr-callout fr-callout--brown-caramel">
-    <p class="fr-callout__text">Aucun modèle actif. <a class="fr-link" href="/models">Ajoute ou réactive un modèle</a>.</p>
+    <p class="fr-callout__text">Aucun modèle actif. <a class="fr-link" href="{{ url_prefix }}/models">Ajoute ou réactive un modèle</a>.</p>
   </div>
   {% endif %}
 
@@ -18,12 +18,12 @@ Pour un lancement différé ou récurrent, voir <a class="fr-link" href="/schedu
   <div class="fr-callout fr-callout--brown-caramel">
     <p class="fr-callout__text">
       Aucun test actif et prêt : le run n'aurait aucune question à poser.
-      <a class="fr-link" href="/tests">Active ou crée des tests</a> avant de lancer un run.
+      <a class="fr-link" href="{{ url_prefix }}/tests">Active ou crée des tests</a> avant de lancer un run.
     </p>
   </div>
   {% endif %}
 
   <button type="submit" class="fr-btn fr-mt-2w" {% if not models or active_tests_count == 0 %}disabled{% endif %}>Lancer le run</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/jobs">Voir les jobs</a>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/jobs">Voir les jobs</a>
 </form>
 {% endblock %}

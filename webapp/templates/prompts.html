@@ -3,7 +3,7 @@
 {% block content %}
 <div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
   <div class="fr-col"><h1>Prompts d'évaluation</h1></div>
-  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/prompts/new">Nouveau prompt</a></div>
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/prompts/new">Nouveau prompt</a></div>
 </div>
 <p class="fr-hint-text">Rubriques utilisées par les juges. Le schéma JSON de sortie est ajouté automatiquement à l'exécution.</p>
 
@@ -18,7 +18,7 @@
         <td>{{ p.prompt_name }}</td>
         <td><p class="fr-badge fr-badge--sm fr-badge--blue-ecume">{{ p.prompt_type_label }}</p></td>
         <td class="fr-text--sm">{{ p.prompt_text|truncate(120) }}</td>
-        <td><a class="fr-link" href="/prompts/{{ p.prompt_id }}/edit">Éditer</a></td>
+        <td><a class="fr-link" href="{{ url_prefix }}/prompts/{{ p.prompt_id }}/edit">Éditer</a></td>
       </tr>
       {% endfor %}
     </tbody>

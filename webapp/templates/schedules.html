@@ -5,7 +5,7 @@
 <p class="fr-hint-text">Les planifications sont stockées en base et survivent aux redéploiements.
 Heures affichées en heure de Paris.</p>
 
-<a class="fr-btn fr-mb-2w" href="/schedules/new">Programmer un run</a>
+<a class="fr-btn fr-mb-2w" href="{{ url_prefix }}/schedules/new">Programmer un run</a>
 
 {% if not schedules %}
 <div class="fr-callout">
@@ -38,18 +38,18 @@ Heures affichées en heure de Paris.</p>
         <td>{% if s.next_run_at %}{{ s.next_run_at.astimezone(tz).strftime('%d/%m %H:%M') }}{% else %}—{% endif %}</td>
         <td>
           {% if s.last_run_at %}{{ s.last_run_at.astimezone(tz).strftime('%d/%m %H:%M') }}
-            {% if s.last_job_id %}<a class="fr-link fr-link--sm" href="/jobs/{{ s.last_job_id }}">job</a>{% endif %}
+            {% if s.last_job_id %}<a class="fr-link fr-link--sm" href="{{ url_prefix }}/jobs/{{ s.last_job_id }}">job</a>{% endif %}
           {% else %}—{% endif %}
         </td>
         <td>{% if s.enabled %}<span class="fr-badge fr-badge--success fr-badge--sm">actif</span>{% else %}<span class="fr-badge fr-badge--sm">inactif</span>{% endif %}</td>
         <td>
-          <form method="post" action="/schedules/{{ s.schedule_id }}/run-now" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/schedules/{{ s.schedule_id }}/run-now" style="display:inline">
             <button class="fr-btn fr-btn--sm fr-btn--secondary">Lancer maintenant</button>
           </form>
-          <form method="post" action="/schedules/{{ s.schedule_id }}/toggle" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/schedules/{{ s.schedule_id }}/toggle" style="display:inline">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary">{{ 'Désactiver' if s.enabled else 'Réactiver' }}</button>
           </form>
-          <form method="post" action="/schedules/{{ s.schedule_id }}/delete" style="display:inline"
+          <form method="post" action="{{ url_prefix }}/schedules/{{ s.schedule_id }}/delete" style="display:inline"
                 onsubmit="return confirm('Supprimer la planification « {{ s.name }} » ?')">
             <button class="fr-btn fr-btn--sm fr-btn--tertiary">Supprimer</button>
           </form>

@@ -14,10 +14,66 @@ class Base(DeclarativeBase):
     pass
 
 
+# =====================================================================
+# Tenancy (ADR-077) — organisations, utilisateurs, appartenances.
+# Auth déléguée à l'infra VibeLab (headers gate/Authentik), zéro logique
+# de login ici. Les rôles vivent dans `memberships.role` (voir ROLES).
+# =====================================================================
+class Organization(Base):
+    __tablename__ = "organizations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    first_seen_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    last_seen_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
+    )
+    # Cache local du bit `lab-team` (dérivé de X-Gate-Groups) — non source de
+    # vérité : les groupes du header priment à chaque requête.
+    is_superuser_cached: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+
+class Membership(Base):
+    __tablename__ = "memberships"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
+    org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    role: Mapped[str] = mapped_column(Text, nullable=False)  # org_admin | editor | viewer
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+# =====================================================================
+# Domaine benchmark — tests, modèles, runs, évaluations, prompts, planif.
+# Toutes les entités porteuses de données métier ont un `organization_id`
+# pour l'isolation par org.
+# =====================================================================
 class Test(Base):
     __tablename__ = "tests"
 
     test_id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
 
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     expected_answer: Mapped[Optional[str]] = mapped_column(Text)
@@ -61,6 +117,9 @@ class ScheduledRun(Base):
     __tablename__ = "scheduled_runs"
 
     schedule_id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
 
     tested_models: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)   # list[str] model_version
@@ -84,6 +143,9 @@ class RunRow(Base):
     __tablename__ = "runs"
 
     run_id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
     tested_model_id: Mapped[int] = mapped_column(ForeignKey("models.model_id"), nullable=False)
 
     started_at: Mapped[datetime] = mapped_column(
@@ -133,4 +195,3 @@ class EvaluationPrompt(Base):
     prompt_type_id: Mapped[int] = mapped_column(ForeignKey("prompt_types.prompt_type_id"), nullable=False)
     prompt_name: Mapped[str] = mapped_column(Text, nullable=False)
     prompt_text: Mapped[str] = mapped_column(Text, nullable=False)
-

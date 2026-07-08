@@ -3,6 +3,11 @@ Couche d'accès aux données pour l'UI web.
 
 Retourne des dicts prêts pour les templates (scores convertis en float ou None)
 afin de garder les templates Jinja simples.
+
+Isolation par organisation (ADR-077) : les DAO manipulant des données
+métier prennent `org_id` en premier argument obligatoire. Les entités
+globales — catalogue de modèles, prompts d'évaluation, types — n'ont pas de
+`organization_id` (partagées entre orgs).
 """
 from __future__ import annotations
 
@@ -37,7 +42,7 @@ def _f(x: Any) -> Optional[float]:
 # -----------------------------
 # Tableau de bord / runs
 # -----------------------------
-def leaderboard(session: Session) -> list[dict[str, Any]]:
+def leaderboard(session: Session, org_id: int) -> list[dict[str, Any]]:
     stmt = (
         select(
             Model.model_id,
@@ -50,6 +55,7 @@ def leaderboard(session: Session) -> list[dict[str, Any]]:
         )
         .join(RunRow, RunRow.tested_model_id == Model.model_id)
         .join(RunEvaluation, RunEvaluation.run_id == RunRow.run_id)
+        .where(RunRow.organization_id == org_id)
         .group_by(Model.model_id, Model.model_name, Model.model_version)
         .order_by(func.avg(RunEvaluation.response_quality_score).desc().nullslast())
     )
@@ -69,7 +75,7 @@ def leaderboard(session: Session) -> list[dict[str, Any]]:
     return out
 
 
-def list_runs(session: Session) -> list[dict[str, Any]]:
+def list_runs(session: Session, org_id: int) -> list[dict[str, Any]]:
     stmt = (
         select(
             RunRow.run_id,
@@ -83,6 +89,7 @@ def list_runs(session: Session) -> list[dict[str, Any]]:
         )
         .join(Model, Model.model_id == RunRow.tested_model_id)
         .outerjoin(RunEvaluation, RunEvaluation.run_id == RunRow.run_id)
+        .where(RunRow.organization_id == org_id)
         .group_by(
             RunRow.run_id,
             RunRow.started_at,
@@ -109,17 +116,16 @@ def list_runs(session: Session) -> list[dict[str, Any]]:
     return out
 
 
-def get_run_detail(session: Session, run_id: int) -> Optional[dict[str, Any]]:
+def get_run_detail(session: Session, org_id: int, run_id: int) -> Optional[dict[str, Any]]:
     run = session.execute(
         select(RunRow, Model)
         .join(Model, Model.model_id == RunRow.tested_model_id)
-        .where(RunRow.run_id == run_id)
+        .where(RunRow.run_id == run_id, RunRow.organization_id == org_id)
     ).first()
     if run is None:
         return None
     run_row, tested_model = run
 
-    # Résultats (réponses) du run
     result_rows = session.execute(
         select(RunResult, Test)
         .join(Test, Test.test_id == RunResult.test_id)
@@ -127,7 +133,6 @@ def get_run_detail(session: Session, run_id: int) -> Optional[dict[str, Any]]:
         .order_by(RunResult.test_id)
     ).all()
 
-    # Évaluations (notes des juges), regroupées par test_id
     eval_rows = session.execute(
         select(RunEvaluation, Model.model_version)
         .join(Model, Model.model_id == RunEvaluation.judge_model_id)
@@ -172,7 +177,7 @@ def get_run_detail(session: Session, run_id: int) -> Optional[dict[str, Any]]:
 
 
 # -----------------------------
-# Modèles
+# Modèles (catalogue global — pas de filtre par org)
 # -----------------------------
 def list_models(session: Session, active_only: bool = True) -> list[Model]:
     stmt = select(Model).order_by(Model.model_id)
@@ -279,18 +284,28 @@ def delete_model(session: Session, model_id: int) -> None:
 # -----------------------------
 # Runs programmés
 # -----------------------------
-def list_schedules(session: Session) -> list[ScheduledRun]:
+def list_schedules(session: Session, org_id: int) -> list[ScheduledRun]:
     return list(
-        session.execute(select(ScheduledRun).order_by(ScheduledRun.schedule_id)).scalars().all()
+        session.execute(
+            select(ScheduledRun)
+            .where(ScheduledRun.organization_id == org_id)
+            .order_by(ScheduledRun.schedule_id)
+        ).scalars().all()
     )
 
 
-def get_schedule(session: Session, schedule_id: int) -> Optional[ScheduledRun]:
-    return session.get(ScheduledRun, schedule_id)
+def get_schedule(
+    session: Session, org_id: int, schedule_id: int
+) -> Optional[ScheduledRun]:
+    sr = session.get(ScheduledRun, schedule_id)
+    if sr is None or sr.organization_id != org_id:
+        return None
+    return sr
 
 
 def create_schedule(
     session: Session,
+    org_id: int,
     *,
     name: str,
     tested_models: list[str],
@@ -302,6 +317,7 @@ def create_schedule(
     next_run_at: datetime,
 ) -> ScheduledRun:
     sr = ScheduledRun(
+        organization_id=org_id,
         name=name,
         tested_models=tested_models,
         judges=judges,
@@ -317,21 +333,26 @@ def create_schedule(
     return sr
 
 
-def set_schedule_enabled(session: Session, schedule_id: int, enabled: bool,
-                         next_run_at: Optional[datetime] = None) -> None:
-    sr = session.get(ScheduledRun, schedule_id)
+def set_schedule_enabled(
+    session: Session,
+    org_id: int,
+    schedule_id: int,
+    enabled: bool,
+    next_run_at: Optional[datetime] = None,
+) -> None:
+    sr = get_schedule(session, org_id, schedule_id)
     if sr is None:
-        raise ValueError(f"schedule_id={schedule_id} introuvable")
+        raise ValueError(f"schedule_id={schedule_id} introuvable pour org={org_id}")
     sr.enabled = enabled
     if enabled and next_run_at is not None:
         sr.next_run_at = next_run_at
     session.commit()
 
 
-def delete_schedule(session: Session, schedule_id: int) -> None:
-    sr = session.get(ScheduledRun, schedule_id)
+def delete_schedule(session: Session, org_id: int, schedule_id: int) -> None:
+    sr = get_schedule(session, org_id, schedule_id)
     if sr is None:
-        raise ValueError(f"schedule_id={schedule_id} introuvable")
+        raise ValueError(f"schedule_id={schedule_id} introuvable pour org={org_id}")
     session.delete(sr)
     session.commit()
 
@@ -339,16 +360,24 @@ def delete_schedule(session: Session, schedule_id: int) -> None:
 # -----------------------------
 # Tests
 # -----------------------------
-def list_tests(session: Session) -> list[Test]:
-    return list(session.execute(select(Test).order_by(Test.test_id)).scalars().all())
+def list_tests(session: Session, org_id: int) -> list[Test]:
+    return list(
+        session.execute(
+            select(Test).where(Test.organization_id == org_id).order_by(Test.test_id)
+        ).scalars().all()
+    )
 
 
-def get_test(session: Session, test_id: int) -> Optional[Test]:
-    return session.get(Test, test_id)
+def get_test(session: Session, org_id: int, test_id: int) -> Optional[Test]:
+    test = session.get(Test, test_id)
+    if test is None or test.organization_id != org_id:
+        return None
+    return test
 
 
 def create_test(
     session: Session,
+    org_id: int,
     *,
     prompt: str,
     expected_answer: Optional[str],
@@ -356,6 +385,7 @@ def create_test(
     citation_quality_prompt_id: Optional[int],
 ) -> Test:
     test = Test(
+        organization_id=org_id,
         prompt=prompt,
         expected_answer=expected_answer or None,
         response_quality_prompt_id=response_quality_prompt_id,
@@ -370,6 +400,7 @@ def create_test(
 
 def update_test(
     session: Session,
+    org_id: int,
     test_id: int,
     *,
     prompt: str,
@@ -377,9 +408,9 @@ def update_test(
     response_quality_prompt_id: Optional[int],
     citation_quality_prompt_id: Optional[int],
 ) -> Test:
-    test = session.get(Test, test_id)
+    test = get_test(session, org_id, test_id)
     if test is None:
-        raise ValueError(f"test_id={test_id} introuvable")
+        raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
     test.prompt = prompt
     test.expected_answer = expected_answer or None
     test.response_quality_prompt_id = response_quality_prompt_id
@@ -388,24 +419,24 @@ def update_test(
     return test
 
 
-def deactivate_test(session: Session, test_id: int) -> None:
-    test = session.get(Test, test_id)
+def deactivate_test(session: Session, org_id: int, test_id: int) -> None:
+    test = get_test(session, org_id, test_id)
     if test is None:
-        raise ValueError(f"test_id={test_id} introuvable")
+        raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
     test.validity_end_at = datetime.now(timezone.utc)
     session.commit()
 
 
-def reactivate_test(session: Session, test_id: int) -> None:
-    test = session.get(Test, test_id)
+def reactivate_test(session: Session, org_id: int, test_id: int) -> None:
+    test = get_test(session, org_id, test_id)
     if test is None:
-        raise ValueError(f"test_id={test_id} introuvable")
+        raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
     test.validity_end_at = None
     session.commit()
 
 
 # -----------------------------
-# Prompts d'évaluation
+# Prompts d'évaluation (catalogue global)
 # -----------------------------
 def list_prompts(session: Session) -> list[dict[str, Any]]:
     stmt = (

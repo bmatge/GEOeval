@@ -3,7 +3,7 @@
 {% block content %}
 <h1>{{ 'Modifier' if model else 'Ajouter' }} un modèle</h1>
 
-<form method="post" action="{{ '/models/%d/edit' % model.model_id if model else '/models/new' }}" class="fr-mt-2w" style="max-width: 40rem">
+<form method="post" action="{{ (url_prefix ~ ('/models/%d/edit' % model.model_id)) if model else (url_prefix ~ '/models/new') }}" class="fr-mt-2w" style="max-width: 40rem">
   <div class="fr-select-group">
     <label class="fr-label" for="model_name">Provider
       <span class="fr-hint-text">Pilote le connecteur utilisé. « compatible-openai » = tout endpoint
@@ -61,6 +61,6 @@
   </div>
 
   <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if model else 'Ajouter' }}</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/models">Annuler</a>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/models">Annuler</a>
 </form>
 {% endblock %}

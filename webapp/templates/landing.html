@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Choisir une organisation{% endblock %}
+{% block content %}
+<h1>Bienvenue sur GEOeval</h1>
+<p class="fr-text--lead">Choisissez une organisation pour continuer.</p>
+
+{% if orgs %}
+<div class="fr-grid-row fr-grid-row--gutters fr-mt-4w">
+  {% for o in orgs %}
+  <div class="fr-col-12 fr-col-md-6 fr-col-lg-4">
+    <div class="fr-tile fr-enlarge-link">
+      <div class="fr-tile__body">
+        <div class="fr-tile__content">
+          <h3 class="fr-tile__title">
+            <a href="/o/{{ o.slug }}/">{{ o.name }}</a>
+          </h3>
+          <p class="fr-tile__desc"><code>/o/{{ o.slug }}</code></p>
+        </div>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="fr-callout fr-callout--brown-caramel">
+  <p class="fr-callout__text">
+    Aucune organisation ne t'est encore rattachée. Contacte un administrateur
+    plateforme pour être invité(e).
+  </p>
+</div>
+{% endif %}
+{% endblock %}

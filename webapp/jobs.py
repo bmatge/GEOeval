@@ -116,11 +116,18 @@ class JobManager:
             judges: list[dict[str, Any]] = job.params["judges"]
             note: Optional[str] = job.params.get("note") or None
             test_ids: Optional[list[int]] = job.params.get("test_ids") or None
+            organization_id: int = int(job.params["organization_id"])
 
             for tm in tested_models:
                 # PHASE RUN
                 with SessionLocal() as session:
-                    tests = load_tests(session, test_ids=test_ids, active_only=True, ready_only=True)
+                    tests = load_tests(
+                        session,
+                        test_ids=test_ids,
+                        active_only=True,
+                        ready_only=True,
+                        organization_id=organization_id,
+                    )
                     if not tests:
                         raise ValueError(
                             "Aucun test actif et prêt (dans la sélection) : active ou "
@@ -135,6 +142,7 @@ class JobManager:
                         session,
                         tested_model=tm,
                         tests=tests,
+                        organization_id=organization_id,
                         run_meta={"note": note} if note else None,
                         progress_cb=run_cb,
                     )

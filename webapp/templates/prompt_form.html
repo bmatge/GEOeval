@@ -1,10 +1,10 @@
 {% extends "base.html" %}
 {% block title %}{{ "Éditer" if prompt else "Nouveau" }} prompt{% endblock %}
 {% block content %}
-<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/prompts">Retour aux prompts</a>
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/prompts">Retour aux prompts</a>
 <h1 class="fr-mt-2w">{{ "Éditer le prompt " ~ prompt.prompt_id if prompt else "Nouveau prompt d'évaluation" }}</h1>
 
-<form method="post" action="{{ '/prompts/' ~ prompt.prompt_id ~ '/edit' if prompt else '/prompts/new' }}" class="fr-mt-2w">
+<form method="post" action="{{ (url_prefix ~ '/prompts/' ~ prompt.prompt_id ~ '/edit') if prompt else (url_prefix ~ '/prompts/new') }}" class="fr-mt-2w">
   <div class="fr-input-group">
     <label class="fr-label" for="prompt_name">Nom</label>
     <input class="fr-input" id="prompt_name" name="prompt_name" required

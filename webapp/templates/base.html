@@ -19,28 +19,43 @@
             </div>
           </div>
           <div class="fr-header__service">
-            <a href="/" title="Accueil — GEOeval">
-              <p class="fr-header__service-title">GEOeval</p>
+            <a href="{{ (url_prefix ~ '/') if org else '/' }}" title="Accueil — GEOeval">
+              <p class="fr-header__service-title">GEOeval{% if org %} · {{ org.name }}{% endif %}</p>
             </a>
             <p class="fr-header__service-tagline">Banc d'essai LLM avec recherche web</p>
           </div>
         </div>
+        {% if user %}
+        <div class="fr-header__tools">
+          <div class="fr-header__tools-links">
+            <ul class="fr-btns-group">
+              <li>
+                <span class="fr-hint-text fr-mr-2w">
+                  {{ user.email }}{% if user.is_platform_admin %} · <em>admin plateforme</em>{% endif %}
+                </span>
+              </li>
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/">Changer d'organisation</a></li>
+            </ul>
+          </div>
+        </div>
+        {% endif %}
       </div>
     </div>
   </div>
+  {% if org %}
   <div class="fr-header__menu fr-modal">
     <div class="fr-container">
       <nav class="fr-nav" role="navigation" aria-label="Menu principal">
         <ul class="fr-nav__list">
           {% set items = [
-            ('home', '/', 'Accueil'),
-            ('dashboard', '/dashboard', 'Tableau de bord'),
-            ('runs', '/runs', 'Runs'),
-            ('tests', '/tests', 'Tests'),
-            ('prompts', '/prompts', 'Prompts d\'évaluation'),
-            ('models', '/models', 'Modèles'),
-            ('launch', '/launch', 'Lancer un run'),
-            ('schedules', '/schedules', 'Planification')
+            ('home', url_prefix ~ '/', 'Accueil'),
+            ('dashboard', url_prefix ~ '/dashboard', 'Tableau de bord'),
+            ('runs', url_prefix ~ '/runs', 'Runs'),
+            ('tests', url_prefix ~ '/tests', 'Tests'),
+            ('prompts', url_prefix ~ '/prompts', 'Prompts d\'évaluation'),
+            ('models', url_prefix ~ '/models', 'Modèles'),
+            ('launch', url_prefix ~ '/launch', 'Lancer un run'),
+            ('schedules', url_prefix ~ '/schedules', 'Planification')
           ] %}
           {% for key, url, label in items %}
           <li class="fr-nav__item">
@@ -52,6 +67,7 @@
       </nav>
     </div>
   </div>
+  {% endif %}
 </header>
 
 <main role="main" id="contenu">
@@ -64,7 +80,8 @@
   <div class="fr-container">
     <div class="fr-footer__bottom">
       <p class="fr-footer__bottom-copy fr-py-2w">
-        GEOeval — outil interne de benchmark LLM. Interface DSFR.
+        GEOeval — outil de benchmark LLM.
+        {% if org %}Organisation <strong>{{ org.name }}</strong>{% if role %} · rôle {{ role }}{% endif %}.{% endif %}
       </p>
     </div>
   </div>

@@ -5,7 +5,7 @@
 <p class="fr-hint-text">Le run sera lancé automatiquement à l'échéance (heure de Paris), puis
 évalué par le(s) juge(s), comme un lancement manuel.</p>
 
-<form method="post" action="/schedules/new" class="fr-mt-2w">
+<form method="post" action="{{ url_prefix }}/schedules/new" class="fr-mt-2w">
   <div class="fr-input-group" style="max-width: 30rem">
     <label class="fr-label" for="name">Nom de la planification</label>
     <input class="fr-input" id="name" name="name" required placeholder="baseline quotidienne">
@@ -58,6 +58,6 @@
   </fieldset>
 
   <button type="submit" class="fr-btn fr-mt-2w">Programmer</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/schedules">Annuler</a>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/schedules">Annuler</a>
 </form>
 {% endblock %}
