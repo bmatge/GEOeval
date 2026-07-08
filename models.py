@@ -350,14 +350,18 @@ class UsageRecord(Base):
 
 
 class Budget(Base):
-    """Plafond mensuel par org (€/mois). Soft-stop : refuse un nouveau scan si
-    spent + estimate > cap, mais laisse aller au bout un scan en cours."""
+    """Plafonds par org : mensuel (€/mois) + journalier optionnel (€/jour,
+    EPIC-001 Phase 3). Soft-stop : refuse un nouveau scan si spent + estimate
+    dépasse l'un des caps, mais laisse aller au bout un scan en cours."""
     __tablename__ = "budgets"
 
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), primary_key=True
     )
     monthly_cap_eur: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    daily_cap_eur: Mapped[Optional[Decimal]] = mapped_column(
+        Numeric(12, 2), nullable=True
+    )
     currency: Mapped[str] = mapped_column(Text, nullable=False, default="EUR", server_default="EUR")
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(),

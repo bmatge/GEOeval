@@ -210,3 +210,9 @@ BEGIN
           AND model_version IN ('gpt-5.2', 'mistral-large-latest', 'gemini-pro-latest');
     END IF;
 END $$;
+
+-- ---------------------------------------------------------------------
+-- EPIC-001 Phase 3 (S3.1) : plafond journalier optionnel à côté du
+-- mensuel (NULL = illimité). Soft-stop identique (ADR-078 §5).
+-- ---------------------------------------------------------------------
+ALTER TABLE budgets ADD COLUMN IF NOT EXISTS daily_cap_eur NUMERIC(12, 2);

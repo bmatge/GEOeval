@@ -712,11 +712,12 @@ def launch_form(
     peri = perimeters.get_by_id(db, org.id, perimeter_id) if perimeter_id > 0 else None
     fctx = _run_form_context(db, org.id, perimeter_id=peri.id if peri else None)
     b = budget.get_budget(db, org.id)
-    spent = budget.current_month_spent(db, org.id)
+    spent = budget.current_period_spent(db, org.id, "month")
+    day_spent = budget.current_period_spent(db, org.id, "day")
     return render(request, "launch.html", active="launch", org=org, role=role,
                   active_tests_count=len(fctx["tests"]),
                   selected_perimeter=peri,
-                  budget=b, month_spent=spent, **fctx)
+                  budget=b, month_spent=spent, day_spent=day_spent, **fctx)
 
 
 @app.post("/o/{org_slug}/launch")
@@ -1580,13 +1581,17 @@ def org_budget_view(
 ):
     org, role = ctx
     b = budget.get_budget(db, org.id)
-    spent = budget.current_month_spent(db, org.id)
+    spent = budget.current_period_spent(db, org.id, "month")
+    day_spent = budget.current_period_spent(db, org.id, "day")
     pct = None
     if b is not None and b.monthly_cap_eur:
         pct = min(100, int((spent / _Decimal(str(b.monthly_cap_eur))) * 100))
+    pct_day = None
+    if b is not None and b.daily_cap_eur:
+        pct_day = min(100, int((day_spent / _Decimal(str(b.daily_cap_eur))) * 100))
     return render(
         request, "org_budget.html", active="settings", org=org, role=role,
-        budget=b, month_spent=spent, pct=pct,
+        budget=b, month_spent=spent, day_spent=day_spent, pct=pct, pct_day=pct_day,
     )
 
 
@@ -1596,6 +1601,7 @@ def org_budget_set(
     db: Session = Depends(get_db),
     user: CurrentUser = Depends(require_user),
     monthly_cap_eur: str = Form(...),
+    daily_cap_eur: str = Form(""),
 ):
     org, _ = ctx
     try:
@@ -1604,11 +1610,22 @@ def org_budget_set(
             raise ValueError("négatif")
     except Exception as e:  # noqa: BLE001
         raise HTTPException(status_code=400, detail=f"Cap invalide : {e}")
-    budget.set_cap(db, org_id=org.id, cap_eur=cap, updated_by=user.id)
+    daily_cap: Optional[_Decimal] = None
+    if daily_cap_eur.strip():
+        try:
+            daily_cap = _Decimal(daily_cap_eur.replace(",", "."))
+            if daily_cap < 0:
+                raise ValueError("négatif")
+        except Exception as e:  # noqa: BLE001
+            raise HTTPException(status_code=400, detail=f"Cap journalier invalide : {e}")
+    budget.set_cap(
+        db, org_id=org.id, cap_eur=cap, updated_by=user.id, daily_cap_eur=daily_cap
+    )
     audit.record(
         db,
         user_id=user.id, org_id=org.id, action="set_cap",
-        entity_type="budget", entity_id=org.id, meta={"cap_eur": str(cap)},
+        entity_type="budget", entity_id=org.id,
+        meta={"cap_eur": str(cap), "daily_cap_eur": str(daily_cap) if daily_cap is not None else None},
     )
     return RedirectResponse(f"/o/{org.slug}/budget", status_code=303)
 
