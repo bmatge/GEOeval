@@ -1,0 +1,107 @@
+{% extends "base.html" %}
+{% block title %}Import OpenRouter{% endblock %}
+{% block content %}
+<h1>Import du catalogue OpenRouter</h1>
+<p class="fr-hint-text">
+  Catalogue public <code>openrouter.ai/api/v1/models</code>, chargé à la demande (aucune clé requise).
+  Les prix OpenRouter (USD/token) sont convertis en <strong>€/million de tokens</strong> au taux
+  USD→EUR <strong>{{ rate }}</strong> (<code>USD_EUR_RATE</code>) et versionnés dans
+  <a class="fr-link" href="/admin/pricing">Tarifs des IA</a>.
+</p>
+
+{% if msg_text %}
+<div class="fr-alert fr-alert--{{ msg_kind }} fr-alert--sm fr-mb-2w"><p>{{ msg_text }}</p></div>
+{% endif %}
+{% if error %}
+<div class="fr-alert fr-alert--error fr-mb-2w">
+  <h3 class="fr-alert__title">Catalogue indisponible</h3>
+  <p>{{ error }}</p>
+</div>
+{% endif %}
+
+<form method="get" action="/admin/openrouter-import" class="fr-mb-3w"
+      style="display:flex; gap:.75rem; align-items:flex-end; flex-wrap:wrap;">
+  <input type="hidden" name="load" value="1">
+  <div class="fr-input-group" style="margin-bottom:0;">
+    <label class="fr-label" for="q">Filtrer (identifiant ou nom)</label>
+    <input class="fr-input" id="q" name="q" value="{{ q }}" placeholder="ex. mistral" style="width:18rem;">
+  </div>
+  <button class="fr-btn" type="submit">{% if loaded %}Recharger / filtrer{% else %}Charger le catalogue{% endif %}</button>
+</form>
+
+{% if loaded and not error %}
+<p>
+  <strong>{{ entries|length }}</strong> modèle(s)
+  {%- if q %} pour « {{ q }} » (sur {{ total }} au catalogue OpenRouter){% endif %} —
+  déjà en base : ceux marqués <span class="fr-badge fr-badge--success fr-badge--sm">en base</span>.
+</p>
+
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr>
+        <th>Identifiant OpenRouter</th>
+        <th>Nom</th>
+        <th>Contexte</th>
+        <th>Search natif</th>
+        <th>Entrée (€/M tok)</th>
+        <th>Sortie (€/M tok)</th>
+        <th>Statut</th>
+        <th>Action</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in entries %}
+      {% set model = existing.get(e.id) %}
+      <tr>
+        <td><code>{{ e.id }}</code></td>
+        <td>{{ e.name }}</td>
+        <td>{{ "{:,}".format(e.context_length).replace(",", " ") if e.context_length else "—" }}</td>
+        <td>{{ "oui" if e.has_native_search else "—" }}</td>
+        <td>{{ "%.4f"|format(e.prompt_eur_per_1m) if e.prompt_eur_per_1m is not none else "—" }}</td>
+        <td>{{ "%.4f"|format(e.completion_eur_per_1m) if e.completion_eur_per_1m is not none else "—" }}</td>
+        <td>
+          {% if model %}
+          <span class="fr-badge fr-badge--success fr-badge--sm">en base (#{{ model.model_id }})</span>
+          {% else %}
+          <span class="fr-badge fr-badge--sm">absent</span>
+          {% endif %}
+        </td>
+        <td>
+          {% if model %}
+          {% if e.prompt_usd_per_token is not none and e.completion_usd_per_token is not none %}
+          <form method="post" action="/admin/openrouter-import/pricing" style="display:inline">
+            <input type="hidden" name="model_ref" value="{{ e.id }}">
+            <input type="hidden" name="prompt_usd" value="{{ e.prompt_usd_per_token }}">
+            <input type="hidden" name="completion_usd" value="{{ e.completion_usd_per_token }}">
+            <input type="hidden" name="q" value="{{ q }}">
+            <button class="fr-btn fr-btn--sm fr-btn--secondary" type="submit">Importer le prix</button>
+          </form>
+          {% else %}
+          <span class="fr-hint-text">prix indisponible</span>
+          {% endif %}
+          {% else %}
+          <form method="post" action="/admin/openrouter-import/create" style="display:inline">
+            <input type="hidden" name="model_ref" value="{{ e.id }}">
+            <input type="hidden" name="prompt_usd" value="{{ e.prompt_usd_per_token if e.prompt_usd_per_token is not none else '' }}">
+            <input type="hidden" name="completion_usd" value="{{ e.completion_usd_per_token if e.completion_usd_per_token is not none else '' }}">
+            <input type="hidden" name="q" value="{{ q }}">
+            <button class="fr-btn fr-btn--sm" type="submit">Créer</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-hint-text">
+  Un modèle créé ici arrive avec <code>model_name=openrouter</code>, notateur activé et
+  <strong>sans</strong> recherche web (<code>search_config</code> vide) — configure-la ensuite via
+  « Modifier » dans le Catalogue d'IA (ADR-080 §2.2).
+</p>
+{% endif %}
+
+<p class="fr-mt-4w"><a class="fr-link" href="/admin/pricing">→ Tarifs des IA</a></p>
+{% endblock %}
