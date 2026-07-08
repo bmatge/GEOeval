@@ -118,6 +118,9 @@ class Test(Base):
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
     )
+    perimeter_id: Mapped[int] = mapped_column(
+        ForeignKey("perimeters.id"), nullable=False
+    )
 
     prompt: Mapped[str] = mapped_column(Text, nullable=False)
     expected_answer: Mapped[Optional[str]] = mapped_column(Text)
@@ -136,6 +139,30 @@ class Test(Base):
     validity_end_at: Mapped[Optional[datetime]] = mapped_column(
         TIMESTAMP(timezone=True)
     )
+
+
+# =====================================================================
+# PR#18 — Périmètre : objet intermédiaire entre une organisation et ses
+# questions. Chaque question est rattachée à UN périmètre. Un périmètre
+# est le contexte de recherche (site, thématique, propriété). Le champ
+# `kind` reste optionnel pour distinguer visuellement plus tard.
+# =====================================================================
+class Perimeter(Base):
+    __tablename__ = "perimeters"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    slug: Mapped[str] = mapped_column(Text, nullable=False)
+    kind: Mapped[Optional[str]] = mapped_column(Text, nullable=True)  # "site" | "topic" | NULL
+    home_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
 
 
 class OrgCredential(Base):
@@ -198,6 +225,9 @@ class ScheduledRun(Base):
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
     )
+    perimeter_id: Mapped[int] = mapped_column(
+        ForeignKey("perimeters.id"), nullable=False
+    )
     name: Mapped[str] = mapped_column(Text, nullable=False)
 
     tested_models: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)   # list[str] model_version
@@ -223,6 +253,9 @@ class RunRow(Base):
     run_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
+    )
+    perimeter_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("perimeters.id"), nullable=True
     )
     tested_model_id: Mapped[int] = mapped_column(ForeignKey("models.model_id"), nullable=False)
 

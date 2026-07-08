@@ -101,6 +101,7 @@ def _tick() -> None:
             job = manager.submit(
                 dict(
                     organization_id=sr.organization_id,
+                    perimeter_id=sr.perimeter_id,
                     tested_models=list(sr.tested_models),
                     judges=list(sr.judges),
                     note=sr.note or f"planifié : {sr.name}",

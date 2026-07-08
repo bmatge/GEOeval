@@ -5,6 +5,21 @@
 <h1 class="fr-mt-2w">{{ "Éditer le test " ~ test.test_id if test else "Nouveau test" }}</h1>
 
 <form method="post" action="{{ (url_prefix ~ '/tests/' ~ test.test_id ~ '/edit') if test else (url_prefix ~ '/tests/new') }}" class="fr-mt-2w">
+
+  <div class="fr-select-group">
+    <label class="fr-label" for="perimeter_id">Périmètre
+      <span class="fr-hint-text">Le contexte de recherche auquel appartient cette question.</span>
+    </label>
+    <select class="fr-select" id="perimeter_id" name="perimeter_id" required>
+      {% for p in all_perimeters %}
+      <option value="{{ p.id }}"
+        {% if test and test.perimeter_id == p.id %}selected{% endif %}
+        {% if not test and default_perimeter and default_perimeter.id == p.id %}selected{% endif %}
+      >{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
   <div class="fr-input-group">
     <label class="fr-label" for="prompt">Question (prompt)
       <span class="fr-hint-text">La question posée au modèle testé.</span>

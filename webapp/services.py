@@ -284,14 +284,17 @@ def delete_model(session: Session, model_id: int) -> None:
 # -----------------------------
 # Runs programmés
 # -----------------------------
-def list_schedules(session: Session, org_id: int) -> list[ScheduledRun]:
-    return list(
-        session.execute(
-            select(ScheduledRun)
-            .where(ScheduledRun.organization_id == org_id)
-            .order_by(ScheduledRun.schedule_id)
-        ).scalars().all()
+def list_schedules(
+    session: Session, org_id: int, perimeter_id: Optional[int] = None
+) -> list[ScheduledRun]:
+    stmt = (
+        select(ScheduledRun)
+        .where(ScheduledRun.organization_id == org_id)
+        .order_by(ScheduledRun.schedule_id)
     )
+    if perimeter_id is not None:
+        stmt = stmt.where(ScheduledRun.perimeter_id == perimeter_id)
+    return list(session.execute(stmt).scalars().all())
 
 
 def get_schedule(
@@ -307,6 +310,7 @@ def create_schedule(
     session: Session,
     org_id: int,
     *,
+    perimeter_id: int,
     name: str,
     tested_models: list[str],
     judges: list[dict[str, Any]],
@@ -318,6 +322,7 @@ def create_schedule(
 ) -> ScheduledRun:
     sr = ScheduledRun(
         organization_id=org_id,
+        perimeter_id=perimeter_id,
         name=name,
         tested_models=tested_models,
         judges=judges,
@@ -360,12 +365,13 @@ def delete_schedule(session: Session, org_id: int, schedule_id: int) -> None:
 # -----------------------------
 # Tests
 # -----------------------------
-def list_tests(session: Session, org_id: int) -> list[Test]:
-    return list(
-        session.execute(
-            select(Test).where(Test.organization_id == org_id).order_by(Test.test_id)
-        ).scalars().all()
-    )
+def list_tests(
+    session: Session, org_id: int, perimeter_id: Optional[int] = None
+) -> list[Test]:
+    stmt = select(Test).where(Test.organization_id == org_id).order_by(Test.test_id)
+    if perimeter_id is not None:
+        stmt = stmt.where(Test.perimeter_id == perimeter_id)
+    return list(session.execute(stmt).scalars().all())
 
 
 def get_test(session: Session, org_id: int, test_id: int) -> Optional[Test]:
@@ -379,6 +385,7 @@ def create_test(
     session: Session,
     org_id: int,
     *,
+    perimeter_id: int,
     prompt: str,
     expected_answer: Optional[str],
     response_quality_prompt_id: Optional[int],
@@ -386,6 +393,7 @@ def create_test(
 ) -> Test:
     test = Test(
         organization_id=org_id,
+        perimeter_id=perimeter_id,
         prompt=prompt,
         expected_answer=expected_answer or None,
         response_quality_prompt_id=response_quality_prompt_id,

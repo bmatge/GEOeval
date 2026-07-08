@@ -1,0 +1,71 @@
+{% extends "base.html" %}
+{% block title %}{{ perimeter.name }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/perimeters">Retour aux périmètres</a>
+
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters fr-mt-2w">
+  <div class="fr-col">
+    <h1>{{ perimeter.name }}</h1>
+    <p class="fr-hint-text">
+      <code>{{ perimeter.slug }}</code>
+      {% if perimeter.kind %} · type <em>{{ perimeter.kind }}</em>{% endif %}
+      {% if perimeter.home_url %} · <a class="fr-link" href="{{ perimeter.home_url }}" target="_blank" rel="noopener">{{ perimeter.home_url }}</a>{% endif %}
+    </p>
+    {% if perimeter.description %}<p>{{ perimeter.description }}</p>{% endif %}
+  </div>
+  <div class="fr-col-auto">
+    {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+    <a class="fr-btn fr-btn--secondary" href="{{ url_prefix }}/perimeters/{{ perimeter.id }}/edit">Éditer</a>
+    {% endif %}
+  </div>
+</div>
+
+<h2 class="fr-mt-4w">Actions rapides</h2>
+<a class="fr-btn" href="{{ url_prefix }}/launch?perimeter_id={{ perimeter.id }}">Lancer une évaluation</a>
+<a class="fr-btn fr-btn--secondary fr-ml-2w" href="{{ url_prefix }}/schedules/new?perimeter_id={{ perimeter.id }}">Programmer</a>
+{% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+<a class="fr-btn fr-btn--tertiary fr-ml-2w" href="{{ url_prefix }}/tests/new?perimeter_id={{ perimeter.id }}">Ajouter une question</a>
+{% endif %}
+
+<h2 class="fr-mt-4w">Questions ({{ tests|length }})</h2>
+{% if tests %}
+<div class="fr-table">
+  <table>
+    <thead>
+      <tr><th>#</th><th>Question</th><th>Réponse attendue</th><th>État</th><th>Actions</th></tr>
+    </thead>
+    <tbody>
+      {% for t in tests %}
+      <tr>
+        <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
+        <td>{{ t.prompt|truncate(80) }}</td>
+        <td>{{ (t.expected_answer or '—')|truncate(40) }}</td>
+        <td>
+          {% if t.validity_end_at is none %}
+            <p class="fr-badge fr-badge--success fr-badge--sm">active</p>
+          {% else %}
+            <p class="fr-badge fr-badge--sm">inactive</p>
+          {% endif %}
+        </td>
+        <td>
+          {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+          <a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}/edit">Éditer</a>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fr-callout">
+  <p class="fr-callout__text">
+    Aucune question dans ce périmètre.
+    {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+    <a class="fr-link" href="{{ url_prefix }}/tests/new?perimeter_id={{ perimeter.id }}">Ajouter la première →</a>
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
+{% endblock %}
