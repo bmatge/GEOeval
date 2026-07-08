@@ -1,6 +1,7 @@
 # EPIC-001 — Bascule OpenRouter (provider plateforme unique) sur socle multi-tenant
 
-- **Statut** : Proposé
+- **Statut** : En cours — Phase 0 livrée ([SPIKE-001](../spikes/SPIKE-001-openrouter-phase0.md)),
+  arbitrages actés dans [ADR-080 §6](../adr/ADR-080-openrouter-provider-unique-websearch.md)
 - **Décision cadre** : [ADR-080](../adr/ADR-080-openrouter-provider-unique-websearch.md)
 - **Branche de travail** : `claude/openrouter-multi-tenant-4802kt` (greffée sur `multi-tenants`)
 - **Cible de merge** : `multi-tenants`
@@ -36,23 +37,15 @@ des runs historiques (préservés tels quels), suppression des familles legacy (
 
 Chaque story = une PR indépendante vers `multi-tenants`, avec ses critères d'acceptation (CA).
 
-### Phase 0 — Spike de validation (bloquant, aucune bascule avant)
+### Phase 0 — Spike de validation ✅ (livré 2026-07-08 : [SPIKE-001](../spikes/SPIKE-001-openrouter-phase0.md))
 
-> But : **mesurer** les 2 inconnues qui conditionnent tout (cf. ADR-080 §3). Livrable = note de spike
-> + décision Mistral, pas de code de prod.
-
-- **S0.1 — Geo-targeting FR via OpenRouter.**
-  - CA : script jetable appelant OpenRouter `chat.completions` + `plugins:[{id:web,engine:native}]`
-    sur une question dont la réponse dépend de la localisation FR ; comparer les sources obtenues
-    à l'appel OpenAI direct actuel (`user_location` Paris). Conclusion tranchée : localisation
-    propagée OUI/NON, et si NON, contournement (search_prompt, allowed_domains `.fr`, …).
-- **S0.2 — Mistral : natif vs Exa.**
-  - CA : vérifier sur la page modèle OpenRouter + un appel réel si un modèle Mistral route en
-    `native` ou retombe en `exa`. Décision documentée : Mistral via OpenRouter (Exa accepté) OU
-    Mistral gardé en direct (Agents).
-- **S0.3 — Forme de `usage`/coût réel.**
-  - CA : capturer la structure exacte du champ coût/tokens renvoyé par OpenRouter (`usage`),
-    valider le mapping vers `UsageRecord` (input/output tokens + `cost_eur`).
+- [x] **S0.1 — Geo-targeting FR** : NON propagé (`user_location` ignoré) ; atténué par les
+  questions en français (sources FR mesurées). **Accepté**, traçage `run_meta.geo`.
+- [x] **S0.2 — Mistral : Exa** (natif → 404). Découverte : **Gemini idem**. **Arbitrage : Exa
+  accepté, OpenRouter devient le mode d'accès par défaut pour TOUS les modèles testés.**
+- [x] **S0.3 — `usage`** : `cost` (USD), `cost_details`, `is_byok`,
+  `server_tool_use_details.web_search_requests`. **Devise : conversion USD→EUR à l'ingestion**
+  (`USD_EUR_RATE`, défaut 0.88) + conservation du brut `cost_usd` (ADR-080 §6.3).
 
 ### Phase 1 — Fondations OpenRouter (provider + coût réel + citations)
 
@@ -66,10 +59,12 @@ Chaque story = une PR indépendante vers `multi-tenants`, avec ses critères d'a
   - `evaluate.py::call_judge_llm` : router les modèles `model_name="openrouter"` par le chemin
     `chat.completions` existant (déjà utilisé par Albert/`openai-compatible`).
   - CA : un juge OpenRouter note un run et écrit `run_evaluations` (JSON strict respecté).
-- **S1.3 — Coût réel dans `usage`.**
-  - `webapp/usage.py::record` : accepter un coût/tokens **réels** (issus de la réponse OpenRouter)
-    ; fallback heuristique `len/4` conservé pour les providers directs.
-  - CA : une ligne `usage` OpenRouter porte le coût réel (≠ heuristique) ; `billed_to` correct.
+- **S1.3 — Coût réel dans `usage` (en EUR).**
+  - `webapp/usage.py::record` : accepter un coût/tokens **réels** (issus de la réponse OpenRouter) ;
+    conversion USD→EUR à l'ingestion via `USD_EUR_RATE` (`.env`, défaut `0.88`) + colonne
+    `usage.cost_usd` (brut, audit) — ADR-080 §6.3. Fallback heuristique `len/4` conservé pour les
+    chemins directs (souverains).
+  - CA : une ligne `usage` OpenRouter porte `cost_eur` converti + `cost_usd` brut ; `billed_to` correct.
 
 ### Phase 2 — Web search paramétrable + simplification de `run.py`
 
@@ -77,11 +72,15 @@ Chaque story = une PR indépendante vers `multi-tenants`, avec ses critères d'a
   - `migrations.sql` : `ADD COLUMN IF NOT EXISTS search_config JSONB`. ORM `Model` + `model_form.html`
     (engine, max_results, search_context_size, allowed_domains).
   - CA : édition/lecture du search_config depuis l'UI Modèles ; valeurs par défaut sûres.
-- **S2.2 — Appel unifié web search.**
+- **S2.2 — Appel unifié web search (collapse total, ADR-080 §6.1).**
   - `run.py::call_tested_llm` : pour `model_name="openrouter"`, un seul
-    `chat.completions.create(..., extra_body={"plugins":[{"id":"web", **search_config}]})`.
-    Branches OpenAI/Mistral/Gemini directes **conservées** pour les modèles non-OpenRouter.
-  - CA : un run OpenRouter en `engine:native` produit réponse + citations.
+    `chat.completions.create(..., extra_body={"plugins":[{"id":"web", **search_config}]})` —
+    natif pour OpenAI, Exa pour Mistral/Gemini. Le catalogue seed bascule les 3 modèles testés
+    sur la famille `openrouter` (nouvelles lignes `models`, les anciennes **désactivées**, jamais
+    supprimées — ADR-076). Branches directes conservées uniquement pour les modèles souverains
+    et les lignes legacy désactivées.
+  - CA : les 3 modèles testés produisent réponse + citations via OpenRouter ; un run legacy reste
+    lisible dans l'historique.
 - **S2.3 — Citations structurées + traçage longitudinal.**
   - Alimenter `raw_citations` depuis les `annotations` `url_citation` ; enrichir `run_meta`
     (`provider_route`, `search_engine`, `geo`).
