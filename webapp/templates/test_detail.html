@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Test #{{ test.test_id }}{% endblock %}
+{% block title %}Question #{{ test.test_id }}{% endblock %}
 {% block content %}
-<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/tests">Retour aux tests</a>
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/tests">Retour aux questions</a>
 
-<h1 class="fr-mt-2w">Test #{{ test.test_id }}</h1>
+<h1 class="fr-mt-2w">Question #{{ test.test_id }}</h1>
 
 <p><strong>Question :</strong> {{ test.prompt }}</p>
 <p><strong>Réponse attendue :</strong> {{ test.expected_answer or "—" }}</p>
 
-<h2 class="fr-mt-4w">Vérité de référence <span class="fr-hint-text">(mode conformité — ADR-079)</span></h2>
+<h2 class="fr-mt-4w">Réponse de référence <span class="fr-hint-text">(passe le notateur en mode « conformité »)</span></h2>
 
 {% set current = gt_versions[0] if gt_versions and gt_versions[0].valid_to is none else none %}
 {% if current %}
@@ -23,16 +23,16 @@
 {% else %}
 <div class="fr-callout fr-callout--brown-caramel">
   <p class="fr-callout__text">
-    Aucune vérité de référence. Sans elle, le juge évalue en <em>opinion</em> par rapport à
-    la <code>expected_answer</code>. Avec elle, il évalue en <em>conformité</em>
-    (labels catégoriels).
+    Aucune réponse de référence. Sans elle, le notateur évalue en <em>opinion</em> par rapport
+    à la <em>réponse attendue</em>. Avec elle, il évalue en <em>conformité</em> (labels
+    conforme / partiel / non-conforme / hors-sujet).
   </p>
 </div>
 {% endif %}
 
 {% if role in ('org_admin', 'editor') or (user and user.is_platform_admin) %}
 <details class="fr-mt-3w">
-  <summary class="fr-btn fr-btn--secondary">{% if current %}Créer une nouvelle version{% else %}Ajouter la vérité de référence{% endif %}</summary>
+  <summary class="fr-btn fr-btn--secondary">{% if current %}Créer une nouvelle version{% else %}Ajouter la réponse de référence{% endif %}</summary>
   <form method="post" action="{{ url_prefix }}/tests/{{ test.test_id }}/ground-truth" class="fr-mt-2w" style="max-width:50rem;">
     <div class="fr-input-group">
       <label class="fr-label" for="reference_answer">Réponse de référence</label>

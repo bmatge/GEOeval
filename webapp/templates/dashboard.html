@@ -3,17 +3,17 @@
 {% block content %}
 <h1>Tableau de bord</h1>
 
-<h2 class="fr-mt-4w">Classement des modèles</h2>
+<h2 class="fr-mt-4w">Classement des IA</h2>
 <p class="fr-hint-text">Scores moyens (0–10) agrégés sur toutes les évaluations.</p>
 {% if leaderboard %}
 <div class="fr-table fr-table--bordered">
   <table>
     <thead>
       <tr>
-        <th scope="col">Modèle</th>
-        <th scope="col">Version API</th>
-        <th scope="col">Runs</th>
+        <th scope="col">IA</th>
+        <th scope="col">Version</th>
         <th scope="col">Évaluations</th>
+        <th scope="col">Notes reçues</th>
         <th scope="col">Qualité réponse</th>
         <th scope="col">Qualité citation</th>
       </tr>
@@ -34,17 +34,17 @@
 </div>
 {% else %}
 <div class="fr-callout">
-  <p class="fr-callout__text">Aucune évaluation pour l'instant. Lance un run depuis
-    <a href="{{ url_prefix }}/launch">Lancer un run</a>.</p>
+  <p class="fr-callout__text">Aucune évaluation pour l'instant.
+    <a class="fr-link" href="{{ url_prefix }}/launch">Lancer la première →</a></p>
 </div>
 {% endif %}
 
-<h2 class="fr-mt-4w">Derniers runs</h2>
+<h2 class="fr-mt-4w">Dernières évaluations</h2>
 {% if runs %}
 <div class="fr-table">
   <table>
     <thead>
-      <tr><th>#</th><th>Modèle testé</th><th>Démarré</th><th>Réponse (moy.)</th><th>Citation (moy.)</th><th></th></tr>
+      <tr><th>#</th><th>IA évaluée</th><th>Démarrée</th><th>Réponse (moy.)</th><th>Citation (moy.)</th><th></th></tr>
     </thead>
     <tbody>
       {% for r in runs %}
@@ -60,8 +60,8 @@
     </tbody>
   </table>
 </div>
-<p class="fr-mt-2w"><a class="fr-link" href="{{ url_prefix }}/runs">Voir tous les runs →</a></p>
+<p class="fr-mt-2w"><a class="fr-link" href="{{ url_prefix }}/runs">Voir toutes les évaluations →</a></p>
 {% else %}
-<p>Aucun run enregistré.</p>
+<p>Aucune évaluation enregistrée.</p>
 {% endif %}
 {% endblock %}

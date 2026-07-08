@@ -1,13 +1,13 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Modifier' if model else 'Ajouter' }} un modèle{% endblock %}
+{% block title %}{{ 'Modifier' if model else 'Ajouter' }} une IA{% endblock %}
 {% block content %}
-<h1>{{ 'Modifier' if model else 'Ajouter' }} un modèle</h1>
+<h1>{{ 'Modifier' if model else 'Ajouter' }} une IA</h1>
 
 <form method="post" action="{{ (url_prefix ~ ('/models/%d/edit' % model.model_id)) if model else (url_prefix ~ '/models/new') }}" class="fr-mt-2w" style="max-width: 40rem">
   <div class="fr-select-group">
     <label class="fr-label" for="model_name">Provider
       <span class="fr-hint-text">Pilote le connecteur utilisé. « compatible-openai » = tout endpoint
-      /chat/completions compatible OpenAI (utilisable comme juge uniquement).</span>
+      /chat/completions compatible OpenAI (utilisable comme notateur uniquement).</span>
     </label>
     <select class="fr-select" id="model_name" name="model_name" required>
       {% for p in providers %}
@@ -20,7 +20,7 @@
   </div>
 
   <div class="fr-input-group">
-    <label class="fr-label" for="model_version">Identifiant du modèle (côté API)
+    <label class="fr-label" for="model_version">Version (identifiant côté API)
       <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large</span>
     </label>
     <input class="fr-input" id="model_version" name="model_version" required
