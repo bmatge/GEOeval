@@ -340,6 +340,8 @@ class UsageRecord(Base):
     input_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     output_tokens: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     cost_eur: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"), server_default="0")
+    # Coût réel provider en USD (OpenRouter, ADR-080 §6.3) — NULL si coût estimé.
+    cost_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 6), nullable=True)
 
 
 class Budget(Base):

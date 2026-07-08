@@ -180,3 +180,10 @@ ALTER TABLE scheduled_runs  ALTER COLUMN perimeter_id SET NOT NULL;
 CREATE INDEX IF NOT EXISTS ix_tests_perimeter_id           ON tests(perimeter_id);
 CREATE INDEX IF NOT EXISTS ix_scheduled_runs_perimeter_id  ON scheduled_runs(perimeter_id);
 CREATE INDEX IF NOT EXISTS ix_runs_perimeter_id            ON runs(perimeter_id);
+
+-- ---------------------------------------------------------------------
+-- EPIC-001 Phase 1 (ADR-080 §6.3) : coût réel provider en USD
+-- (NULL = coût estimé par pricing ; renseigné = coût réel OpenRouter,
+--  cost_eur étant alors la conversion à l'ingestion via USD_EUR_RATE)
+-- ---------------------------------------------------------------------
+ALTER TABLE usage ADD COLUMN IF NOT EXISTS cost_usd NUMERIC(12, 6);

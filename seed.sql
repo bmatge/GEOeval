@@ -34,7 +34,10 @@ INSERT INTO models (model_id, model_name, model_version) VALUES
     (4, 'gemini',  'gemini-pro-latest'),     -- modèle testé
     (5, 'gemini',  'gemini-2.5-pro'),        -- juge par défaut (cf. main.py)
     (6, 'albert',  'openweight-large'),      -- juge (API souveraine Etalab, sans web)
-    (7, 'albert',  'openweight-medium')      -- juge (API souveraine Etalab, sans web)
+    (7, 'albert',  'openweight-medium'),     -- juge (API souveraine Etalab, sans web)
+    -- OpenRouter = provider plateforme par défaut (ADR-080, EPIC-001 Phase 1).
+    -- model_version = id du modèle au catalogue OpenRouter.
+    (8, 'openrouter', 'mistralai/mistral-small-3.2-24b-instruct')  -- juge économique via OpenRouter
 ON CONFLICT (model_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------

@@ -11,6 +11,9 @@ services:
     restart: unless-stopped
     environment:
       DATABASE_URL: postgresql+psycopg2://geoeval:geoeval@db:5432/geoeval
+      # OpenRouter = provider plateforme par défaut (ADR-080)
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+      USD_EUR_RATE: ${USD_EUR_RATE:-}
       OPENAI_API_KEY: ${OPENAI_API_KEY:-}
       MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}

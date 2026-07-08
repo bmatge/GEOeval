@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import random
 import time
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Callable, Optional, Tuple, Type, Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
@@ -79,6 +81,14 @@ _FAMILY_BY_NAME = {
     "openai-compatible": "generic", "compatible-openai": "generic",
     "mistral": "mistral", "mistralai": "mistral",
     "gemini": "gemini", "google": "gemini",
+    "openrouter": "openrouter",
+}
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# En-têtes d'attribution recommandés par OpenRouter (classement d'app, diagnostic).
+_OPENROUTER_HEADERS = {
+    "HTTP-Referer": "https://geoeval.lab.miweb.run",
+    "X-Title": "GEOeval",
 }
 
 _CLIENTS_BY_CONFIG: dict[tuple, Any] = {}
@@ -163,6 +173,14 @@ def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
             )
         from openai import OpenAI
         client = OpenAI(api_key=api_key or "none", base_url=base_url, default_headers=headers)
+    elif family == "openrouter":
+        # Provider plateforme par défaut (ADR-080) : compatible OpenAI, clé unique.
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=api_key or os.environ["OPENROUTER_API_KEY"],
+            base_url=base_url or OPENROUTER_BASE_URL,
+            default_headers={**_OPENROUTER_HEADERS, **(headers or {})},
+        )
     elif family == "mistral":
         try:
             from mistralai import Mistral  # SDK v1.x
@@ -222,6 +240,36 @@ def get_mistral_agent_singleton_by_model_version(
         _MISTRAL_AGENT_SINGLETON_BY_MODEL_VERSION[model_version] = agent
 
     return _MISTRAL_AGENT_SINGLETON_BY_MODEL_VERSION[model_version]
+
+
+# -----------------------------
+# Usage réel (ADR-080 §6.3)
+# -----------------------------
+@dataclass(frozen=True)
+class LLMUsage:
+    """Tokens et coût réels renvoyés par le provider (OpenRouter : usage.include).
+
+    `cost_usd` est le total facturé par OpenRouter (web search inclus), en USD —
+    la conversion EUR se fait à l'ingestion (webapp/usage.py).
+    """
+    input_tokens: int
+    output_tokens: int
+    cost_usd: Optional[Decimal] = None
+
+
+def usage_from_openrouter_response(resp: Any) -> Optional[LLMUsage]:
+    """Extrait un LLMUsage de la réponse chat.completions d'OpenRouter (best-effort)."""
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return None
+    cost = getattr(u, "cost", None)
+    if cost is None and getattr(u, "model_extra", None):
+        cost = u.model_extra.get("cost")
+    return LLMUsage(
+        input_tokens=int(getattr(u, "prompt_tokens", 0) or 0),
+        output_tokens=int(getattr(u, "completion_tokens", 0) or 0),
+        cost_usd=Decimal(str(cost)) if cost is not None else None,
+    )
 
 
 # -----------------------------
@@ -308,4 +356,5 @@ def call_with_retry(
 OPENAI_RETRY_EXCEPTIONS = (Exception,)
 GEMINI_RETRY_EXCEPTIONS = (Exception,)
 MISTRAL_RETRY_EXCEPTIONS = (Exception,)
-ALBERT_RETRY_EXCEPTIONS = (Exception,) 
+ALBERT_RETRY_EXCEPTIONS = (Exception,)
+OPENROUTER_RETRY_EXCEPTIONS = (Exception,)
