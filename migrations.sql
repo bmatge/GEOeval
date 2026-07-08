@@ -228,3 +228,9 @@ CREATE TABLE IF NOT EXISTS org_models (
 CREATE UNIQUE INDEX IF NOT EXISTS uq_org_models_org_model
     ON org_models(organization_id, model_id);
 CREATE INDEX IF NOT EXISTS ix_org_models_org_id ON org_models(organization_id);
+
+-- ---------------------------------------------------------------------
+-- EPIC-001 Phase 3 (S3.1) : plafond journalier optionnel à côté du
+-- mensuel (NULL = illimité). Soft-stop identique (ADR-078 §5).
+-- ---------------------------------------------------------------------
+ALTER TABLE budgets ADD COLUMN IF NOT EXISTS daily_cap_eur NUMERIC(12, 2);

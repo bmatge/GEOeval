@@ -57,9 +57,10 @@ Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_
 </form>
 
 <p class="fr-hint-text fr-mt-3w">
-  <strong>Budget</strong> : consommé ce mois-ci
-  {{ "%.4f"|format(month_spent) }} €{% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} €{% else %} (pas de plafond posé){% endif %}.
-  Une évaluation dépassant le plafond sera <em>refusée</em> (soft-stop, ADR-078 §5).
+  <strong>Budget</strong> :
+  consommé ce mois-ci {{ "%.4f"|format(month_spent) }} €{% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} €{% else %} (pas de plafond posé){% endif %} ·
+  dépensé aujourd'hui {{ "%.4f"|format(day_spent) }} €{% if budget and budget.daily_cap_eur is not none %} / plafond jour {{ "%.2f"|format(budget.daily_cap_eur) }} €{% else %} (pas de plafond journalier){% endif %}.
+  Une évaluation dont le devis dépasse l'un des plafonds (jour ou mois) sera <em>refusée</em> (soft-stop, ADR-078 §5).
 </p>
 {% endif %}
 {% endblock %}
