@@ -7,21 +7,21 @@
   <div class="fr-col-12 fr-col-md-8">
     <h1 class="fr-display--xs">Mesurer ce que les IA répondent<br>quand elles cherchent sur le web</h1>
     <p class="fr-text--lead">
-      GEOeval interroge régulièrement les grands modèles de langage (chatGPT, Mistral, Gemini…)
+      GEOeval interroge régulièrement les grandes IA (chatGPT, Mistral, Gemini…)
       — <strong>recherche web activée</strong> — sur une batterie de questions factuelles
-      françaises, puis fait noter chaque réponse et ses sources par des <strong>LLM-juges</strong>
-      indépendants. Objectif : suivre dans le temps la fiabilité des réponses et la qualité
-      des citations.
+      françaises, puis fait noter chaque réponse et ses sources par des <strong>notateurs</strong>
+      indépendants (autres IA, humains, ou les deux). Objectif : suivre dans le temps la fiabilité
+      des réponses et la qualité des citations.
     </p>
     <a class="fr-btn fr-btn--lg" href="{{ url_prefix }}/dashboard">Voir le classement</a>
-    <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="{{ url_prefix }}/launch">Lancer un run</a>
+    <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="{{ url_prefix }}/launch">Lancer une évaluation</a>
   </div>
   <div class="fr-col-12 fr-col-md-4">
     <div class="fr-tile fr-tile--no-border" style="text-align:center">
       <div class="fr-grid-row fr-grid-row--gutters">
         <div class="fr-col-4 fr-col-md-12">
           <p class="fr-display--sm fr-mb-0">{{ n_models }}</p>
-          <p class="fr-hint-text">modèles actifs</p>
+          <p class="fr-hint-text">IA disponibles</p>
         </div>
         <div class="fr-col-4 fr-col-md-12">
           <p class="fr-display--sm fr-mb-0">{{ n_tests }}</p>
@@ -29,7 +29,7 @@
         </div>
         <div class="fr-col-4 fr-col-md-12">
           <p class="fr-display--sm fr-mb-0">{{ n_runs }}</p>
-          <p class="fr-hint-text">runs effectués</p>
+          <p class="fr-hint-text">évaluations effectuées</p>
         </div>
       </div>
     </div>
@@ -43,10 +43,11 @@
     <div class="fr-card fr-card--no-arrow">
       <div class="fr-card__body">
         <div class="fr-card__content">
-          <h3 class="fr-card__title">1 · Des questions en base</h3>
-          <p class="fr-card__desc">Chaque <a class="fr-link" href="{{ url_prefix }}/tests">test</a> est une question
-          factuelle avec sa réponse attendue (plusieurs variantes possibles). On peut les créer,
-          modifier, désactiver — l'historique reste comparable.</p>
+          <h3 class="fr-card__title">1 · Des questions organisées par périmètre</h3>
+          <p class="fr-card__desc">Chaque <a class="fr-link" href="{{ url_prefix }}/tests">question</a> est une
+          question factuelle avec sa réponse attendue, rattachée à un
+          <a class="fr-link" href="{{ url_prefix }}/perimeters">périmètre</a>
+          (site, thématique…). L'historique reste comparable dans le temps.</p>
         </div>
       </div>
     </div>
@@ -55,9 +56,9 @@
     <div class="fr-card fr-card--no-arrow">
       <div class="fr-card__body">
         <div class="fr-card__content">
-          <h3 class="fr-card__title">2 · Les modèles répondent</h3>
-          <p class="fr-card__desc">Phase <strong>RUN</strong> : chaque modèle testé reçoit les
-          questions avec son outil de recherche web natif. Réponses et URLs citées sont
+          <h3 class="fr-card__title">2 · Les IA répondent</h3>
+          <p class="fr-card__desc">Phase <strong>réponse</strong> : chaque IA évaluée reçoit les questions du
+          périmètre avec son outil de recherche web natif. Réponses et URLs citées sont
           archivées telles quelles.</p>
         </div>
       </div>
@@ -67,10 +68,10 @@
     <div class="fr-card fr-card--no-arrow">
       <div class="fr-card__body">
         <div class="fr-card__content">
-          <h3 class="fr-card__title">3 · Des juges notent</h3>
-          <p class="fr-card__desc">Phase <strong>ÉVALUATION</strong> : un ou plusieurs LLM-juges
-          (sans accès web) notent de 0 à 10 la <em>qualité de la réponse</em> face à la réponse
-          attendue, et la <em>qualité des citations</em>.</p>
+          <h3 class="fr-card__title">3 · Les notateurs évaluent</h3>
+          <p class="fr-card__desc">Phase <strong>notation</strong> : un ou plusieurs notateurs (IA sans accès
+          web, ou annotations humaines) notent de 0 à 10 la <em>qualité de la réponse</em> face à la
+          réponse attendue, et la <em>qualité des citations</em>.</p>
         </div>
       </div>
     </div>
@@ -82,27 +83,26 @@
 <div class="fr-grid-row fr-grid-row--gutters fr-mb-4w">
   <div class="fr-col-12 fr-col-md-6">
     <ol>
-      <li><strong><a class="fr-link" href="{{ url_prefix }}/models">Modèles</a></strong> — déclare ou ajuste les
-        modèles (URL, clé API, rôle juge ou non). Tout endpoint compatible OpenAI peut devenir
-        juge sans code.</li>
-      <li><strong><a class="fr-link" href="{{ url_prefix }}/tests">Tests</a></strong> — crée tes questions et
-        réponses attendues, active/désactive celles à inclure.</li>
-      <li><strong><a class="fr-link" href="{{ url_prefix }}/launch">Lancer un run</a></strong> — coche modèles
-        testés, juges et questions ; suis la progression en direct dans
-        <a class="fr-link" href="{{ url_prefix }}/jobs">Jobs</a>.</li>
-      <li><strong><a class="fr-link" href="{{ url_prefix }}/schedules">Planification</a></strong> — programme des
-        runs récurrents (quotidien, hebdo…) pour mesurer la <em>cohérence dans le temps</em>,
-        l'intérêt principal du banc d'essai.</li>
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/perimeters">Périmètres</a></strong> — crée un contexte
+        de recherche (site, thématique) auquel rattacher tes questions.</li>
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/tests">Questions</a></strong> — crée tes questions et
+        leurs réponses attendues.</li>
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/launch">Lancer une évaluation</a></strong> — choisis
+        le périmètre, coche les IA évaluées, les notateurs et les questions ; suis la progression
+        en direct.</li>
+      <li><strong><a class="fr-link" href="{{ url_prefix }}/schedules">Programmer</a></strong> — planifie des
+        évaluations récurrentes (quotidiennes, hebdo…) pour mesurer la <em>cohérence dans le
+        temps</em>, l'intérêt principal du banc d'essai.</li>
     </ol>
   </div>
   <div class="fr-col-12 fr-col-md-6">
     <div class="fr-callout">
       <h3 class="fr-callout__title">Lire les résultats</h3>
       <p class="fr-callout__text">
-        Le <a class="fr-link" href="{{ url_prefix }}/dashboard">tableau de bord</a> classe les modèles par score
-        moyen (réponse / citation). Chaque <a class="fr-link" href="{{ url_prefix }}/runs">run</a> se déplie
-        jusqu'au détail : question → réponse du modèle → sources citées → notes et
-        justifications de chaque juge.
+        Le <a class="fr-link" href="{{ url_prefix }}/dashboard">tableau de bord</a> classe les IA par score
+        moyen (réponse / citation). Chaque
+        <a class="fr-link" href="{{ url_prefix }}/runs">évaluation</a> se déplie jusqu'au détail :
+        question → réponse de l'IA → sources citées → notes et justifications de chaque notateur.
       </p>
     </div>
   </div>

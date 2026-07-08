@@ -22,7 +22,7 @@
             <a href="{{ (url_prefix ~ '/') if org else '/' }}" title="Accueil — GEOeval">
               <p class="fr-header__service-title">GEOeval{% if org %} · {{ org.name }}{% endif %}</p>
             </a>
-            <p class="fr-header__service-tagline">Banc d'essai LLM avec recherche web</p>
+            <p class="fr-header__service-tagline">Suivre la visibilité de l'information dans les IA</p>
           </div>
         </div>
         {% if user %}
@@ -34,6 +34,9 @@
                   {{ user.email }}{% if user.is_platform_admin %} · <em>admin plateforme</em>{% endif %}
                 </span>
               </li>
+              {% if org and (role == 'org_admin' or user.is_platform_admin) %}
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="{{ url_prefix }}/settings">Paramètres de l'org</a></li>
+              {% endif %}
               <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/">Changer d'organisation</a></li>
             </ul>
           </div>
@@ -47,35 +50,70 @@
     <div class="fr-container">
       <nav class="fr-nav" role="navigation" aria-label="Menu principal">
         <ul class="fr-nav__list">
-          {% set items = [
-            ('home', url_prefix ~ '/', 'Accueil'),
-            ('dashboard', url_prefix ~ '/dashboard', 'Tableau de bord'),
-            ('perimeters', url_prefix ~ '/perimeters', 'Périmètres'),
-            ('runs', url_prefix ~ '/runs', 'Runs'),
-            ('tests', url_prefix ~ '/tests', 'Questions'),
-            ('prompts', url_prefix ~ '/prompts', 'Grilles de notation'),
-            ('models', url_prefix ~ '/models', 'Modèles'),
-            ('launch', url_prefix ~ '/launch', 'Lancer une évaluation'),
-            ('schedules', url_prefix ~ '/schedules', 'Programmations')
-          ] %}
-          {% for key, url, label in items %}
+
+          {# --- Utiliser (toujours visible) --- #}
           <li class="fr-nav__item">
-            <a class="fr-nav__link" href="{{ url }}"
-               {% if active == key %}aria-current="page"{% endif %}>{{ label }}</a>
+            <a class="fr-nav__link" href="{{ url_prefix }}/dashboard"
+               {% if active == 'dashboard' %}aria-current="page"{% endif %}>Tableau de bord</a>
           </li>
-          {% endfor %}
-          {% if role == 'org_admin' or (user and user.is_platform_admin) %}
           <li class="fr-nav__item">
-            <a class="fr-nav__link" href="{{ url_prefix }}/settings"
-               {% if active == 'settings' %}aria-current="page"{% endif %}>Paramètres</a>
+            <a class="fr-nav__link" href="{{ url_prefix }}/launch"
+               {% if active == 'launch' %}aria-current="page"{% endif %}>Lancer une évaluation</a>
+          </li>
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="{{ url_prefix }}/runs"
+               {% if active == 'runs' %}aria-current="page"{% endif %}>Évaluations</a>
+          </li>
+
+          {# --- Configurer (dropdown, editor+) --- #}
+          {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+          {% set conf_active = active in ('perimeters', 'tests', 'prompts', 'schedules') %}
+          <li class="fr-nav__item">
+            <button class="fr-nav__btn" aria-expanded="false" aria-controls="menu-configurer"
+                    {% if conf_active %}aria-current="true"{% endif %}>Configurer</button>
+            <div class="fr-collapse fr-menu" id="menu-configurer">
+              <ul class="fr-menu__list">
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/perimeters"
+                     {% if active == 'perimeters' %}aria-current="page"{% endif %}>Périmètres</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/tests"
+                     {% if active == 'tests' %}aria-current="page"{% endif %}>Questions</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/prompts"
+                     {% if active == 'prompts' %}aria-current="page"{% endif %}>Grilles de notation</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/schedules"
+                     {% if active == 'schedules' %}aria-current="page"{% endif %}>Programmations</a>
+                </li>
+              </ul>
+            </div>
           </li>
           {% endif %}
+
+          {# --- Administrer la plateforme (dropdown, platform_admin) --- #}
           {% if user and user.is_platform_admin %}
+          {% set adm_active = active in ('admin', 'models') %}
           <li class="fr-nav__item">
-            <a class="fr-nav__link" href="/admin/organizations"
-               {% if active == 'admin' %}aria-current="page"{% endif %}>Admin plateforme</a>
+            <button class="fr-nav__btn" aria-expanded="false" aria-controls="menu-administrer"
+                    {% if adm_active %}aria-current="true"{% endif %}>Administrer</button>
+            <div class="fr-collapse fr-menu" id="menu-administrer">
+              <ul class="fr-menu__list">
+                <li><a class="fr-nav__link" href="{{ url_prefix }}/models"
+                       {% if active == 'models' %}aria-current="page"{% endif %}>Catalogue d'IA</a></li>
+                <li><a class="fr-nav__link" href="/admin/pricing">Tarifs des IA</a></li>
+                <li><a class="fr-nav__link" href="/admin/organizations">Organisations</a></li>
+                <li><a class="fr-nav__link" href="/admin/audit">Journal d'audit global</a></li>
+                <li><a class="fr-nav__link" href="/admin/gold-annotations/import">Notation humaine</a></li>
+                <li><a class="fr-nav__link" href="/methodology/judges">Accord des notateurs</a></li>
+              </ul>
+            </div>
           </li>
           {% endif %}
+
         </ul>
       </nav>
     </div>
@@ -93,7 +131,7 @@
   <div class="fr-container">
     <div class="fr-footer__bottom">
       <p class="fr-footer__bottom-copy fr-py-2w">
-        GEOeval — outil de benchmark LLM.
+        GEOeval — mesure de la visibilité de l'information publique dans les IA.
         {% if org %}Organisation <strong>{{ org.name }}</strong>{% if role %} · rôle {{ role }}{% endif %}.{% endif %}
       </p>
     </div>

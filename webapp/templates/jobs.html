@@ -1,11 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Jobs{% endblock %}
+{% block title %}Suivi des évaluations{% endblock %}
 {% block content %}
-<h1>Jobs</h1>
+<h1>Suivi des évaluations</h1>
+<p class="fr-hint-text">Historique en mémoire des lancements récents (perdu au redéploiement).
+Les évaluations terminées restent en base — voir <a class="fr-link" href="{{ url_prefix }}/runs">Évaluations</a>.</p>
 {% if jobs %}
 <div class="fr-table fr-table--bordered">
   <table>
-    <thead><tr><th>ID</th><th>Statut</th><th>Modèles testés</th><th>Progression</th><th></th></tr></thead>
+    <thead><tr><th>ID</th><th>Statut</th><th>IA évaluées</th><th>Progression</th><th></th></tr></thead>
     <tbody>
       {% for j in jobs %}
       <tr>
@@ -18,13 +20,14 @@
         </td>
         <td>{{ j.params.tested_models|join(", ") }}</td>
         <td>{{ j.current }}/{{ j.total }} ({{ j.pct }} %)</td>
-        <td><a class="fr-link" href="{{ url_prefix }}/jobs/{{ j.id }}">Suivi</a></td>
+        <td><a class="fr-link" href="{{ url_prefix }}/jobs/{{ j.id }}">Suivi détaillé</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<div class="fr-callout"><p class="fr-callout__text">Aucun job. <a href="{{ url_prefix }}/launch">Lancer un run</a>.</p></div>
+<div class="fr-callout"><p class="fr-callout__text">Aucun suivi en cours.
+  <a class="fr-link" href="{{ url_prefix }}/launch">Lancer une évaluation →</a></p></div>
 {% endif %}
 {% endblock %}

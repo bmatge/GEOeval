@@ -1,7 +1,9 @@
 {% extends "base.html" %}
-{% block title %}Admin — import gold annotations{% endblock %}
+{% block title %}Admin — notation humaine{% endblock %}
 {% block content %}
-<h1>Admin — import gold annotations (CSV)</h1>
+<h1>Notation humaine — import CSV</h1>
+<p class="fr-hint-text">Charge des annotations humaines (une personne note une évaluation) pour
+calibrer les IA notatrices — voir <a class="fr-link" href="/methodology/judges">Accord des notateurs</a>.</p>
 
 <div class="fr-callout">
   <p class="fr-callout__title">Format attendu</p>
@@ -38,5 +40,5 @@
 {% endif %}
 {% endif %}
 
-<p class="fr-mt-4w"><a class="fr-link" href="/methodology/judges">Voir la matrice d'accord des juges →</a></p>
+<p class="fr-mt-4w"><a class="fr-link" href="/methodology/judges">Voir l'accord des notateurs →</a></p>
 {% endblock %}
