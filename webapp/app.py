@@ -24,7 +24,18 @@ from sqlalchemy.orm import Session
 
 from db import SessionLocal
 from load import load_tests
-from webapp import audit, budget, credentials, ground_truth, pricing, scheduler, services, tenancy
+from webapp import (
+    agreement,
+    audit,
+    budget,
+    credentials,
+    gold,
+    ground_truth,
+    pricing,
+    scheduler,
+    services,
+    tenancy,
+)
 from webapp.auth import CurrentUser, GateAuthMiddleware
 from webapp.deps import (
     get_db,
@@ -464,12 +475,20 @@ PROVIDER_CHOICES = ["chatGPT", "mistral", "gemini", "albert", "compatible-openai
 def _run_form_context(db: Session, org_id: int) -> dict:
     """Contexte commun aux formulaires « lancer » et « planifier » un run."""
     models = services.list_models(db)
+    judges = [m for m in models if m.is_judge]
+    # Précompute kappa vs gold set pour affichage inline (ADR-079 §6).
+    judge_kappa: dict[int, Optional[float]] = {}
+    for j in judges:
+        ag = agreement.compute_agreement_vs_gold(db, j.model_id)
+        judge_kappa[j.model_id] = ag.get("response_kappa")
     return dict(
         models=models,
         testable_models=[
             m for m in models if (m.model_name or "").lower() in TESTABLE_PROVIDERS
         ],
-        judgeable_models=[m for m in models if m.is_judge],
+        judgeable_models=judges,
+        judge_kappa=judge_kappa,
+        kappa_threshold=0.6,
         tests=load_tests(db, organization_id=org_id),
     )
 
@@ -1391,3 +1410,83 @@ def admin_pricing_set(
         meta={"input": str(ip), "output": str(op)},
     )
     return RedirectResponse("/admin/pricing", status_code=303)
+
+
+# =====================================================================
+# PR#17 — Gold set + métriques d'accord
+# =====================================================================
+from fastapi import UploadFile, File  # noqa: E402
+from models import Model as _Model  # noqa: E402
+from sqlalchemy import select as _sel2  # noqa: E402
+
+KAPPA_WARNING_THRESHOLD = 0.6
+
+
+@app.get("/admin/gold-annotations/import", response_class=HTMLResponse)
+def gold_import_form(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+):
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_gold_import.html",
+        context={"active": "admin", "user": user, "url_prefix": "", "result": None},
+    )
+
+
+@app.post("/admin/gold-annotations/import", response_class=HTMLResponse)
+async def gold_import_submit(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    content = await file.read()
+    result = gold.import_csv(db, content)
+    audit.record(
+        db, user_id=user.id, org_id=None,
+        action="import_csv", entity_type="gold_annotations",
+        entity_id=None,
+        meta={"inserted": result["inserted"], "rejected": len(result["rejected"])},
+    )
+    return templates.TemplateResponse(
+        request=request,
+        name="admin_gold_import.html",
+        context={"active": "admin", "user": user, "url_prefix": "", "result": result},
+    )
+
+
+def _judges_agreement_matrix(session):
+    """Renvoie [{model, agreement}] pour tous les modèles marqués juge."""
+    judges = session.execute(
+        _sel2(_Model).where(_Model.is_judge.is_(True))
+    ).scalars().all()
+    out = []
+    for j in judges:
+        ag = agreement.compute_agreement_vs_gold(session, j.model_id)
+        out.append(dict(
+            model_id=j.model_id,
+            model_name=j.model_name,
+            model_version=j.model_version,
+            is_sovereign=j.is_sovereign,
+            agreement=ag,
+        ))
+    return out
+
+
+@app.get("/methodology/judges", response_class=HTMLResponse)
+def methodology_judges(
+    request: Request,
+    user: CurrentUser = Depends(require_user),
+    db: Session = Depends(get_db),
+):
+    # Accessible à tout user connecté (info méthodologique).
+    matrix = _judges_agreement_matrix(db)
+    return templates.TemplateResponse(
+        request=request,
+        name="methodology_judges.html",
+        context={
+            "active": "methodology", "user": user, "url_prefix": "",
+            "matrix": matrix, "threshold": KAPPA_WARNING_THRESHOLD,
+        },
+    )

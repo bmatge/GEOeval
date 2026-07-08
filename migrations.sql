@@ -120,3 +120,11 @@ VALUES (
     'Attribue AUSSI un score numérique 0-10 (10=parfaitement conforme, 0=hors sujet).'
 )
 ON CONFLICT (prompt_id) DO NOTHING;
+
+-- ---------------------------------------------------------------------
+-- ADR-079 §2, §5-6 (PR#17) : gold set humain + métriques d'accord.
+-- ---------------------------------------------------------------------
+CREATE UNIQUE INDEX IF NOT EXISTS uq_gold_annotations_test_run_annotator
+    ON gold_annotations(test_id, run_id, annotator_email);
+CREATE INDEX IF NOT EXISTS ix_gold_annotations_run_id
+    ON gold_annotations(run_id);

@@ -349,6 +349,30 @@ class EvaluationPrompt(Base):
 # Résolution par date via valid_from/valid_to (une seule row active à un
 # instant t). L'édition crée une NOUVELLE version et clôt l'ancienne.
 # =====================================================================
+class GoldAnnotation(Base):
+    """Annotation humaine d'une paire (test, run) — gold set ADR-079 §2.
+
+    UNIQUE(test_id, run_id, annotator_email) : un même annotateur ne rate pas
+    deux fois la même paire. Labels catégoriels obligatoires (vocab fixe),
+    scores 0-10.
+    """
+    __tablename__ = "gold_annotations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.run_id"), nullable=False)
+    ground_truth_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    annotator_email: Mapped[str] = mapped_column(Text, nullable=False)
+    response_label: Mapped[str] = mapped_column(Text, nullable=False)
+    response_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    citation_label: Mapped[str] = mapped_column(Text, nullable=False)
+    citation_score: Mapped[Decimal] = mapped_column(Numeric(4, 2), nullable=False)
+    notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    annotated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
 class TestGroundTruth(Base):
     __tablename__ = "test_ground_truth"
 

@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Méthodologie — accord des juges{% endblock %}
+{% block content %}
+<h1>Méthodologie — accord des juges avec le gold set</h1>
+<p class="fr-hint-text">
+  Comparaison des jugements LLM aux annotations humaines (ADR-079 §5).
+  Kappa de Cohen sur les labels catégoriels, Spearman sur les scores.
+</p>
+
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr>
+        <th>Modèle juge</th>
+        <th>Paires</th>
+        <th>κ réponse</th>
+        <th>Spearman réponse</th>
+        <th>κ citation</th>
+        <th>Spearman citation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in matrix %}
+      <tr>
+        <td>
+          {{ e.model_name }} · <code>{{ e.model_version }}</code>
+          {% if e.is_sovereign %}<span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}
+        </td>
+        <td>{{ e.agreement.n_pairs }}</td>
+        {% set k = e.agreement.response_kappa %}
+        <td>
+          {% if k is not none %}
+            {{ "%.3f"|format(k) }}
+            {% if k < threshold %}<span class="fr-badge fr-badge--sm fr-badge--warning">bas</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ "%.3f"|format(e.agreement.response_spearman) if e.agreement.response_spearman is not none else '—' }}</td>
+        <td>{{ "%.3f"|format(e.agreement.citation_kappa) if e.agreement.citation_kappa is not none else '—' }}</td>
+        <td>{{ "%.3f"|format(e.agreement.citation_spearman) if e.agreement.citation_spearman is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-hint-text fr-mt-2w">
+  Seuil d'alerte : κ &lt; {{ threshold }}. Un juge sous ce seuil affiche un bandeau
+  d'avertissement au moment de le sélectionner.
+</p>
+
+{% if user and user.is_platform_admin %}
+<p class="fr-mt-4w">
+  <a class="fr-link" href="/admin/gold-annotations/import">Importer d'autres annotations CSV →</a>
+</p>
+{% endif %}
+{% endblock %}

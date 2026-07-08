@@ -26,6 +26,10 @@
           <label class="fr-label" for="judge-{{ m.model_id }}">
             {{ m.model_name }} · <code>{{ m.model_version }}</code>
             {% if m.is_sovereign %}<span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}
+            {% set k = judge_kappa.get(m.model_id) if judge_kappa else none %}
+            {% if k is not none and k < kappa_threshold %}
+            <span class="fr-badge fr-badge--sm fr-badge--warning" title="Accord modéré avec les annotations humaines (κ = {{ '%.2f'|format(k) }})">κ = {{ '%.2f'|format(k) }}</span>
+            {% endif %}
           </label>
         </div>
       </div>
