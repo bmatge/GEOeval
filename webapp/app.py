@@ -94,6 +94,25 @@ def render(
     return templates.TemplateResponse(request=request, name=template, context=context)
 
 
+def _nav_fallback(db: Session, user: Optional[CurrentUser]) -> tuple:
+    """Org de repli pour la nav des pages hors organisation (/admin/*, méthodologie).
+
+    Première adhésion de l'utilisateur ; pour un admin plateforme sans adhésion,
+    la première organisation existante. (None, None) sinon — la nav reste masquée.
+    """
+    from sqlalchemy import select as _s
+    from models import Organization
+    if user is None:
+        return (None, None)
+    if user.memberships:
+        org_id = next(iter(user.memberships))
+        return (db.get(Organization, org_id), user.memberships.get(org_id))
+    if user.is_platform_admin:
+        org = db.execute(_s(Organization).order_by(Organization.id)).scalars().first()
+        return (org, None)
+    return (None, None)
+
+
 # =====================================================================
 # Landing (choix d'organisation)
 # =====================================================================
@@ -1611,16 +1630,11 @@ def admin_orgs(
     db: Session = Depends(get_db),
 ):
     orgs = tenancy.list_all_orgs(db)
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_organizations.html",
-        context={
-            "active": "admin",
-            "user": user,
-            "url_prefix": "",
-            "orgs": orgs,
-            "roles": tenancy.ROLES,
-        },
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_organizations.html", active="admin",
+        org=nav_org, role=nav_role,
+        orgs=orgs, roles=tenancy.ROLES,
     )
 
 
@@ -1695,17 +1709,12 @@ def admin_audit_view(
         )
         for al, email, slug in rows
     ]
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_audit.html",
-        context={
-            "active": "admin",
-            "user": user,
-            "url_prefix": "",
-            "entries": entries,
-            "page": page,
-            "next_page": page + 1 if len(entries) == PAGE_SIZE else None,
-        },
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_audit.html", active="admin",
+        org=nav_org, role=nav_role,
+        entries=entries, page=page,
+        next_page=page + 1 if len(entries) == PAGE_SIZE else None,
     )
 
 
@@ -1779,13 +1788,10 @@ def admin_pricing_view(
     db: Session = Depends(get_db),
 ):
     entries = pricing.list_pricing(db)
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_pricing.html",
-        context={
-            "active": "admin", "user": user, "url_prefix": "",
-            "entries": entries,
-        },
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_pricing.html", active="admin",
+        org=nav_org, role=nav_role, entries=entries,
     )
 
 
@@ -1862,16 +1868,14 @@ def admin_openrouter_import_view(
             ]
         existing = openrouter_catalog.existing_openrouter_models(db)
     kind, text = _OR_IMPORT_MESSAGES.get(msg, ("", ""))
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_openrouter_import.html",
-        context={
-            "active": "admin", "user": user, "url_prefix": "",
-            "loaded": bool(load), "entries": entries, "existing": existing,
-            "total": total, "q": q, "error": error,
-            "msg_kind": kind, "msg_text": text,
-            "rate": openrouter_catalog.usd_eur_rate(),
-        },
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_openrouter_import.html", active="admin",
+        org=nav_org, role=nav_role,
+        loaded=bool(load), entries=entries, existing=existing,
+        total=total, q=q, error=error,
+        msg_kind=kind, msg_text=text,
+        rate=openrouter_catalog.usd_eur_rate(),
     )
 
 
@@ -1957,11 +1961,12 @@ KAPPA_WARNING_THRESHOLD = 0.6
 def gold_import_form(
     request: Request,
     user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
 ):
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_gold_import.html",
-        context={"active": "admin", "user": user, "url_prefix": "", "result": None},
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_gold_import.html", active="admin",
+        org=nav_org, role=nav_role, result=None,
     )
 
 
@@ -1980,10 +1985,10 @@ async def gold_import_submit(
         entity_id=None,
         meta={"inserted": result["inserted"], "rejected": len(result["rejected"])},
     )
-    return templates.TemplateResponse(
-        request=request,
-        name="admin_gold_import.html",
-        context={"active": "admin", "user": user, "url_prefix": "", "result": result},
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_gold_import.html", active="admin",
+        org=nav_org, role=nav_role, result=result,
     )
 
 
@@ -2013,11 +2018,9 @@ def methodology_judges(
 ):
     # Accessible à tout user connecté (info méthodologique).
     matrix = _judges_agreement_matrix(db)
-    return templates.TemplateResponse(
-        request=request,
-        name="methodology_judges.html",
-        context={
-            "active": "methodology", "user": user, "url_prefix": "",
-            "matrix": matrix, "threshold": KAPPA_WARNING_THRESHOLD,
-        },
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "methodology_judges.html", active="methodology",
+        org=nav_org, role=nav_role,
+        matrix=matrix, threshold=KAPPA_WARNING_THRESHOLD,
     )
