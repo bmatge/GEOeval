@@ -27,17 +27,24 @@ ON CONFLICT (id) DO NOTHING;
 --    model_version = identifiant du modèle côté API.
 --    (ids alignés sur les commentaires de main.py : 2..5)
 -- ---------------------------------------------------------------------
-INSERT INTO models (model_id, model_name, model_version) VALUES
-    (1, 'chatGPT', 'gpt-4.1-mini'),          -- juge économique (optionnel)
-    (2, 'chatGPT', 'gpt-5.2'),               -- modèle testé
-    (3, 'mistral', 'mistral-large-latest'),  -- modèle testé
-    (4, 'gemini',  'gemini-pro-latest'),     -- modèle testé
-    (5, 'gemini',  'gemini-2.5-pro'),        -- juge par défaut (cf. main.py)
-    (6, 'albert',  'openweight-large'),      -- juge (API souveraine Etalab, sans web)
-    (7, 'albert',  'openweight-medium'),     -- juge (API souveraine Etalab, sans web)
-    -- OpenRouter = provider plateforme par défaut (ADR-080, EPIC-001 Phase 1).
+-- OpenRouter = provider plateforme par défaut pour les modèles testés (ADR-080 §6.1) :
+-- les lignes directes historiques (2/3/4) sont conservées mais DÉSACTIVÉES (jamais
+-- supprimées — ADR-076, les runs historiques y restent rattachés).
+INSERT INTO models (model_id, model_name, model_version, is_active, search_config) VALUES
+    (1, 'chatGPT', 'gpt-4.1-mini', TRUE, NULL),           -- juge économique (optionnel)
+    (2, 'chatGPT', 'gpt-5.2', FALSE, NULL),               -- testé LEGACY direct → remplacé par #9
+    (3, 'mistral', 'mistral-large-latest', FALSE, NULL),  -- testé LEGACY direct → remplacé par #10
+    (4, 'gemini',  'gemini-pro-latest', FALSE, NULL),     -- testé LEGACY direct → remplacé par #11
+    (5, 'gemini',  'gemini-2.5-pro', TRUE, NULL),         -- juge par défaut (cf. main.py)
+    (6, 'albert',  'openweight-large', TRUE, NULL),       -- juge (API souveraine Etalab, sans web)
+    (7, 'albert',  'openweight-medium', TRUE, NULL),      -- juge (API souveraine Etalab, sans web)
     -- model_version = id du modèle au catalogue OpenRouter.
-    (8, 'openrouter', 'mistralai/mistral-small-3.2-24b-instruct')  -- juge économique via OpenRouter
+    (8, 'openrouter', 'mistralai/mistral-small-3.2-24b-instruct', TRUE, NULL),  -- juge économique
+    -- Modèles testés via OpenRouter (ADR-080) : search natif pour OpenAI,
+    -- Exa (moteur OpenRouter) pour Mistral/Gemini — mesuré au SPIKE-001.
+    (9,  'openrouter', 'openai/gpt-5.2',              TRUE, '{"engine": "native", "max_results": 5}'),
+    (10, 'openrouter', 'mistralai/mistral-large-2512', TRUE, '{"engine": "exa", "max_results": 5}'),
+    (11, 'openrouter', 'google/gemini-2.5-pro',        TRUE, '{"engine": "exa", "max_results": 5}')
 ON CONFLICT (model_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------

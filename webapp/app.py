@@ -626,8 +626,7 @@ def prompt_update(
 # Lancer un run (par org)
 # =====================================================================
 # Providers utilisables comme modèle TESTÉ (dispatch de run.py, avec recherche web).
-# NB : « openrouter » y entrera en Phase 2 de l'EPIC-001 (web search unifié).
-TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google"}
+TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google", "openrouter"}
 PROVIDER_CHOICES = ["openrouter", "chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
 
 
@@ -871,6 +870,40 @@ def model_new_form(
                   model=None, providers=PROVIDER_CHOICES)
 
 
+def _parse_search_config(
+    engine: str, max_results: str, context_size: str, allowed_domains: str
+) -> Optional[dict]:
+    """Assemble models.search_config depuis les champs du formulaire (ADR-080 §2.2).
+
+    engine vide ou "off" sans autre champ → None (pas de recherche web).
+    """
+    engine = (engine or "").strip().lower()
+    if engine not in {"", "off", "native", "exa", "firecrawl"}:
+        raise HTTPException(status_code=400, detail=f"engine invalide : {engine!r}")
+    config: dict = {}
+    if engine and engine != "off":
+        config["engine"] = engine
+    if (max_results or "").strip():
+        try:
+            n = int(max_results)
+            if not 1 <= n <= 20:
+                raise ValueError
+        except ValueError:
+            raise HTTPException(status_code=400, detail="max_results doit être un entier entre 1 et 20")
+        config["max_results"] = n
+    context_size = (context_size or "").strip().lower()
+    if context_size:
+        if context_size not in {"low", "medium", "high"}:
+            raise HTTPException(status_code=400, detail=f"search_context_size invalide : {context_size!r}")
+        config["search_context_size"] = context_size
+    domains = [d.strip() for d in (allowed_domains or "").split(",") if d.strip()]
+    if domains:
+        config["allowed_domains"] = domains
+    if engine == "off":
+        return {"engine": "off"}  # explicite : recherche coupée malgré d'autres champs
+    return config or None
+
+
 @app.post("/o/{org_slug}/models/new")
 def model_new_submit(
     ctx=Depends(require_org),
@@ -881,6 +914,10 @@ def model_new_submit(
     base_url: str = Form(""),
     api_key: str = Form(""),
     extra_headers: str = Form(""),
+    search_engine: str = Form(""),
+    search_max_results: str = Form(""),
+    search_context_size: str = Form(""),
+    search_allowed_domains: str = Form(""),
 ):
     org, _ = ctx
     services.create_model(
@@ -890,6 +927,9 @@ def model_new_submit(
         base_url=base_url.strip(),
         api_key=api_key.strip(),
         extra_headers=_parse_headers(extra_headers),
+        search_config=_parse_search_config(
+            search_engine, search_max_results, search_context_size, search_allowed_domains
+        ),
     )
     return RedirectResponse(f"/o/{org.slug}/models", status_code=303)
 
@@ -922,6 +962,10 @@ def model_edit_submit(
     api_key: str = Form(""),
     clear_api_key: bool = Form(False),
     extra_headers: str = Form(""),
+    search_engine: str = Form(""),
+    search_max_results: str = Form(""),
+    search_context_size: str = Form(""),
+    search_allowed_domains: str = Form(""),
 ):
     org, _ = ctx
     services.update_model(
@@ -933,6 +977,9 @@ def model_edit_submit(
         api_key=api_key.strip(),
         clear_api_key=clear_api_key,
         extra_headers=_parse_headers(extra_headers),
+        search_config=_parse_search_config(
+            search_engine, search_max_results, search_context_size, search_allowed_domains
+        ),
     )
     return RedirectResponse(f"/o/{org.slug}/models", status_code=303)
 

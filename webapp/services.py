@@ -209,6 +209,7 @@ def create_model(
     base_url: Optional[str],
     api_key: Optional[str],
     extra_headers: Optional[dict[str, Any]],
+    search_config: Optional[dict[str, Any]] = None,
 ) -> Model:
     model = Model(
         model_name=model_name,
@@ -216,6 +217,7 @@ def create_model(
         base_url=base_url or None,
         api_key=api_key or None,
         extra_headers=extra_headers or None,
+        search_config=search_config or None,
         is_active=True,
     )
     session.add(model)
@@ -233,6 +235,7 @@ def update_model(
     api_key: Optional[str],       # None = inchangée ; "" via clear_api_key
     clear_api_key: bool,
     extra_headers: Optional[dict[str, Any]],
+    search_config: Optional[dict[str, Any]] = None,
 ) -> Model:
     model = session.get(Model, model_id)
     if model is None:
@@ -241,6 +244,7 @@ def update_model(
     model.model_version = model_version
     model.base_url = base_url or None
     model.extra_headers = extra_headers or None
+    model.search_config = search_config or None
     if clear_api_key:
         model.api_key = None
     elif api_key:  # champ laissé vide = clé existante conservée

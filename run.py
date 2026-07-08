@@ -88,7 +88,15 @@ def build_instructions() -> str:
 # -----------------------------
 # LLM call (tested model)
 # -----------------------------
-def call_tested_llm(model: Model, prompt: str, organization_id: Optional[int] = None) -> str:
+def call_tested_llm(
+    model: Model, prompt: str, organization_id: Optional[int] = None
+) -> tuple[str, Optional[list[str]], Optional[llm_clients.LLMUsage]]:
+    """Appelle le modèle testé et renvoie (réponse, citations structurées, usage réel).
+
+    Citations et usage réels ne sont fournis que par la famille openrouter
+    (ADR-080) ; les chemins directs renvoient None → regex + heuristique côté
+    execute_run.
+    """
     logger.info("call_tested_llm START %s", model.model_version)
     start = time.perf_counter()
     instructions = build_instructions()
@@ -129,7 +137,7 @@ def call_tested_llm(model: Model, prompt: str, organization_id: Optional[int] = 
         )
         end = time.perf_counter()
         logger.info("call_tested_llm END (%.2f s)", end - start)
-        return response 
+        return response, None, None
 
     # 2) Mistral (Agents/Conversations + web_search) + agent singleton par model_version
     if model_name in {"mistral", "mistralai"}:
@@ -179,7 +187,7 @@ def call_tested_llm(model: Model, prompt: str, organization_id: Optional[int] = 
         )
         end = time.perf_counter()
         logger.info("call_tested_llm END (%.2f s)", end - start)
-        return response 
+        return response, None, None
 
     # 3) Gemini (GoogleSearch activé)
     if model_name in {"gemini", "google"}:
@@ -213,7 +221,45 @@ def call_tested_llm(model: Model, prompt: str, organization_id: Optional[int] = 
         )
         end = time.perf_counter()
         logger.info("call_tested_llm END (%.2f s)", end - start)
-        return response 
+        return response, None, None
+
+    # 4) OpenRouter — appel UNIFIÉ (ADR-080 §2.3) : le web search est un jeu de
+    # paramètres par modèle (models.search_config), natif ou Exa selon le modèle.
+    if model_name in {"openrouter"}:
+        client = llm_clients.client_for_model(model, organization_id=organization_id)
+        extra_body = llm_clients.openrouter_web_extra_body(model.search_config)
+        captured: dict[str, Any] = {"citations": None, "usage": None}
+
+        def _do() -> str:
+            resp = client.chat.completions.create(
+                model=model.model_version,
+                messages=[
+                    {"role": "system", "content": instructions},
+                    {"role": "user", "content": prompt},
+                ],
+                temperature=0.8,
+                top_p=1,
+                extra_body=extra_body,
+            )
+            message = resp.choices[0].message
+            out_text = (message.content or "").strip()
+            if not out_text:
+                raise RuntimeError(f"OpenRouter: output VIDE (resp={resp})")
+            captured["citations"] = llm_clients.citations_from_openrouter_message(message)
+            captured["usage"] = llm_clients.usage_from_openrouter_response(resp)
+            return out_text
+
+        response = llm_clients.call_with_retry(
+            _do,
+            retry_exceptions=llm_clients.OPENROUTER_RETRY_EXCEPTIONS,
+            max_retries=8,
+            base_sleep=1.0,
+            max_sleep=30.0,
+            success_delay=0.2,
+        )
+        end = time.perf_counter()
+        logger.info("call_tested_llm END (%.2f s)", end - start)
+        return response, captured["citations"], captured["usage"]
 
     raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
 
@@ -239,6 +285,21 @@ def execute_run(
     """
     tested_model = resolve_model(session, tested_model)
 
+    # 0) Traçage longitudinal (ADR-080 §3, ADR-076) : conditions de recherche du
+    # run figées dans run_meta — la couture avant/après bascule reste lisible.
+    family = llm_clients.provider_family(tested_model.model_name)
+    if family == "openrouter":
+        engine = ((tested_model.search_config or {}).get("engine") or "off").lower()
+        search_meta = {"provider_route": "openrouter", "search_engine": engine, "geo": "none"}
+    else:
+        search_meta = {
+            "provider_route": "direct",
+            "search_engine": "native",
+            # Seul l'appel OpenAI direct force user_location Paris/FR.
+            "geo": "user_location:FR-Paris" if family == "openai" else "none",
+        }
+    run_meta = {**(run_meta or {}), **search_meta}
+
     # 1) Créer d'abord RunRow (on connaîtra run_id pour attacher l'usage).
     run_row = RunRow(
         tested_model_id=tested_model.model_id,
@@ -257,8 +318,12 @@ def execute_run(
 
     total = len(tests)
     for i, t in enumerate(tests, start=1):
-        answer = call_tested_llm(tested_model, t.prompt, organization_id=organization_id)
-        citations = extract_urls(answer)
+        answer, structured_citations, real_usage = call_tested_llm(
+            tested_model, t.prompt, organization_id=organization_id
+        )
+        # Citations structurées (annotations url_citation, ADR-080 §2.4) quand le
+        # provider les fournit ; regex en repli pour les chemins directs.
+        citations = structured_citations if structured_citations else extract_urls(answer)
         session.add(
             RunResult(
                 run_id=run_id,
@@ -267,7 +332,8 @@ def execute_run(
                 raw_citations=citations if citations else None,
             )
         )
-        # Usage row-par-appel (best-effort — jamais bloquant).
+        # Usage row-par-appel (best-effort — jamais bloquant). Tokens/coût réels
+        # si fournis (OpenRouter), heuristique len/4 sinon.
         try:
             usage.record(
                 session,
@@ -276,8 +342,9 @@ def execute_run(
                 run_id=run_id,
                 kind="tested",
                 billed_to=billed_to,
-                input_tokens=max(1, len(t.prompt or "") // 4),
-                output_tokens=max(1, len(answer or "") // 4),
+                input_tokens=real_usage.input_tokens if real_usage else max(1, len(t.prompt or "") // 4),
+                output_tokens=real_usage.output_tokens if real_usage else max(1, len(answer or "") // 4),
+                cost_usd=real_usage.cost_usd if real_usage else None,
             )
         except Exception:  # noqa: BLE001
             logger.exception("usage.record échoué (run=%s test=%s)", run_id, t.test_id)

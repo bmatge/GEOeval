@@ -207,6 +207,11 @@ class Model(Base):
     base_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     api_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    # Web search par modèle (ADR-080 §2.2, famille openrouter uniquement) :
+    # {"engine": "native|exa|firecrawl|off", "max_results": int,
+    #  "search_context_size": "low|medium|high", "allowed_domains": [...]}
+    # NULL ou engine="off" = pas de recherche web.
+    search_config: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     # Désactivé = masqué des formulaires (l'historique des runs reste intact).
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
     # Proposé (ou non) dans la colonne « Juges » des formulaires lancer/planifier.
