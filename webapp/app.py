@@ -288,12 +288,41 @@ def perimeter_detail(
     p = perimeters.get_by_id(db, org.id, perimeter_id)
     if p is None:
         raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    # Questions des AUTRES périmètres, proposables au rattachement.
+    attachable = [t for t in services.list_tests(db, org.id) if t.perimeter_id != p.id]
     return render(
         request, "perimeter_detail.html", active="perimeters", org=org, role=role,
         perimeter=p,
         tests=services.list_tests(db, org.id, perimeter_id=p.id),
         all_perimeters=perimeters.list_for_org(db, org.id),
+        attachable_tests=attachable,
     )
+
+
+@app.post("/o/{org_slug}/perimeters/{perimeter_id}/attach-test")
+def perimeter_attach_test(
+    perimeter_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    test_id: int = Form(...),
+):
+    """Rattache une question existante (d'un autre périmètre) à ce périmètre."""
+    org, _ = ctx
+    p = perimeters.get_by_id(db, org.id, perimeter_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    test = services.get_test(db, org.id, test_id)
+    if test is None:
+        raise HTTPException(status_code=404, detail="Question introuvable.")
+    if test.perimeter_id != perimeter_id:
+        perimeters.move_test(db, org_id=org.id, test_id=test_id, to_perimeter_id=perimeter_id)
+        audit.record(
+            db, user_id=user.id, org_id=org.id,
+            action="move_test", entity_type="test", entity_id=test_id,
+            meta={"to_perimeter_id": perimeter_id},
+        )
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 
 @app.get("/o/{org_slug}/perimeters/{perimeter_id}/edit", response_class=HTMLResponse)

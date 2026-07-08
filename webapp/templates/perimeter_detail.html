@@ -68,4 +68,28 @@
 </div>
 {% endif %}
 
+{% if (role in ('editor', 'org_admin') or (user and user.is_platform_admin)) and attachable_tests %}
+<h2 class="fr-mt-4w">Rattacher une question existante</h2>
+<p class="fr-hint-text">Déplace une question d'un autre périmètre vers celui-ci
+  (une question n'appartient qu'à un seul périmètre — le rattachement est un déplacement).</p>
+<form method="post" action="{{ url_prefix }}/perimeters/{{ perimeter.id }}/attach-test"
+      class="fr-grid-row fr-grid-row--bottom fr-grid-row--gutters" style="max-width: 50rem">
+  <div class="fr-col">
+    <div class="fr-select-group">
+      <label class="fr-label" for="attach-test-id">Question à rattacher</label>
+      <select class="fr-select" id="attach-test-id" name="test_id" required>
+        {% for t in attachable_tests %}
+        {% for p in all_perimeters if p.id == t.perimeter_id %}
+        <option value="{{ t.test_id }}">#{{ t.test_id }} — {{ t.prompt|truncate(70) }} ({{ p.name }})</option>
+        {% endfor %}
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="fr-col-auto">
+    <button type="submit" class="fr-btn fr-btn--secondary">Rattacher ici</button>
+  </div>
+</form>
+{% endif %}
+
 {% endblock %}
