@@ -212,6 +212,24 @@ BEGIN
 END $$;
 
 -- ---------------------------------------------------------------------
+-- EPIC-001 Phase 4 (S4.1) : allowlist de modèles par organisation.
+-- Aucune ligne pour une org = héritage du catalogue global filtré
+-- models.is_active (rétro-compat). is_active=FALSE = explicitement masqué.
+-- (La table est normalement créée par init_db.py/create_all — le CREATE
+--  TABLE IF NOT EXISTS couvre les bases migrées hors entrypoint.)
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS org_models (
+    id              BIGSERIAL   PRIMARY KEY,
+    organization_id BIGINT      NOT NULL REFERENCES organizations(id),
+    model_id        BIGINT      NOT NULL REFERENCES models(model_id),
+    is_active       BOOLEAN     NOT NULL DEFAULT TRUE,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_org_models_org_model
+    ON org_models(organization_id, model_id);
+CREATE INDEX IF NOT EXISTS ix_org_models_org_id ON org_models(organization_id);
+
+-- ---------------------------------------------------------------------
 -- EPIC-001 Phase 3 (S3.1) : plafond journalier optionnel à côté du
 -- mensuel (NULL = illimité). Soft-stop identique (ADR-078 §5).
 -- ---------------------------------------------------------------------

@@ -6,7 +6,16 @@ from decimal import Decimal
 from typing import Optional, Any
 
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
-from sqlalchemy import Boolean, Text, TIMESTAMP, ForeignKey, func, Numeric, Integer
+from sqlalchemy import (
+    Boolean,
+    ForeignKey,
+    Integer,
+    Numeric,
+    Text,
+    TIMESTAMP,
+    UniqueConstraint,
+    func,
+)
 from sqlalchemy.dialects.postgresql import JSONB
 
 
@@ -187,6 +196,34 @@ class OrgCredential(Base):
     base_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     api_key_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default="true"
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class OrgModel(Base):
+    """Allowlist org ↔ modèle (EPIC-001 Phase 4, S4.1).
+
+    Restreint les modèles du catalogue global proposés aux rôles editor/viewer
+    d'une org. AUCUNE ligne pour une org = héritage du catalogue global filtré
+    `models.is_active` (rétro-compat — voir webapp/org_models.py).
+    """
+    __tablename__ = "org_models"
+    __table_args__ = (
+        UniqueConstraint("organization_id", "model_id", name="uq_org_models_org_model"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False
+    )
+    model_id: Mapped[int] = mapped_column(
+        ForeignKey("models.model_id"), nullable=False
+    )
+    # TRUE = proposé aux editor/viewer ; FALSE = explicitement masqué.
     is_active: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True, server_default="true"
     )
