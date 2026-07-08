@@ -6,7 +6,8 @@
 <form method="post" action="{{ (url_prefix ~ ('/models/%d/edit' % model.model_id)) if model else (url_prefix ~ '/models/new') }}" class="fr-mt-2w" style="max-width: 40rem">
   <div class="fr-select-group">
     <label class="fr-label" for="model_name">Provider
-      <span class="fr-hint-text">Pilote le connecteur utilisé. « compatible-openai » = tout endpoint
+      <span class="fr-hint-text">Pilote le connecteur utilisé. « openrouter » = provider plateforme
+      par défaut (clé unique, tout le catalogue openrouter.ai). « compatible-openai » = tout endpoint
       /chat/completions compatible OpenAI (utilisable comme notateur uniquement).</span>
     </label>
     <select class="fr-select" id="model_name" name="model_name" required>
@@ -21,7 +22,8 @@
 
   <div class="fr-input-group">
     <label class="fr-label" for="model_version">Version (identifiant côté API)
-      <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large</span>
+      <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large —
+      pour « openrouter » : l'id du catalogue, ex. mistralai/mistral-small-3.2-24b-instruct</span>
     </label>
     <input class="fr-input" id="model_version" name="model_version" required
            value="{{ model.model_version if model else '' }}">

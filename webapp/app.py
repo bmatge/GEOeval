@@ -626,8 +626,9 @@ def prompt_update(
 # Lancer un run (par org)
 # =====================================================================
 # Providers utilisables comme modèle TESTÉ (dispatch de run.py, avec recherche web).
+# NB : « openrouter » y entrera en Phase 2 de l'EPIC-001 (web search unifié).
 TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google"}
-PROVIDER_CHOICES = ["chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
+PROVIDER_CHOICES = ["openrouter", "chatGPT", "mistral", "gemini", "albert", "compatible-openai"]
 
 
 def _run_form_context(db: Session, org_id: int, perimeter_id: Optional[int] = None) -> dict:
