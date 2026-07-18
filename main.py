@@ -30,6 +30,8 @@ if __name__ == "__main__":
     # en interne via la table `models`.
     tested_models = ["gpt-5.2", "mistral-large-latest", "gemini-pro-latest"]
     judges = [{"model": "gemini-2.5-pro", "repeats": 1}]
+    # CLI historique : rattache tout à l'org seed (slug « bertrand », id=1).
+    ORG_ID = 1
 
     for tested_model in tested_models:
         logger.info("tested_model = %s", tested_model)
@@ -37,8 +39,16 @@ if __name__ == "__main__":
         with SessionLocal() as session:
             try:
                 logger.info("PHASE RUN")
-                tests = load_tests(session, active_only=True, ready_only=True)
-                run_id = execute_run(session, tested_model=tested_model, tests=tests, run_meta={"note": "baseline"},)
+                tests = load_tests(
+                    session, active_only=True, ready_only=True, organization_id=ORG_ID
+                )
+                run_id = execute_run(
+                    session,
+                    tested_model=tested_model,
+                    tests=tests,
+                    organization_id=ORG_ID,
+                    run_meta={"note": "baseline"},
+                )
                 session.commit()
             except:
                 session.rollback()

@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Question #{{ test.test_id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/tests">Retour aux questions</a>
+
+<h1 class="fr-mt-2w">Question #{{ test.test_id }}</h1>
+
+<p><strong>Question :</strong> {{ test.prompt }}</p>
+<p><strong>Réponse attendue :</strong> {{ test.expected_answer or "—" }}</p>
+
+<h2 class="fr-mt-4w">Réponse de référence <span class="fr-hint-text">(passe le notateur en mode « conformité »)</span></h2>
+
+{% set current = gt_versions[0] if gt_versions and gt_versions[0].valid_to is none else none %}
+{% if current %}
+<div class="fr-callout">
+  <p class="fr-callout__title">Version {{ current.version }} — en vigueur depuis {{ current.valid_from.strftime("%Y-%m-%d %H:%M") }}</p>
+  <p class="fr-callout__text">{{ current.reference_answer }}</p>
+  {% if current.reference_urls %}
+  <ul>{% for u in current.reference_urls %}<li><a class="fr-link" href="{{ u }}">{{ u }}</a></li>{% endfor %}</ul>
+  {% endif %}
+  {% if current.notes %}<p class="fr-hint-text"><em>{{ current.notes }}</em></p>{% endif %}
+</div>
+{% else %}
+<div class="fr-callout fr-callout--brown-caramel">
+  <p class="fr-callout__text">
+    Aucune réponse de référence. Sans elle, le notateur évalue en <em>opinion</em> par rapport
+    à la <em>réponse attendue</em>. Avec elle, il évalue en <em>conformité</em> (labels
+    conforme / partiel / non-conforme / hors-sujet).
+  </p>
+</div>
+{% endif %}
+
+{% if role in ('org_admin', 'editor') or (user and user.is_platform_admin) %}
+<details class="fr-mt-3w">
+  <summary class="fr-btn fr-btn--secondary">{% if current %}Créer une nouvelle version{% else %}Ajouter la réponse de référence{% endif %}</summary>
+  <form method="post" action="{{ url_prefix }}/tests/{{ test.test_id }}/ground-truth" class="fr-mt-2w" style="max-width:50rem;">
+    <div class="fr-input-group">
+      <label class="fr-label" for="reference_answer">Réponse de référence</label>
+      <textarea class="fr-input" id="reference_answer" name="reference_answer" rows="4" required>{{ current.reference_answer if current else "" }}</textarea>
+    </div>
+    <div class="fr-input-group">
+      <label class="fr-label" for="reference_urls">URLs sources
+        <span class="fr-hint-text">Séparées par virgules ou retours à la ligne.</span>
+      </label>
+      <textarea class="fr-input" id="reference_urls" name="reference_urls" rows="2">{{ current.reference_urls | join(", ") if current and current.reference_urls else "" }}</textarea>
+    </div>
+    <div class="fr-input-group">
+      <label class="fr-label" for="notes">Notes (optionnel)</label>
+      <input class="fr-input" id="notes" name="notes">
+    </div>
+    <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
+  </form>
+</details>
+{% endif %}
+
+{% if gt_versions|length > 1 %}
+<h3 class="fr-mt-4w">Historique des versions</h3>
+<ul>
+  {% for v in gt_versions %}
+  <li>
+    v{{ v.version }} · {{ v.valid_from.strftime("%Y-%m-%d %H:%M") }}
+    {% if v.valid_to %}→ {{ v.valid_to.strftime("%Y-%m-%d %H:%M") }}{% else %}<strong>(en cours)</strong>{% endif %}
+    — {{ v.reference_answer | truncate(120) }}
+  </li>
+  {% endfor %}
+</ul>
+{% endif %}
+
+{% endblock %}

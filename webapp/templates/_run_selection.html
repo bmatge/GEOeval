@@ -1,9 +1,10 @@
-{# Sélection commune modèles testés / juges / tests — utilisée par launch.html
-   et schedule_form.html. Attend : testable_models, judgeable_models, tests. #}
+{# Sélection commune IA évaluées / notateurs / questions — utilisée par
+   launch.html et schedule_form.html. Attend : testable_models, judgeable_models,
+   tests, judge_kappa, kappa_threshold. #}
 <div class="fr-grid-row fr-grid-row--gutters">
   <div class="fr-col-12 fr-col-md-6">
     <fieldset class="fr-fieldset" aria-labelledby="tested-legend">
-      <legend class="fr-fieldset__legend fr-text--bold" id="tested-legend">Modèles testés (avec recherche web)</legend>
+      <legend class="fr-fieldset__legend fr-text--bold" id="tested-legend">IA évaluées (avec recherche web)</legend>
       {% for m in testable_models %}
       <div class="fr-fieldset__element">
         <div class="fr-checkbox-group">
@@ -17,12 +18,20 @@
 
   <div class="fr-col-12 fr-col-md-6">
     <fieldset class="fr-fieldset" aria-labelledby="judge-legend">
-      <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Juges (LLM-as-a-judge)</legend>
+      <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Notateurs (IA de notation)</legend>
       {% for m in judgeable_models %}
       <div class="fr-fieldset__element">
         <div class="fr-checkbox-group">
-          <input type="checkbox" id="judge-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}">
-          <label class="fr-label" for="judge-{{ m.model_id }}">{{ m.model_name }} · <code>{{ m.model_version }}</code></label>
+          <input type="checkbox" id="judge-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}"
+                 {% if m.is_sovereign %}checked{% endif %}>
+          <label class="fr-label" for="judge-{{ m.model_id }}">
+            {{ m.model_name }} · <code>{{ m.model_version }}</code>
+            {% if m.is_sovereign %}<span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}
+            {% set k = judge_kappa.get(m.model_id) if judge_kappa else none %}
+            {% if k is not none and k < kappa_threshold %}
+            <span class="fr-badge fr-badge--sm fr-badge--warning" title="Accord modéré avec les annotations humaines (κ = {{ '%.2f'|format(k) }})">κ = {{ '%.2f'|format(k) }}</span>
+            {% endif %}
+          </label>
         </div>
       </div>
       {% endfor %}
@@ -31,9 +40,9 @@
 </div>
 
 <fieldset class="fr-fieldset fr-mt-2w" aria-labelledby="tests-legend">
-  <legend class="fr-fieldset__legend fr-text--bold" id="tests-legend">Tests à inclure
-    <span class="fr-hint-text">Tous cochés = la sélection suit automatiquement les tests actifs
-    (y compris ceux créés plus tard). Décoche pour figer un sous-ensemble.</span>
+  <legend class="fr-fieldset__legend fr-text--bold" id="tests-legend">Questions à inclure
+    <span class="fr-hint-text">Toutes cochées = la sélection suit automatiquement les questions
+    actives du périmètre (y compris celles créées plus tard). Décoche pour figer un sous-ensemble.</span>
   </legend>
   {% for t in tests %}
   <div class="fr-fieldset__element">
@@ -48,13 +57,13 @@
 <div class="fr-grid-row fr-grid-row--gutters">
   <div class="fr-col-12 fr-col-md-3">
     <div class="fr-input-group">
-      <label class="fr-label" for="repeats">Répétitions par juge</label>
+      <label class="fr-label" for="repeats">Répétitions par notateur</label>
       <input class="fr-input" type="number" id="repeats" name="repeats" value="1" min="1" max="10">
     </div>
   </div>
   <div class="fr-col-12 fr-col-md-9">
     <div class="fr-input-group">
-      <label class="fr-label" for="note">Note (run_meta)</label>
+      <label class="fr-label" for="note">Étiquette libre (facultatif)</label>
       <input class="fr-input" id="note" name="note" value="baseline">
     </div>
   </div>

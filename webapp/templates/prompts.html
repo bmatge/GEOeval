@@ -1,11 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Prompts d'évaluation{% endblock %}
+{% block title %}Grilles de notation{% endblock %}
 {% block content %}
 <div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
-  <div class="fr-col"><h1>Prompts d'évaluation</h1></div>
-  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/prompts/new">Nouveau prompt</a></div>
+  <div class="fr-col"><h1>Grilles de notation</h1></div>
+  {% if user and user.is_platform_admin %}
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/prompts/new">Nouvelle grille</a></div>
+  {% endif %}
 </div>
-<p class="fr-hint-text">Rubriques utilisées par les juges. Le schéma JSON de sortie est ajouté automatiquement à l'exécution.</p>
+<p class="fr-hint-text">Consignes données aux notateurs pour noter la qualité d'une réponse ou de ses
+citations. Le schéma JSON de sortie est ajouté automatiquement à l'exécution.</p>
 
 {% if prompts %}
 <div class="fr-table fr-table--bordered">
@@ -18,13 +21,17 @@
         <td>{{ p.prompt_name }}</td>
         <td><p class="fr-badge fr-badge--sm fr-badge--blue-ecume">{{ p.prompt_type_label }}</p></td>
         <td class="fr-text--sm">{{ p.prompt_text|truncate(120) }}</td>
-        <td><a class="fr-link" href="/prompts/{{ p.prompt_id }}/edit">Éditer</a></td>
+        <td>
+          {% if user and user.is_platform_admin %}
+          <a class="fr-link" href="{{ url_prefix }}/prompts/{{ p.prompt_id }}/edit">Éditer</a>
+          {% endif %}
+        </td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<div class="fr-callout"><p class="fr-callout__text">Aucun prompt d'évaluation.</p></div>
+<div class="fr-callout"><p class="fr-callout__text">Aucune grille de notation.</p></div>
 {% endif %}
 {% endblock %}

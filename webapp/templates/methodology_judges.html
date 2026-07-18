@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Accord des notateurs{% endblock %}
+{% block content %}
+<h1>Accord des notateurs avec la notation humaine</h1>
+<p class="fr-hint-text">
+  Comparaison des notes attribuées par chaque IA notatrice aux annotations humaines de
+  référence.
+</p>
+<div class="fr-callout fr-callout--blue-ecume">
+  <p class="fr-callout__title">Deux métriques</p>
+  <p class="fr-callout__text">
+    <strong>Kappa (κ) de Cohen</strong> mesure l'accord sur les labels catégoriels
+    (conforme / partiel / non-conforme / hors-sujet) au-delà du hasard : 1 = accord parfait,
+    0 = niveau du hasard, &lt;0 = désaccord.<br>
+    <strong>Spearman (ρ)</strong> mesure la corrélation des scores 0-10 en rang : 1 = même
+    classement, -1 = classement inversé.
+  </p>
+</div>
+
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr>
+        <th>Notateur</th>
+        <th>Paires notées</th>
+        <th>κ réponse</th>
+        <th>Spearman réponse</th>
+        <th>κ citation</th>
+        <th>Spearman citation</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for e in matrix %}
+      <tr>
+        <td>
+          {{ e.model_name }} · <code>{{ e.model_version }}</code>
+          {% if e.is_sovereign %}<span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}
+        </td>
+        <td>{{ e.agreement.n_pairs }}</td>
+        {% set k = e.agreement.response_kappa %}
+        <td>
+          {% if k is not none %}
+            {{ "%.3f"|format(k) }}
+            {% if k < threshold %}<span class="fr-badge fr-badge--sm fr-badge--warning">bas</span>{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        <td>{{ "%.3f"|format(e.agreement.response_spearman) if e.agreement.response_spearman is not none else '—' }}</td>
+        <td>{{ "%.3f"|format(e.agreement.citation_kappa) if e.agreement.citation_kappa is not none else '—' }}</td>
+        <td>{{ "%.3f"|format(e.agreement.citation_spearman) if e.agreement.citation_spearman is not none else '—' }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-hint-text fr-mt-2w">
+  Seuil d'alerte : κ &lt; {{ threshold }}. Un notateur sous ce seuil affiche un badge
+  d'avertissement au moment de le sélectionner pour une évaluation.
+</p>
+
+{% if user and user.is_platform_admin %}
+<p class="fr-mt-4w">
+  <a class="fr-link" href="/admin/gold-annotations/import">Importer des annotations humaines →</a>
+</p>
+{% endif %}
+{% endblock %}

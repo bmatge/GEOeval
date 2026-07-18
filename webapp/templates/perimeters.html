@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Périmètres{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
+  <div class="fr-col"><h1>Périmètres</h1></div>
+  {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+  <div class="fr-col-auto">
+    <a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/perimeters/new">Nouveau périmètre</a>
+  </div>
+  {% endif %}
+</div>
+
+<p class="fr-hint-text">
+  Un périmètre est le contexte de recherche d'une organisation : un site, une thématique, un
+  produit… Chaque question appartient à un périmètre, et un lancement d'évaluation se fait sur
+  un périmètre.
+</p>
+
+{% if perimeters %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead>
+      <tr>
+        <th>Nom</th><th>Slug</th><th>Type</th><th>URL de référence</th>
+        <th>Questions</th><th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for p in perimeters %}
+      <tr>
+        <td>
+          <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ p.id }}"><strong>{{ p.name }}</strong></a>
+          {% if p.description %}<br><span class="fr-hint-text">{{ p.description|truncate(90) }}</span>{% endif %}
+        </td>
+        <td><code>{{ p.slug }}</code></td>
+        <td>{{ p.kind or '—' }}</td>
+        <td>{% if p.home_url %}<a class="fr-link" href="{{ p.home_url }}" target="_blank" rel="noopener">{{ p.home_url|truncate(40) }}</a>{% else %}—{% endif %}</td>
+        <td>{{ counts.get(p.id, 0) }}</td>
+        <td>
+          <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ p.id }}">Voir</a>
+          {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+          &nbsp;·&nbsp;
+          <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ p.id }}/edit">Éditer</a>
+          {% if p.slug != 'general' and counts.get(p.id, 0) == 0 %}
+          &nbsp;·&nbsp;
+          <form method="post" action="{{ url_prefix }}/perimeters/{{ p.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Supprimer le périmètre {{ p.name }} ?');">
+            <button type="submit" class="fr-link">Supprimer</button>
+          </form>
+          {% endif %}
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<div class="fr-callout"><p class="fr-callout__text">Aucun périmètre pour l'instant.</p></div>
+{% endif %}
+{% endblock %}

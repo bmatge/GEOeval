@@ -1,75 +1,146 @@
 {% extends "base.html" %}
-{% block title %}Modèles{% endblock %}
+{% block title %}Catalogue d'IA{% endblock %}
 {% block content %}
-<h1>Modèles</h1>
-<p class="fr-hint-text">
-  Catalogue des modèles (testés et juges). URL, clé API et en-têtes sont optionnels :
-  vides, le code utilise les variables d'environnement et les défauts du provider.
-</p>
+<h1>Catalogue d'IA</h1>
 
-<a class="fr-btn fr-mb-2w" href="/models/new">Ajouter un modèle</a>
+<div class="fr-tabs">
+  <ul class="fr-tabs__list" role="tablist" aria-label="Catalogue plateforme et clés API de l'organisation">
+    <li role="presentation">
+      <button id="tab-platform" class="fr-tabs__tab" tabindex="0" role="tab"
+              aria-selected="true" aria-controls="panel-platform">Plateforme</button>
+    </li>
+    <li role="presentation">
+      <button id="tab-org" class="fr-tabs__tab" tabindex="-1" role="tab"
+              aria-selected="false" aria-controls="panel-org">Clés API de l'organisation ({{ org.name }})</button>
+    </li>
+  </ul>
 
-<div class="fr-table fr-table--no-scroll">
-  <table>
-    <thead>
-      <tr>
-        <th>id</th>
-        <th>Provider</th>
-        <th>Modèle</th>
-        <th>URL de base</th>
-        <th>Clé API</th>
-        <th>En-têtes</th>
-        <th>Juge</th>
-        <th>Historique</th>
-        <th>Actions</th>
-      </tr>
-    </thead>
-    <tbody>
-      {% for m in models %}
-      <tr {% if not m.is_active %}style="opacity:.55"{% endif %}>
-        <td>{{ m.model_id }}</td>
-        <td>{{ m.model_name }}</td>
-        <td><code>{{ m.model_version }}</code>{% if not m.is_active %} <span class="fr-badge fr-badge--sm">désactivé</span>{% endif %}</td>
-        <td>{% if m.base_url %}<code>{{ m.base_url }}</code>{% else %}<span class="fr-hint-text">défaut</span>{% endif %}</td>
-        <td>{% if m.api_key %}•••• (en base){% else %}<span class="fr-hint-text">env</span>{% endif %}</td>
-        <td>{% if m.extra_headers %}{{ m.extra_headers | length }} en-tête(s){% else %}—{% endif %}</td>
-        <td>
-          <form method="post" action="/models/{{ m.model_id }}/toggle-judge" style="display:inline">
-            <button class="fr-btn fr-btn--sm {{ 'fr-btn--secondary' if m.is_judge else 'fr-btn--tertiary' }}"
-                    title="{{ 'Retirer des juges proposés' if m.is_judge else 'Proposer comme juge' }}"
-                    aria-pressed="{{ 'true' if m.is_judge else 'false' }}">
-              {{ '✓ juge' if m.is_judge else '✗ non' }}
-            </button>
-          </form>
-        </td>
-        <td>{{ refs[m.model_id] }} réf.</td>
-        <td>
-          <a class="fr-btn fr-btn--sm fr-btn--secondary" href="/models/{{ m.model_id }}/edit">Modifier</a>
-          {% if m.is_active %}
-          <form method="post" action="/models/{{ m.model_id }}/deactivate" style="display:inline">
-            <button class="fr-btn fr-btn--sm fr-btn--tertiary">Désactiver</button>
-          </form>
-          {% else %}
-          <form method="post" action="/models/{{ m.model_id }}/reactivate" style="display:inline">
-            <button class="fr-btn fr-btn--sm fr-btn--tertiary">Réactiver</button>
-          </form>
-          {% endif %}
-          {% if refs[m.model_id] == 0 %}
-          <form method="post" action="/models/{{ m.model_id }}/delete" style="display:inline"
-                onsubmit="return confirm('Supprimer définitivement {{ m.model_version }} ?')">
-            <button class="fr-btn fr-btn--sm fr-btn--tertiary">Supprimer</button>
-          </form>
-          {% endif %}
-        </td>
-      </tr>
-      {% endfor %}
-    </tbody>
-  </table>
+  {# ---- Onglet Plateforme ---- #}
+  <div id="panel-platform" class="fr-tabs__panel fr-tabs__panel--selected"
+       role="tabpanel" aria-labelledby="tab-platform" tabindex="0">
+    <p class="fr-hint-text">
+      Catalogue global des IA — évaluées et notateurs. Édition réservée aux administrateurs plateforme.
+    </p>
+
+    {% if user and user.is_platform_admin %}
+    <a class="fr-btn fr-mb-2w" href="{{ url_prefix }}/models/new">Ajouter une IA</a>
+    <a class="fr-btn fr-btn--secondary fr-mb-2w" href="/admin/openrouter-import">Importer depuis OpenRouter</a>
+    {% endif %}
+
+    <div class="fr-table fr-table--no-scroll">
+      <table>
+        <thead>
+          <tr>
+            <th>id</th><th>Provider</th><th>Version</th><th>URL base</th><th>Clé API</th>
+            <th>En-têtes</th><th>Notateur</th><th>Historique</th><th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in models %}
+          <tr {% if not m.is_active %}style="opacity:.55"{% endif %}>
+            <td>{{ m.model_id }}</td>
+            <td>{{ m.model_name }}</td>
+            <td><code>{{ m.model_version }}</code>{% if not m.is_active %} <span class="fr-badge fr-badge--sm">désactivée</span>{% endif %}</td>
+            <td>{% if m.base_url %}<code>{{ m.base_url }}</code>{% else %}<span class="fr-hint-text">défaut</span>{% endif %}</td>
+            <td>{% if m.api_key %}•••• (en base){% else %}<span class="fr-hint-text">env</span>{% endif %}</td>
+            <td>{% if m.extra_headers %}{{ m.extra_headers | length }} en-tête(s){% else %}—{% endif %}</td>
+            <td>
+              {% if user and user.is_platform_admin %}
+              <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/toggle-judge" style="display:inline">
+                <button class="fr-btn fr-btn--sm {{ 'fr-btn--secondary' if m.is_judge else 'fr-btn--tertiary' }}">
+                  {{ '✓ oui' if m.is_judge else '✗ non' }}
+                </button>
+              </form>
+              {% else %}
+              {{ '✓' if m.is_judge else '—' }}
+              {% endif %}
+            </td>
+            <td>{{ refs[m.model_id] }} réf.</td>
+            <td>
+              {% if user and user.is_platform_admin %}
+              <a class="fr-btn fr-btn--sm fr-btn--secondary" href="{{ url_prefix }}/models/{{ m.model_id }}/edit">Modifier</a>
+              {% if m.is_active %}
+              <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/deactivate" style="display:inline">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary">Désactiver</button>
+              </form>
+              {% else %}
+              <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/reactivate" style="display:inline">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary">Réactiver</button>
+              </form>
+              {% endif %}
+              {% if refs[m.model_id] == 0 %}
+              <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/delete" style="display:inline"
+                    onsubmit="return confirm('Supprimer définitivement {{ m.model_version }} ?')">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary">Supprimer</button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  {# ---- Onglet Organisation (clés API propres) ---- #}
+  <div id="panel-org" class="fr-tabs__panel"
+       role="tabpanel" aria-labelledby="tab-org" tabindex="0">
+    <p class="fr-hint-text">
+      Clés d'accès propres à l'organisation. Chiffrées au repos (Fernet). Vides = repli sur la
+      clé de la plateforme (onglet précédent) puis sur les variables d'environnement.
+    </p>
+
+    {% if role != 'org_admin' and not (user and user.is_platform_admin) %}
+    <div class="fr-callout fr-callout--brown-caramel">
+      <p class="fr-callout__text">Seul un administrateur d'organisation peut éditer les clés API.</p>
+    </div>
+    {% endif %}
+
+    <div class="fr-table fr-table--bordered">
+      <table>
+        <thead>
+          <tr>
+            <th>IA</th>
+            <th>URL base (org)</th>
+            <th>Clé API (org)</th>
+            <th>En-têtes</th>
+            <th>État</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for m in models %}
+          {% set cred = creds_by_model.get(m.model_id) %}
+          <tr>
+            <td>{{ m.model_name }} · <code>{{ m.model_version }}</code></td>
+            <td>{% if cred and cred.base_url %}<code>{{ cred.base_url }}</code>{% else %}<span class="fr-hint-text">—</span>{% endif %}</td>
+            <td>{% if cred and cred.api_key_encrypted %}•••• (chiffrée){% else %}<span class="fr-hint-text">non fournie</span>{% endif %}</td>
+            <td>{% if cred and cred.extra_headers %}{{ cred.extra_headers | length }}{% else %}—{% endif %}</td>
+            <td>
+              {% if cred %}
+                {% if cred.is_active %}<p class="fr-badge fr-badge--success fr-badge--sm">active</p>
+                {% else %}<p class="fr-badge fr-badge--sm">désactivée</p>{% endif %}
+              {% else %}<span class="fr-hint-text">—</span>{% endif %}
+            </td>
+            <td>
+              {% if role == 'org_admin' or (user and user.is_platform_admin) %}
+              <a class="fr-btn fr-btn--sm fr-btn--secondary"
+                 href="{{ url_prefix }}/credentials/{{ m.model_id }}/edit">Configurer</a>
+              {% if cred %}
+              <form method="post" action="{{ url_prefix }}/credentials/{{ m.model_id }}/delete" style="display:inline"
+                    onsubmit="return confirm('Effacer la clé API pour {{ m.model_version }} ?');">
+                <button class="fr-btn fr-btn--sm fr-btn--tertiary">Effacer</button>
+              </form>
+              {% endif %}
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
 </div>
 
-<p class="fr-hint-text fr-mt-2w">
-  Un modèle référencé par des runs ou des évaluations ne peut pas être supprimé
-  (l'historique du benchmark doit rester comparable dans le temps) : désactive-le,
-  il disparaît des formulaires mais ses résultats restent.
-</p>
 {% endblock %}

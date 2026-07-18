@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Admin — notation humaine{% endblock %}
+{% block content %}
+<h1>Notation humaine — import CSV</h1>
+<p class="fr-hint-text">Charge des annotations humaines (une personne note une évaluation) pour
+calibrer les IA notatrices — voir <a class="fr-link" href="/methodology/judges">Accord des notateurs</a>.</p>
+
+<div class="fr-callout">
+  <p class="fr-callout__title">Format attendu</p>
+  <p class="fr-callout__text">
+    Colonnes : <code>test_id, run_id, annotator_email, response_label, response_score, citation_label, citation_score[, notes]</code>.
+    Labels ∈ <code>conforme | partiel | non_conforme | hors_sujet</code>. Scores 0-10.
+    L'unique (test_id, run_id, annotator_email) déclenche un upsert.
+  </p>
+</div>
+
+<form method="post" action="/admin/gold-annotations/import" enctype="multipart/form-data" class="fr-mt-2w">
+  <div class="fr-upload-group">
+    <label class="fr-label" for="file">Fichier CSV</label>
+    <input class="fr-upload" type="file" id="file" name="file" accept=".csv,text/csv" required>
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Importer</button>
+</form>
+
+{% if result %}
+<h2 class="fr-mt-4w">Résultat</h2>
+<p><strong>{{ result.inserted }}</strong> annotation(s) insérée(s) / mise(s) à jour.</p>
+{% if result.rejected %}
+<h3>Lignes rejetées</h3>
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Ligne</th><th>Raison</th></tr></thead>
+    <tbody>
+      {% for r in result.rejected %}
+      <tr><td>{{ r.line }}</td><td>{{ r.reason }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+{% endif %}
+
+<p class="fr-mt-4w"><a class="fr-link" href="/methodology/judges">Voir l'accord des notateurs →</a></p>
+{% endblock %}

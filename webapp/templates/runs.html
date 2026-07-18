@@ -1,14 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Runs{% endblock %}
+{% block title %}Évaluations{% endblock %}
 {% block content %}
-<h1>Runs</h1>
+<h1>Évaluations</h1>
 {% if runs %}
 <div class="fr-table fr-table--bordered">
   <table>
     <thead>
       <tr>
-        <th>#</th><th>Modèle testé</th><th>Démarré</th>
-        <th>Évaluations</th><th>Réponse (moy.)</th><th>Citation (moy.)</th><th>Note</th><th></th>
+        <th>#</th><th>IA évaluée</th><th>Démarrée</th>
+        <th>Notes reçues</th><th>Réponse (moy.)</th><th>Citation (moy.)</th><th>Note</th><th></th>
       </tr>
     </thead>
     <tbody>
@@ -21,13 +21,14 @@
         <td><strong>{{ "%.2f"|format(r.avg_response) if r.avg_response is not none else "—" }}</strong></td>
         <td>{{ "%.2f"|format(r.avg_citation) if r.avg_citation is not none else "—" }}</td>
         <td>{{ r.run_meta.note if r.run_meta and r.run_meta.note else "—" }}</td>
-        <td><a class="fr-link" href="/runs/{{ r.run_id }}">Détail</a></td>
+        <td><a class="fr-link" href="{{ url_prefix }}/runs/{{ r.run_id }}">Détail</a></td>
       </tr>
       {% endfor %}
     </tbody>
   </table>
 </div>
 {% else %}
-<div class="fr-callout"><p class="fr-callout__text">Aucun run. <a href="/launch">Lancer un run</a>.</p></div>
+<div class="fr-callout"><p class="fr-callout__text">Aucune évaluation.
+  <a class="fr-link" href="{{ url_prefix }}/launch">Lancer la première →</a></p></div>
 {% endif %}
 {% endblock %}

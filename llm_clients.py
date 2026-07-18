@@ -4,6 +4,8 @@ from __future__ import annotations
 import os
 import random
 import time
+from dataclasses import dataclass
+from decimal import Decimal
 from typing import Callable, Optional, Tuple, Type, Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
@@ -79,6 +81,14 @@ _FAMILY_BY_NAME = {
     "openai-compatible": "generic", "compatible-openai": "generic",
     "mistral": "mistral", "mistralai": "mistral",
     "gemini": "gemini", "google": "gemini",
+    "openrouter": "openrouter",
+}
+
+OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
+# En-têtes d'attribution recommandés par OpenRouter (classement d'app, diagnostic).
+_OPENROUTER_HEADERS = {
+    "HTTP-Referer": "https://geoeval.lab.miweb.run",
+    "X-Title": "GEOeval",
 }
 
 _CLIENTS_BY_CONFIG: dict[tuple, Any] = {}
@@ -93,16 +103,50 @@ def _headers_key(headers: Optional[dict]) -> str:
     return json.dumps(headers, sort_keys=True) if headers else ""
 
 
-def client_for_model(model: Any) -> Any:
-    """Client LLM pour un modèle (ligne de la table `models`), mis en cache par
-    configuration effective. Sans config en base, équivaut aux singletons env."""
+def _byok_override(model: Any, organization_id: Optional[int]) -> tuple[Optional[str], Optional[str], Optional[dict]]:
+    """Cherche une clé BYOK active pour (org, modèle). Renvoie (base_url, api_key, headers) ou (None, None, None)."""
+    if organization_id is None:
+        return (None, None, None)
+    # Import local pour éviter un cycle au chargement.
+    try:
+        from db import SessionLocal
+        from models import OrgCredential
+        from webapp.crypto import decrypt_secret
+    except Exception:  # noqa: BLE001
+        return (None, None, None)
+
+    from sqlalchemy import select
+    with SessionLocal() as session:
+        cred = session.execute(
+            select(OrgCredential).where(
+                OrgCredential.organization_id == organization_id,
+                OrgCredential.model_id == model.model_id,
+                OrgCredential.is_active.is_(True),
+            )
+        ).scalar_one_or_none()
+        if cred is None:
+            return (None, None, None)
+        api_key = decrypt_secret(cred.api_key_encrypted)
+        return (cred.base_url or None, api_key, cred.extra_headers or None)
+
+
+def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
+    """Client LLM pour un modèle avec résolution en cascade des credentials.
+
+    Ordre de résolution (ADR-078 §2) :
+        org_credentials (BYOK, si organization_id fourni)
+        → models.api_key / base_url / headers (config plateforme)
+        → variables d'environnement du provider.
+    Mis en cache par configuration effective.
+    """
     family = provider_family(model.model_name)
     if family is None:
         raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
 
-    base_url = getattr(model, "base_url", None) or None
-    api_key = getattr(model, "api_key", None) or None
-    headers = getattr(model, "extra_headers", None) or None
+    byok_base, byok_key, byok_headers = _byok_override(model, organization_id)
+    base_url = byok_base or getattr(model, "base_url", None) or None
+    api_key = byok_key or getattr(model, "api_key", None) or None
+    headers = byok_headers or getattr(model, "extra_headers", None) or None
     key = (family, base_url, api_key, _headers_key(headers))
     if key in _CLIENTS_BY_CONFIG:
         return _CLIENTS_BY_CONFIG[key]
@@ -129,6 +173,14 @@ def client_for_model(model: Any) -> Any:
             )
         from openai import OpenAI
         client = OpenAI(api_key=api_key or "none", base_url=base_url, default_headers=headers)
+    elif family == "openrouter":
+        # Provider plateforme par défaut (ADR-080) : compatible OpenAI, clé unique.
+        from openai import OpenAI
+        client = OpenAI(
+            api_key=api_key or os.environ["OPENROUTER_API_KEY"],
+            base_url=base_url or OPENROUTER_BASE_URL,
+            default_headers={**_OPENROUTER_HEADERS, **(headers or {})},
+        )
     elif family == "mistral":
         try:
             from mistralai import Mistral  # SDK v1.x
@@ -188,6 +240,80 @@ def get_mistral_agent_singleton_by_model_version(
         _MISTRAL_AGENT_SINGLETON_BY_MODEL_VERSION[model_version] = agent
 
     return _MISTRAL_AGENT_SINGLETON_BY_MODEL_VERSION[model_version]
+
+
+# -----------------------------
+# Usage réel (ADR-080 §6.3)
+# -----------------------------
+@dataclass(frozen=True)
+class LLMUsage:
+    """Tokens et coût réels renvoyés par le provider (OpenRouter : usage.include).
+
+    `cost_usd` est le total facturé par OpenRouter (web search inclus), en USD —
+    la conversion EUR se fait à l'ingestion (webapp/usage.py).
+    """
+    input_tokens: int
+    output_tokens: int
+    cost_usd: Optional[Decimal] = None
+
+
+def citations_from_openrouter_message(message: Any) -> list[str]:
+    """URLs des annotations `url_citation` d'un message OpenRouter (ADR-080 §2.4).
+
+    Format standardisé quel que soit le moteur (natif ou Exa) ; dédoublonné,
+    ordre d'apparition conservé. Tolère objets SDK et dicts.
+    """
+    annotations = getattr(message, "annotations", None) or []
+    urls: list[str] = []
+    for a in annotations:
+        if isinstance(a, dict):
+            kind = a.get("type")
+            citation = a.get("url_citation") or {}
+            url = citation.get("url")
+        else:
+            kind = getattr(a, "type", None)
+            citation = getattr(a, "url_citation", None)
+            url = getattr(citation, "url", None) if citation is not None else None
+        if kind == "url_citation" and url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def openrouter_web_extra_body(search_config: Optional[dict]) -> dict:
+    """extra_body OpenRouter (plugin web + usage réel) depuis models.search_config.
+
+    Config vide ou engine="off" → pas de plugin (aucune recherche web).
+    `allowed_domains` (nom ADR-080) est mappé sur `include_domains` (nom API).
+    """
+    extra_body: dict[str, Any] = {"usage": {"include": True}}
+    sc = search_config or {}
+    engine = (sc.get("engine") or "off").lower()
+    if engine == "off":
+        return extra_body
+    plugin: dict[str, Any] = {"id": "web", "engine": engine}
+    if sc.get("max_results"):
+        plugin["max_results"] = int(sc["max_results"])
+    if sc.get("allowed_domains"):
+        plugin["include_domains"] = list(sc["allowed_domains"])
+    extra_body["plugins"] = [plugin]
+    if sc.get("search_context_size"):
+        extra_body["web_search_options"] = {"search_context_size": sc["search_context_size"]}
+    return extra_body
+
+
+def usage_from_openrouter_response(resp: Any) -> Optional[LLMUsage]:
+    """Extrait un LLMUsage de la réponse chat.completions d'OpenRouter (best-effort)."""
+    u = getattr(resp, "usage", None)
+    if u is None:
+        return None
+    cost = getattr(u, "cost", None)
+    if cost is None and getattr(u, "model_extra", None):
+        cost = u.model_extra.get("cost")
+    return LLMUsage(
+        input_tokens=int(getattr(u, "prompt_tokens", 0) or 0),
+        output_tokens=int(getattr(u, "completion_tokens", 0) or 0),
+        cost_usd=Decimal(str(cost)) if cost is not None else None,
+    )
 
 
 # -----------------------------
@@ -274,4 +400,5 @@ def call_with_retry(
 OPENAI_RETRY_EXCEPTIONS = (Exception,)
 GEMINI_RETRY_EXCEPTIONS = (Exception,)
 MISTRAL_RETRY_EXCEPTIONS = (Exception,)
-ALBERT_RETRY_EXCEPTIONS = (Exception,) 
+ALBERT_RETRY_EXCEPTIONS = (Exception,)
+OPENROUTER_RETRY_EXCEPTIONS = (Exception,)

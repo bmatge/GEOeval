@@ -1,13 +1,14 @@
 {% extends "base.html" %}
-{% block title %}{{ 'Modifier' if model else 'Ajouter' }} un modèle{% endblock %}
+{% block title %}{{ 'Modifier' if model else 'Ajouter' }} une IA{% endblock %}
 {% block content %}
-<h1>{{ 'Modifier' if model else 'Ajouter' }} un modèle</h1>
+<h1>{{ 'Modifier' if model else 'Ajouter' }} une IA</h1>
 
-<form method="post" action="{{ '/models/%d/edit' % model.model_id if model else '/models/new' }}" class="fr-mt-2w" style="max-width: 40rem">
+<form method="post" action="{{ (url_prefix ~ ('/models/%d/edit' % model.model_id)) if model else (url_prefix ~ '/models/new') }}" class="fr-mt-2w" style="max-width: 40rem">
   <div class="fr-select-group">
     <label class="fr-label" for="model_name">Provider
-      <span class="fr-hint-text">Pilote le connecteur utilisé. « compatible-openai » = tout endpoint
-      /chat/completions compatible OpenAI (utilisable comme juge uniquement).</span>
+      <span class="fr-hint-text">Pilote le connecteur utilisé. « openrouter » = provider plateforme
+      par défaut (clé unique, tout le catalogue openrouter.ai). « compatible-openai » = tout endpoint
+      /chat/completions compatible OpenAI (utilisable comme notateur uniquement).</span>
     </label>
     <select class="fr-select" id="model_name" name="model_name" required>
       {% for p in providers %}
@@ -20,8 +21,9 @@
   </div>
 
   <div class="fr-input-group">
-    <label class="fr-label" for="model_version">Identifiant du modèle (côté API)
-      <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large</span>
+    <label class="fr-label" for="model_version">Version (identifiant côté API)
+      <span class="fr-hint-text">ex. gpt-5.2, mistral-large-latest, openweight-large —
+      pour « openrouter » : l'id du catalogue, ex. mistralai/mistral-small-3.2-24b-instruct</span>
     </label>
     <input class="fr-input" id="model_version" name="model_version" required
            value="{{ model.model_version if model else '' }}">
@@ -52,6 +54,52 @@
   </div>
   {% endif %}
 
+  <fieldset class="fr-fieldset fr-mt-2w" id="search-config">
+    <legend class="fr-fieldset__legend">Recherche web (famille « openrouter » uniquement)
+      <span class="fr-hint-text">ADR-080 : natif = moteur du provider (OpenAI…), exa = moteur
+      d'OpenRouter (Mistral, Gemini…), off = pas de recherche. Vide = pas de recherche web.</span>
+    </legend>
+    {% set sc = model.search_config if model and model.search_config else {} %}
+    <div class="fr-fieldset__element">
+      <div class="fr-select-group">
+        <label class="fr-label" for="search_engine">Moteur</label>
+        <select class="fr-select" id="search_engine" name="search_engine">
+          {% for e in ['', 'native', 'exa', 'firecrawl', 'off'] %}
+          <option value="{{ e }}" {% if sc.get('engine', '') == e %}selected{% endif %}>
+            {{ e if e else '— (pas de recherche)' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="search_max_results">Résultats max (1-20, optionnel)</label>
+        <input class="fr-input" id="search_max_results" name="search_max_results" type="number"
+               min="1" max="20" value="{{ sc.get('max_results', '') }}">
+      </div>
+    </div>
+    <div class="fr-fieldset__element">
+      <div class="fr-select-group">
+        <label class="fr-label" for="search_context_size">Taille de contexte (natif, optionnel)</label>
+        <select class="fr-select" id="search_context_size" name="search_context_size">
+          {% for c in ['', 'low', 'medium', 'high'] %}
+          <option value="{{ c }}" {% if sc.get('search_context_size', '') == c %}selected{% endif %}>
+            {{ c if c else '— (défaut provider)' }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="search_allowed_domains">Domaines autorisés (CSV, optionnel)
+          <span class="fr-hint-text">ex. service-public.fr, gouv.fr — restreint les sources.</span>
+        </label>
+        <input class="fr-input" id="search_allowed_domains" name="search_allowed_domains"
+               value="{{ sc.get('allowed_domains', []) | join(', ') }}">
+      </div>
+    </div>
+  </fieldset>
+
   <div class="fr-input-group">
     <label class="fr-label" for="extra_headers">En-têtes HTTP additionnels (JSON, optionnel)
       <span class="fr-hint-text">Objet JSON clé→valeur, ex. {"X-Api-Version": "2"}. Appliqués aux
@@ -61,6 +109,6 @@
   </div>
 
   <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if model else 'Ajouter' }}</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/models">Annuler</a>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/models">Annuler</a>
 </form>
 {% endblock %}

@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}Job {{ job.id }}{% endblock %}
+{% block title %}Suivi de l'évaluation {{ job.id }}{% endblock %}
 {% block content %}
-<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/jobs">Retour aux jobs</a>
-<h1 class="fr-mt-2w">Job <code>{{ job.id }}</code></h1>
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/jobs">Retour au suivi</a>
+<h1 class="fr-mt-2w">Suivi de l'évaluation <code>{{ job.id }}</code></h1>
 
 <div id="status-badge" class="fr-mb-2w"></div>
 
@@ -35,7 +35,7 @@ function badge(status) {
 
 async function poll() {
   try {
-    const res = await fetch(`/api/jobs/${JOB_ID}`);
+    const res = await fetch(`{{ url_prefix }}/api/jobs/${JOB_ID}`);
     if (!res.ok) return;
     const j = await res.json();
 
@@ -57,7 +57,7 @@ async function poll() {
     }
     if (j.run_ids && j.run_ids.length) {
       document.getElementById('run-links').innerHTML =
-        'Runs : ' + j.run_ids.map(id => `<a class="fr-link fr-mr-2w" href="/runs/${id}">#${id}</a>`).join('');
+        'Évaluations : ' + j.run_ids.map(id => `<a class="fr-link fr-mr-2w" href="{{ url_prefix }}/runs/${id}">#${id}</a>`).join('');
     }
 
     if (j.status === 'done' || j.status === 'error') return; // stop polling

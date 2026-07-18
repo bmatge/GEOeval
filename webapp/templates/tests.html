@@ -1,40 +1,68 @@
 {% extends "base.html" %}
-{% block title %}Tests{% endblock %}
+{% block title %}Questions{% endblock %}
 {% block content %}
 <div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
-  <div class="fr-col"><h1>Tests</h1></div>
-  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/tests/new">Nouveau test</a></div>
+  <div class="fr-col"><h1>Questions</h1></div>
+  {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+  <div class="fr-col-auto">
+    <a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/tests/new{% if current_perimeter %}?perimeter_id={{ current_perimeter.id }}{% endif %}">Nouvelle question</a>
+  </div>
+  {% endif %}
 </div>
+
+{# Filtre par périmètre #}
+<form method="get" action="{{ url_prefix }}/tests" class="fr-mt-2w">
+  <div class="fr-grid-row fr-grid-row--gutters fr-grid-row--middle">
+    <div class="fr-col-12 fr-col-md-6">
+      <div class="fr-select-group">
+        <label class="fr-label" for="perimeter">Filtrer par périmètre</label>
+        <select class="fr-select" id="perimeter" name="perimeter" onchange="this.form.submit()">
+          <option value="">— tous les périmètres —</option>
+          {% for p in all_perimeters %}
+          <option value="{{ p.slug }}" {% if current_perimeter and current_perimeter.id == p.id %}selected{% endif %}>{{ p.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+  </div>
+</form>
 
 {% if tests %}
 <div class="fr-table fr-table--bordered">
   <table>
     <thead>
-      <tr><th>#</th><th>Question</th><th>Réponse attendue</th><th>État</th><th>Actions</th></tr>
+      <tr><th>#</th><th>Question</th><th>Périmètre</th><th>Réponse attendue</th><th>État</th><th>Actions</th></tr>
     </thead>
     <tbody>
       {% for t in tests %}
       <tr>
-        <td>{{ t.test_id }}</td>
-        <td>{{ t.prompt|truncate(90) }}</td>
-        <td>{{ (t.expected_answer or "—")|truncate(50) }}</td>
+        <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
+        <td>{{ t.prompt|truncate(80) }}</td>
+        <td>
+          {% for p in all_perimeters if p.id == t.perimeter_id %}
+          <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ p.id }}">{{ p.name }}</a>
+          {% endfor %}
+        </td>
+        <td>{{ (t.expected_answer or "—")|truncate(40) }}</td>
         <td>
           {% if t.validity_end_at is none %}
-            <p class="fr-badge fr-badge--success fr-badge--sm">actif</p>
+            <p class="fr-badge fr-badge--success fr-badge--sm">active</p>
           {% else %}
-            <p class="fr-badge fr-badge--sm">inactif</p>
+            <p class="fr-badge fr-badge--sm">inactive</p>
           {% endif %}
         </td>
         <td>
-          <a class="fr-link fr-mr-2w" href="/tests/{{ t.test_id }}/edit">Éditer</a>
+          {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+          <a class="fr-link fr-mr-2w" href="{{ url_prefix }}/tests/{{ t.test_id }}/edit">Éditer</a>
           {% if t.validity_end_at is none %}
-          <form method="post" action="/tests/{{ t.test_id }}/deactivate" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/deactivate" style="display:inline">
             <button type="submit" class="fr-link">Désactiver</button>
           </form>
           {% else %}
-          <form method="post" action="/tests/{{ t.test_id }}/reactivate" style="display:inline">
+          <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/reactivate" style="display:inline">
             <button type="submit" class="fr-link">Réactiver</button>
           </form>
+          {% endif %}
           {% endif %}
         </td>
       </tr>
@@ -43,6 +71,13 @@
   </table>
 </div>
 {% else %}
-<div class="fr-callout"><p class="fr-callout__text">Aucun test. Crée-en un pour démarrer un benchmark.</p></div>
+<div class="fr-callout">
+  <p class="fr-callout__text">
+    Aucune question dans ce périmètre.
+    {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+    <a class="fr-link" href="{{ url_prefix }}/tests/new{% if current_perimeter %}?perimeter_id={{ current_perimeter.id }}{% endif %}">Créer la première →</a>
+    {% endif %}
+  </p>
+</div>
 {% endif %}
 {% endblock %}

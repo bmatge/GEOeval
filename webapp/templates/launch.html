@@ -1,29 +1,66 @@
 {% extends "base.html" %}
-{% block title %}Lancer un run{% endblock %}
+{% block title %}Lancer une évaluation{% endblock %}
 {% block content %}
-<h1>Lancer un run</h1>
-<p class="fr-hint-text">Chaque modèle testé est interrogé sur les tests sélectionnés, puis évalué par le(s) juge(s).
-Pour un lancement différé ou récurrent, voir <a class="fr-link" href="/schedules">Planification</a>.</p>
+<h1>Lancer une évaluation</h1>
+<p class="fr-hint-text">Chaque IA évaluée est interrogée sur les questions du périmètre sélectionné, puis notée par les notateurs.
+Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_prefix }}/schedules">Programmations</a>.</p>
 
-<form method="post" action="/launch" class="fr-mt-2w">
+{% if not selected_perimeter %}
+<div class="fr-callout">
+  <p class="fr-callout__title">Choisis d'abord un périmètre</p>
+  <p class="fr-callout__text">L'évaluation cible un périmètre (site, thématique…). Chaque périmètre a ses propres questions.</p>
+</div>
+
+<form method="get" action="{{ url_prefix }}/launch" class="fr-mt-2w" style="max-width:30rem;">
+  <div class="fr-select-group">
+    <label class="fr-label" for="perimeter_id">Périmètre</label>
+    <select class="fr-select" id="perimeter_id" name="perimeter_id" required>
+      <option value="">— sélectionne —</option>
+      {% for p in all_perimeters %}
+      <option value="{{ p.id }}">{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Continuer</button>
+</form>
+
+{% else %}
+<div class="fr-callout fr-callout--green-emeraude">
+  <p class="fr-callout__title">Périmètre : {{ selected_perimeter.name }}</p>
+  <p class="fr-callout__text">
+    {% if selected_perimeter.description %}{{ selected_perimeter.description }} · {% endif %}
+    <a class="fr-link" href="{{ url_prefix }}/launch">Changer</a>
+  </p>
+</div>
+
+<form method="post" action="{{ url_prefix }}/launch" class="fr-mt-2w">
+  <input type="hidden" name="perimeter_id" value="{{ selected_perimeter.id }}">
   {% include "_run_selection.html" %}
 
   {% if not models %}
   <div class="fr-callout fr-callout--brown-caramel">
-    <p class="fr-callout__text">Aucun modèle actif. <a class="fr-link" href="/models">Ajoute ou réactive un modèle</a>.</p>
+    <p class="fr-callout__text">Aucune IA disponible. <a class="fr-link" href="{{ url_prefix }}/models">Ajoute ou réactive une IA</a>.</p>
   </div>
   {% endif %}
 
   {% if active_tests_count == 0 %}
   <div class="fr-callout fr-callout--brown-caramel">
     <p class="fr-callout__text">
-      Aucun test actif et prêt : le run n'aurait aucune question à poser.
-      <a class="fr-link" href="/tests">Active ou crée des tests</a> avant de lancer un run.
+      Aucune question active dans ce périmètre.
+      <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ selected_perimeter.id }}">Ajoute des questions</a> avant de lancer.
     </p>
   </div>
   {% endif %}
 
-  <button type="submit" class="fr-btn fr-mt-2w" {% if not models or active_tests_count == 0 %}disabled{% endif %}>Lancer le run</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/jobs">Voir les jobs</a>
+  <button type="submit" class="fr-btn fr-mt-2w" {% if not models or active_tests_count == 0 %}disabled{% endif %}>Lancer l'évaluation</button>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/jobs">Voir les jobs</a>
 </form>
+
+<p class="fr-hint-text fr-mt-3w">
+  <strong>Budget</strong> :
+  consommé ce mois-ci {{ "%.4f"|format(month_spent) }} €{% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} €{% else %} (pas de plafond posé){% endif %} ·
+  dépensé aujourd'hui {{ "%.4f"|format(day_spent) }} €{% if budget and budget.daily_cap_eur is not none %} / plafond jour {{ "%.2f"|format(budget.daily_cap_eur) }} €{% else %} (pas de plafond journalier){% endif %}.
+  Une évaluation dont le devis dépasse l'un des plafonds (jour ou mois) sera <em>refusée</em> (soft-stop, ADR-078 §5).
+</p>
+{% endif %}
 {% endblock %}

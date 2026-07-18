@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Budget — {{ org.name }}{% endblock %}
+{% block content %}
+<h1>Budget — {{ org.name }}</h1>
+
+<h2 class="fr-h5">Mois en cours</h2>
+<p>
+  <strong>Consommé ce mois :</strong> {{ "%.4f"|format(month_spent) }} €
+  {% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} € {% else %}<em>(pas de plafond posé)</em>{% endif %}
+</p>
+
+{% if budget and pct is not none %}
+<progress value="{{ pct }}" max="100" style="width:100%; height:1rem;"></progress>
+<p>{{ pct }} % du plafond mensuel utilisé.</p>
+{% if pct >= 90 %}
+<div class="fr-alert fr-alert--warning fr-mt-2w">
+  <p class="fr-alert__title">Attention</p>
+  <p>Le plafond mensuel est presque atteint. Les prochains scans peuvent être refusés (soft-stop).</p>
+</div>
+{% endif %}
+{% endif %}
+
+<h2 class="fr-h5 fr-mt-3w">Aujourd'hui</h2>
+<p>
+  <strong>Dépensé aujourd'hui :</strong> {{ "%.4f"|format(day_spent) }} €
+  {% if budget and budget.daily_cap_eur is not none %} / plafond jour {{ "%.2f"|format(budget.daily_cap_eur) }} € {% else %}<em>(pas de plafond journalier — illimité)</em>{% endif %}
+</p>
+
+{% if budget and pct_day is not none %}
+<progress value="{{ pct_day }}" max="100" style="width:100%; height:1rem;"></progress>
+<p>{{ pct_day }} % du plafond journalier utilisé.</p>
+{% if pct_day >= 90 %}
+<div class="fr-alert fr-alert--warning fr-mt-2w">
+  <p class="fr-alert__title">Attention</p>
+  <p>Le plafond journalier est presque atteint. Les prochains scans peuvent être refusés (soft-stop).</p>
+</div>
+{% endif %}
+{% endif %}
+
+<h2 class="fr-mt-4w">Définir les plafonds</h2>
+<form method="post" action="{{ url_prefix }}/budget" class="fr-mt-2w" style="max-width:30rem">
+  <div class="fr-input-group">
+    <label class="fr-label" for="monthly_cap_eur">Plafond mensuel (€ / mois)
+      <span class="fr-hint-text">0 = aucun scan possible (test). Vide (pas encore de plafond) = pas de contrôle.</span>
+    </label>
+    <input class="fr-input" id="monthly_cap_eur" name="monthly_cap_eur" type="number"
+           step="0.01" min="0" required
+           value="{{ '%.2f'|format(budget.monthly_cap_eur) if budget else '' }}">
+  </div>
+  <div class="fr-input-group fr-mt-2w">
+    <label class="fr-label" for="daily_cap_eur">Plafond journalier (€ / jour) — optionnel
+      <span class="fr-hint-text">Laisser vide = illimité (seul le plafond mensuel s'applique).</span>
+    </label>
+    <input class="fr-input" id="daily_cap_eur" name="daily_cap_eur" type="number"
+           step="0.01" min="0"
+           value="{{ '%.2f'|format(budget.daily_cap_eur) if budget and budget.daily_cap_eur is not none else '' }}">
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
+</form>
+
+<p class="fr-hint-text fr-mt-4w">
+  Politique : <em>soft-stop</em>. Un nouveau scan est refusé si l'estimation le ferait dépasser
+  l'un des plafonds (jour ou mois). Un scan déjà en cours va toujours au bout (l'historique du
+  benchmark reste comparable).
+</p>
+{% endblock %}

@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Callable, Tuple, List
+from typing import Any, Callable, Optional, Tuple, List
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
@@ -66,6 +66,10 @@ def _normalize_judges(
 # -----------------------------
 # Judge parsing
 # -----------------------------
+# Labels catégoriels ADR-079 §3 (mode conformité).
+CONFORMITY_LABELS = ("conforme", "partiel", "non_conforme", "hors_sujet")
+
+
 @dataclass(frozen=True)
 class JudgeResult:
     label: str
@@ -92,6 +96,9 @@ class JudgeResult:
 
         score_dec = score_dec.quantize(Decimal("0.01"))
         return JudgeResult(label=label.strip(), score=score_dec)
+
+    def is_conformity(self) -> bool:
+        return self.label in CONFORMITY_LABELS
 
 
 def build_prompt_json_guardrails(base_prompt: str) -> str:
@@ -132,7 +139,14 @@ def parse_judge_output(raw: str) -> JudgeResult:
 # -----------------------------
 # LLM judge call
 # -----------------------------
-def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
+def call_judge_llm(
+    judge_model: Model, user_prompt: str, organization_id: Optional[int] = None
+) -> tuple[str, Optional[llm_clients.LLMUsage]]:
+    """Appelle le juge et renvoie (réponse, usage réel ou None).
+
+    L'usage réel n'est disponible que via OpenRouter (ADR-080 §6.3) ; les
+    chemins directs renvoient None → heuristique len/4 côté enregistrement.
+    """
     logger.info("call_judge_llm START %s", judge_model.model_version)
     start = time.perf_counter()
     system_text = (
@@ -144,7 +158,7 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
 
     # OpenAI (sans web)
     if model_name in {"openai", "chatgpt", "gpt"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.responses.create(
@@ -166,11 +180,11 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response
+        return response, None
 
     # Mistral (sans agents, sans web)
     if model_name in {"mistral", "mistralai"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.chat.complete(
@@ -194,11 +208,11 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response 
+        return response, None
 
     # Gemini (sans tools)
     if model_name in {"gemini", "google"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.models.generate_content(
@@ -223,12 +237,12 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response
+        return response, None
 
     # Albert (API souveraine Etalab) et tout endpoint compatible OpenAI
     # (chat completions, sans web)
     if model_name in {"albert", "etalab", "openai-compatible", "compatible-openai"}:
-        client = llm_clients.client_for_model(judge_model)
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
 
         def _do() -> str:
             resp = client.chat.completions.create(
@@ -252,14 +266,87 @@ def call_judge_llm(judge_model: Model, user_prompt: str) -> str:
         )
         end = time.perf_counter()
         logger.info("call_judge_llm END (%.2f s)", end - start)
-        return response
+        return response, None
+
+    # OpenRouter (provider plateforme par défaut, ADR-080) — chat completions
+    # sans web, usage réel demandé dans la réponse (usage.include).
+    if model_name in {"openrouter"}:
+        client = llm_clients.client_for_model(judge_model, organization_id=organization_id)
+        real_usage: list[Optional[llm_clients.LLMUsage]] = [None]
+
+        def _do() -> str:
+            resp = client.chat.completions.create(
+                model=judge_model.model_version,
+                messages=[
+                    {"role": "system", "content": system_text},
+                    {"role": "user", "content": user_prompt},
+                ],
+                temperature=0.3,
+                top_p=0.95,
+                extra_body={"usage": {"include": True}},
+            )
+            real_usage[0] = llm_clients.usage_from_openrouter_response(resp)
+            return resp.choices[0].message.content or ""
+
+        response = llm_clients.call_with_retry(
+            _do,
+            retry_exceptions=llm_clients.OPENROUTER_RETRY_EXCEPTIONS,
+            max_retries=8,
+            base_sleep=1.0,
+            max_sleep=30.0,
+            success_delay=0.2,
+        )
+        end = time.perf_counter()
+        logger.info("call_judge_llm END (%.2f s)", end - start)
+        return response, real_usage[0]
 
     raise ValueError(f"Provider inconnu model_name={judge_model.model_name!r}")
+
+def _record_judge_usage(
+    session,
+    org_id,
+    model_id,
+    run_id,
+    prompt,
+    resp,
+    real_usage: Optional[llm_clients.LLMUsage] = None,
+):
+    """Enregistre l'usage d'un appel juge. Best-effort.
+
+    Tokens/coût réels si le provider les fournit (OpenRouter, ADR-080 §6.3),
+    heuristique len/4 sinon.
+    """
+    if org_id is None:
+        return
+    try:
+        from webapp import credentials, usage
+        cred = credentials.get_for_model(session, org_id, model_id)
+        billed = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+        if real_usage is not None:
+            input_tokens = real_usage.input_tokens
+            output_tokens = real_usage.output_tokens
+            cost_usd = real_usage.cost_usd
+        else:
+            input_tokens = max(1, len(prompt or "") // 4)
+            output_tokens = max(1, len(resp or "") // 4)
+            cost_usd = None
+        usage.record(
+            session,
+            org_id=org_id, model_id=model_id, run_id=run_id,
+            kind="judge", billed_to=billed,
+            input_tokens=input_tokens,
+            output_tokens=output_tokens,
+            cost_usd=cost_usd,
+        )
+    except Exception:  # noqa: BLE001
+        logger.exception("usage judge non enregistré (run=%s model=%s)", run_id, model_id)
+
 
 def evaluate_run(
     session: Session,
     run_id: int,
     judges: list[Any],
+    organization_id: Optional[int] = None,
     progress_cb: Callable[[int, int, str], None] | None = None,
 ) -> None:
     """
@@ -294,6 +381,21 @@ def evaluate_run(
     total = sum(repeats for _, repeats in judge_specs) * n_evaluable
     done = 0
 
+    # Résolution vérité de référence par test au moment du run (ADR-079 §1).
+    from models import RunRow  # local — cycle-safe
+    from webapp import ground_truth as _gt
+
+    run_row = session.get(RunRow, run_id)
+    run_ts = run_row.started_at if run_row else None
+
+    # Prompt « conformité » (ADR-079 §3) chargé si présent.
+    conformity_prompt_row = session.execute(
+        select(EvaluationPrompt).where(
+            EvaluationPrompt.prompt_name == "response_quality_reference"
+        )
+    ).scalar_one_or_none()
+    conformity_prompt_text = conformity_prompt_row.prompt_text if conformity_prompt_row else None
+
     # Double boucle : juge (modèle, repeats) × index de run
     for judge_model, repeats in judge_specs:
 
@@ -308,22 +410,41 @@ def evaluate_run(
                         f"Test {test.test_id}: prompts manquants ou invalides"
                     )
 
-                # 1) Qualité réponse
-                response_quality_prompt = build_prompt_json_guardrails(response_prompt_text)
-                response_quality_user_prompt = (
-                    f"{response_quality_prompt}\n\n"
-                    "=== DONNÉES À ÉVALUER ===\n"
-                    f"[Réponse attendue]\n{test.expected_answer}\n\n"
-                    f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
-                    "Instruction: le champ [Réponse attendue] peut contenir plusieurs variantes "
-                    "séparées par le token ' OU '. "
-                    "Évaluer chaque variante indépendamment et conserver la meilleure note.\n"
-                )
+                gt_row = _gt.get_at(session, test.test_id, run_ts)
+                use_conformity = gt_row is not None and conformity_prompt_text is not None
 
-                response_quality_raw = call_judge_llm(
-                    judge_model, response_quality_user_prompt
+                # 1) Qualité réponse — conformité si vérité présente, opinion sinon.
+                if use_conformity:
+                    response_quality_prompt = build_prompt_json_guardrails(conformity_prompt_text)
+                    urls_str = ", ".join(gt_row.reference_urls or []) or "(aucune)"
+                    response_quality_user_prompt = (
+                        f"{response_quality_prompt}\n\n"
+                        "=== DONNÉES À ÉVALUER ===\n"
+                        f"[Vérité de référence]\n{gt_row.reference_answer}\n"
+                        f"[Sources de référence] {urls_str}\n\n"
+                        f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
+                    )
+                else:
+                    response_quality_prompt = build_prompt_json_guardrails(response_prompt_text)
+                    response_quality_user_prompt = (
+                        f"{response_quality_prompt}\n\n"
+                        "=== DONNÉES À ÉVALUER ===\n"
+                        f"[Réponse attendue]\n{test.expected_answer}\n\n"
+                        f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
+                        "Instruction: le champ [Réponse attendue] peut contenir plusieurs variantes "
+                        "séparées par le token ' OU '. "
+                        "Évaluer chaque variante indépendamment et conserver la meilleure note.\n"
+                    )
+
+                response_quality_raw, response_quality_usage = call_judge_llm(
+                    judge_model, response_quality_user_prompt, organization_id=organization_id
                 )
                 response_quality = parse_judge_output(response_quality_raw)
+                _record_judge_usage(
+                    session, organization_id, judge_model.model_id, run_id,
+                    response_quality_user_prompt, response_quality_raw,
+                    real_usage=response_quality_usage,
+                )
 
                 # 2) Qualité citation
                 citation_quality_prompt = build_prompt_json_guardrails(citation_prompt_text)
@@ -333,10 +454,15 @@ def evaluate_run(
                     f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
                 )
 
-                citation_quality_raw = call_judge_llm(
-                    judge_model, citation_quality_user_prompt
+                citation_quality_raw, citation_quality_usage = call_judge_llm(
+                    judge_model, citation_quality_user_prompt, organization_id=organization_id
                 )
                 citation_quality = parse_judge_output(citation_quality_raw)
+                _record_judge_usage(
+                    session, organization_id, judge_model.model_id, run_id,
+                    citation_quality_user_prompt, citation_quality_raw,
+                    real_usage=citation_quality_usage,
+                )
 
                 payload = dict(
                     run_id=run_id,

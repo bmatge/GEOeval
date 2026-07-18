@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Accepter l'invitation — {{ org.name }}{% endblock %}
+{% block content %}
+<h1>Invitation à rejoindre <em>{{ org.name }}</em></h1>
+
+{% if not token %}
+<div class="fr-callout fr-callout--brown-caramel">
+  <p class="fr-callout__text">
+    Le lien d'invitation est incomplet (token manquant). Redemande un lien à un administrateur
+    de l'organisation.
+  </p>
+</div>
+{% else %}
+<p class="fr-text--lg">
+  Tu es connecté(e) en tant que <code>{{ current_email }}</code>.
+  Si cette invitation te concerne, confirme pour rejoindre l'organisation.
+</p>
+
+<form method="post" action="{{ url_prefix }}/accept-invite" class="fr-mt-2w">
+  <input type="hidden" name="token" value="{{ token }}">
+  <button type="submit" class="fr-btn">Accepter et rejoindre {{ org.name }}</button>
+  <a class="fr-btn fr-btn--secondary fr-ml-2w" href="/">Annuler</a>
+</form>
+
+<p class="fr-hint-text fr-mt-2w">
+  L'invitation sera refusée si l'email n'est pas exactement le tien, si le lien a été révoqué
+  ou s'il est expiré.
+</p>
+{% endif %}
+{% endblock %}

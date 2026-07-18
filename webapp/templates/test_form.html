@@ -1,28 +1,43 @@
 {% extends "base.html" %}
-{% block title %}{{ "Éditer" if test else "Nouveau" }} test{% endblock %}
+{% block title %}{{ "Éditer" if test else "Nouvelle" }} question{% endblock %}
 {% block content %}
-<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/tests">Retour aux tests</a>
-<h1 class="fr-mt-2w">{{ "Éditer le test " ~ test.test_id if test else "Nouveau test" }}</h1>
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/tests">Retour aux questions</a>
+<h1 class="fr-mt-2w">{{ "Éditer la question #" ~ test.test_id if test else "Nouvelle question" }}</h1>
 
-<form method="post" action="{{ '/tests/' ~ test.test_id ~ '/edit' if test else '/tests/new' }}" class="fr-mt-2w">
+<form method="post" action="{{ (url_prefix ~ '/tests/' ~ test.test_id ~ '/edit') if test else (url_prefix ~ '/tests/new') }}" class="fr-mt-2w">
+
+  <div class="fr-select-group">
+    <label class="fr-label" for="perimeter_id">Périmètre
+      <span class="fr-hint-text">Le contexte de recherche auquel appartient cette question.</span>
+    </label>
+    <select class="fr-select" id="perimeter_id" name="perimeter_id" required>
+      {% for p in all_perimeters %}
+      <option value="{{ p.id }}"
+        {% if test and test.perimeter_id == p.id %}selected{% endif %}
+        {% if not test and default_perimeter and default_perimeter.id == p.id %}selected{% endif %}
+      >{{ p.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+
   <div class="fr-input-group">
-    <label class="fr-label" for="prompt">Question (prompt)
-      <span class="fr-hint-text">La question posée au modèle testé.</span>
+    <label class="fr-label" for="prompt">Question
+      <span class="fr-hint-text">La question posée à l'IA évaluée.</span>
     </label>
     <textarea class="fr-input" id="prompt" name="prompt" rows="3" required>{{ test.prompt if test else "" }}</textarea>
   </div>
 
   <div class="fr-input-group">
     <label class="fr-label" for="expected_answer">Réponse attendue
-      <span class="fr-hint-text">Variantes possibles séparées par «  OU  ». Vide = test non évaluable.</span>
+      <span class="fr-hint-text">Variantes possibles séparées par «  OU  ». Vide = question non notable.</span>
     </label>
     <textarea class="fr-input" id="expected_answer" name="expected_answer" rows="2">{{ test.expected_answer if test and test.expected_answer else "" }}</textarea>
   </div>
 
   <div class="fr-select-group">
-    <label class="fr-label" for="response_quality_prompt_id">Prompt — qualité de la réponse</label>
+    <label class="fr-label" for="response_quality_prompt_id">Grille de notation — qualité de la réponse</label>
     <select class="fr-select" id="response_quality_prompt_id" name="response_quality_prompt_id">
-      <option value="">— aucun —</option>
+      <option value="">— aucune —</option>
       {% for p in prompts %}
       <option value="{{ p.prompt_id }}" {% if test and test.response_quality_prompt_id == p.prompt_id %}selected{% endif %}>
         {{ p.prompt_id }} · {{ p.prompt_name }} ({{ p.prompt_type_label }})
@@ -32,9 +47,9 @@
   </div>
 
   <div class="fr-select-group">
-    <label class="fr-label" for="citation_quality_prompt_id">Prompt — qualité des citations</label>
+    <label class="fr-label" for="citation_quality_prompt_id">Grille de notation — qualité des citations</label>
     <select class="fr-select" id="citation_quality_prompt_id" name="citation_quality_prompt_id">
-      <option value="">— aucun —</option>
+      <option value="">— aucune —</option>
       {% for p in prompts %}
       <option value="{{ p.prompt_id }}" {% if test and test.citation_quality_prompt_id == p.prompt_id %}selected{% endif %}>
         {{ p.prompt_id }} · {{ p.prompt_name }} ({{ p.prompt_type_label }})
