@@ -59,7 +59,11 @@ def get_client():
             client_id=os.environ["OIDC_CLIENT_ID"],
             client_secret=os.environ.get("OIDC_CLIENT_SECRET", ""),
             client_kwargs={
-                "scope": os.environ.get("OIDC_SCOPES", "openid email profile"),
+                # `or` et non défaut de get() : le compose passe ${OIDC_SCOPES:-},
+                # la variable existe donc VIDE quand elle n'est pas posée — sans
+                # scope, pas d'id_token et le callback échoue sur le claim sub.
+                "scope": os.environ.get("OIDC_SCOPES", "").strip()
+                or "openid email profile",
                 "code_challenge_method": "S256",
             },
         )
