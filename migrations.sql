@@ -260,3 +260,18 @@ CREATE TABLE IF NOT EXISTS auth_tokens (
     used_at    TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS ix_auth_tokens_user_id ON auth_tokens(user_id);
+
+-- ---------------------------------------------------------------------
+-- Grilles de notation par défaut sur les questions qui n'en ont pas
+-- (l'évaluation exige les deux grilles — sans elles le job plante après
+-- avoir payé la phase RUN). Backfill idempotent ; no-op sur base vierge
+-- (evaluation_prompts est peuplée par seed.sql, rejoué juste après).
+-- ---------------------------------------------------------------------
+UPDATE tests SET response_quality_prompt_id =
+    (SELECT MIN(prompt_id) FROM evaluation_prompts WHERE prompt_type_id = 1)
+WHERE response_quality_prompt_id IS NULL
+  AND EXISTS (SELECT 1 FROM evaluation_prompts WHERE prompt_type_id = 1);
+UPDATE tests SET citation_quality_prompt_id =
+    (SELECT MIN(prompt_id) FROM evaluation_prompts WHERE prompt_type_id = 2)
+WHERE citation_quality_prompt_id IS NULL
+  AND EXISTS (SELECT 1 FROM evaluation_prompts WHERE prompt_type_id = 2);
