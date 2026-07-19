@@ -212,6 +212,34 @@ def question_stats(session: Session, org_id: int) -> list[dict[str, Any]]:
     return out
 
 
+def model_evolution(session: Session, org_id: int) -> list[dict[str, Any]]:
+    """Scores par IA en fonction du n° de passage (format long pour series-field).
+
+    L'abscisse est le rang chronologique du run POUR CHAQUE modèle (« Éval 1 »,
+    « Éval 2 », …) et non le run_id global : chaque IA a ainsi une valeur à
+    chaque position — courbes continues et comparables (un run n'appartient
+    qu'à un modèle ; sur un axe en run_id les autres séries tomberaient à 0).
+    """
+    rows = list_runs(session, org_id)  # desc par run_id
+    rows = [r for r in reversed(rows) if r["n_evals"]]  # chronologique, évalués
+    seq: dict[str, int] = {}
+    out = []
+    for r in rows:
+        model = r["model_version"]
+        seq[model] = seq.get(model, 0) + 1
+        out.append(
+            dict(
+                label=f"Éval {seq[model]}",
+                seq=seq[model],
+                model=model,
+                run_id=r["run_id"],
+                avg_response=r["avg_response"],
+                avg_citation=r["avg_citation"],
+            )
+        )
+    return out
+
+
 def org_stats_summary(session: Session, org_id: int) -> dict[str, Any]:
     """Agrégats globaux d'une org pour les KPIs du tableau de bord (dsfr-data)."""
     row = session.execute(
