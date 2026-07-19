@@ -18,3 +18,9 @@ python-multipart>=0.0.9  # traitement des formulaires POST
 
 # --- Chiffrement BYOK (Fernet, ADR-078 / PR#14) ---
 cryptography>=42
+
+# --- Auth applicative (ADR-086) ---
+bcrypt>=4.1                # hash des mots de passe locaux
+itsdangerous>=2.1          # cookies de session signés (SessionMiddleware Starlette)
+authlib>=1.3               # client OIDC générique (authorization-code + PKCE)
+httpx>=0.27                # transport authlib (découverte .well-known, token endpoint)

@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Invitation{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--center">
+  <div class="fr-col-12 fr-col-md-6">
+
+    {% if state == 'invalid' %}
+    <h1>Invitation invalide</h1>
+    <div class="fr-callout fr-callout--brown-caramel">
+      <p class="fr-callout__text">
+        Ce lien d'invitation est invalide, expiré ou déjà utilisé.
+        Redemande un lien à un administrateur de l'organisation.
+      </p>
+    </div>
+    <a class="fr-btn fr-btn--secondary fr-mt-2w" href="/login">Aller à la connexion</a>
+
+    {% elif state == 'wrong_account' %}
+    <h1>Invitation à rejoindre {{ org_name }}</h1>
+    <div class="fr-alert fr-alert--warning fr-mb-2w">
+      <p>Cette invitation est destinée à <code>{{ invited_email }}</code>, mais tu es
+      connecté(e) avec un autre compte. Déconnecte-toi puis rouvre le lien.</p>
+    </div>
+    <form method="post" action="/logout">
+      <button type="submit" class="fr-btn fr-btn--secondary">Se déconnecter</button>
+    </form>
+
+    {% elif state == 'login_required' %}
+    <h1>Invitation à rejoindre {{ org_name }}</h1>
+    <p class="fr-text--lg">
+      Un compte existe déjà pour <code>{{ invited_email }}</code>.
+      Connecte-toi pour accepter l'invitation.
+    </p>
+    <a class="fr-btn" href="/login?next={{ next | urlencode }}">Se connecter</a>
+
+    {% else %}{# state == 'signup' #}
+    <h1>Invitation à rejoindre {{ org_name }}</h1>
+    <p class="fr-text--lg">
+      Crée ton compte GEOeval pour l'adresse <code>{{ invited_email }}</code>.
+    </p>
+
+    {% if error %}
+    <div class="fr-alert fr-alert--error fr-mb-2w">
+      <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/invitations/{{ token }}/signup">
+      <div class="fr-input-group">
+        <label class="fr-label" for="signup-password">
+          Mot de passe
+          <span class="fr-hint-text">12 caractères minimum</span>
+        </label>
+        <input class="fr-input" type="password" id="signup-password" name="password"
+               autocomplete="new-password" required minlength="12">
+      </div>
+      <div class="fr-input-group">
+        <label class="fr-label" for="signup-password-confirm">Confirme le mot de passe</label>
+        <input class="fr-input" type="password" id="signup-password-confirm" name="password_confirm"
+               autocomplete="new-password" required minlength="12">
+      </div>
+      <button type="submit" class="fr-btn fr-mt-2w">Créer mon compte et rejoindre {{ org_name }}</button>
+    </form>
+    {% endif %}
+
+  </div>
+</div>
+{% endblock %}

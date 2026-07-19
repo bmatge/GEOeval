@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Utilisateurs{% endblock %}
+{% block content %}
+<h1>Utilisateurs de la plateforme</h1>
+<p class="fr-text--lead">
+  Comptes connus de GEOeval (créés par invitation, SSO ou bootstrap).
+  Le rôle « admin plateforme » traverse toutes les organisations.
+</p>
+
+{% if reset_link %}
+<div class="fr-alert fr-alert--success fr-mb-3w">
+  <h3 class="fr-alert__title">Lien de définition de mot de passe généré</h3>
+  <p>À transmettre à <code>{{ reset_email }}</code> (valable 48 h, usage unique) :</p>
+  <div class="fr-input-group">
+    <input class="fr-input" type="text" readonly value="{{ reset_link }}"
+           onclick="this.select()" aria-label="Lien de définition de mot de passe">
+  </div>
+</div>
+{% endif %}
+
+{% if error %}
+<div class="fr-alert fr-alert--error fr-mb-3w"><p>{{ error }}</p></div>
+{% endif %}
+
+<div class="fr-table fr-table--no-caption">
+  <table>
+    <caption>Utilisateurs</caption>
+    <thead>
+      <tr>
+        <th>Email</th>
+        <th>Provider</th>
+        <th>Mot de passe</th>
+        <th>Dernière visite</th>
+        <th>Admin plateforme</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for u in users %}
+      <tr>
+        <td><code>{{ u.email }}</code></td>
+        <td>{{ u.auth_provider }}</td>
+        <td>{{ "défini" if u.password_hash else "—" }}</td>
+        <td>{{ u.last_seen_at.strftime('%Y-%m-%d %H:%M') if u.last_seen_at else "—" }}</td>
+        <td>{% if u.is_platform_admin %}<span class="fr-badge fr-badge--info">admin</span>{% else %}—{% endif %}</td>
+        <td>
+          <form method="post" action="/admin/users/{{ u.id }}/platform-admin" style="display:inline">
+            <input type="hidden" name="value" value="{{ '0' if u.is_platform_admin else '1' }}">
+            <button type="submit" class="fr-btn fr-btn--tertiary fr-btn--sm">
+              {{ "Retirer admin" if u.is_platform_admin else "Promouvoir admin" }}
+            </button>
+          </form>
+          <form method="post" action="/admin/users/{{ u.id }}/reset-link" style="display:inline">
+            <button type="submit" class="fr-btn fr-btn--tertiary fr-btn--sm">Lien mot de passe</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<p class="fr-hint-text">
+  Les accès aux organisations (rôles admin / éditeur / lecteur) se gèrent dans les
+  paramètres de chaque organisation, via invitations.
+</p>
+{% endblock %}

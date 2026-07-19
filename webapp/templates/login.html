@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Connexion{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--center">
+  <div class="fr-col-12 fr-col-md-6">
+    <h1>Connexion</h1>
+    <p class="fr-text--lead">Banc d'essai longitudinal de la visibilité de l'information dans les IA.</p>
+
+    {% if error %}
+    <div class="fr-alert fr-alert--error fr-mb-2w">
+      <p>{{ error }}</p>
+    </div>
+    {% endif %}
+
+    <form method="post" action="/login">
+      <input type="hidden" name="next" value="{{ next }}">
+      <div class="fr-input-group">
+        <label class="fr-label" for="login-email">Adresse email</label>
+        <input class="fr-input" type="email" id="login-email" name="email"
+               autocomplete="username" required value="{{ email or '' }}">
+      </div>
+      <div class="fr-input-group">
+        <label class="fr-label" for="login-password">Mot de passe</label>
+        <input class="fr-input" type="password" id="login-password" name="password"
+               autocomplete="current-password" required>
+      </div>
+      <button type="submit" class="fr-btn fr-mt-2w">Se connecter</button>
+    </form>
+
+    {% if oidc_enabled %}
+    <hr class="fr-mt-4w">
+    <h2 class="fr-h6">Ou via votre fournisseur d'identité</h2>
+    <a class="fr-btn fr-btn--secondary" href="/auth/oidc/login">Se connecter avec {{ oidc_label }}</a>
+    {% endif %}
+
+    <p class="fr-hint-text fr-mt-4w">
+      Pas de compte ? L'accès à GEOeval se fait sur invitation d'une organisation —
+      demande un lien d'invitation à ton administrateur.
+    </p>
+  </div>
+</div>
+{% endblock %}

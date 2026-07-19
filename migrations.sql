@@ -234,3 +234,29 @@ CREATE INDEX IF NOT EXISTS ix_org_models_org_id ON org_models(organization_id);
 -- mensuel (NULL = illimité). Soft-stop identique (ADR-078 §5).
 -- ---------------------------------------------------------------------
 ALTER TABLE budgets ADD COLUMN IF NOT EXISTS daily_cap_eur NUMERIC(12, 2);
+
+-- ---------------------------------------------------------------------
+-- ADR-086 : auth applicative (comptes locaux + OIDC optionnel).
+-- users : mot de passe bcrypt, provider, identité OIDC, rôle plateforme
+-- en base (is_platform_admin remplace la dérivation lab-team d'ADR-077).
+-- ---------------------------------------------------------------------
+ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash     TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS auth_provider     TEXT    NOT NULL DEFAULT 'local';
+ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_issuer       TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_external_id  TEXT;
+ALTER TABLE users ADD COLUMN IF NOT EXISTS is_platform_admin BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_users_oidc_identity
+    ON users(oidc_issuer, oidc_external_id)
+    WHERE oidc_issuer IS NOT NULL AND oidc_external_id IS NOT NULL;
+
+-- Liens one-shot de définition de mot de passe (TTL applicatif 48 h).
+CREATE TABLE IF NOT EXISTS auth_tokens (
+    id         BIGSERIAL   PRIMARY KEY,
+    user_id    BIGINT      NOT NULL REFERENCES users(id),
+    purpose    TEXT        NOT NULL DEFAULT 'set_password',
+    token      TEXT        NOT NULL UNIQUE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    used_at    TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS ix_auth_tokens_user_id ON auth_tokens(user_id);

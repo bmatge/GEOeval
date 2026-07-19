@@ -24,9 +24,9 @@ class Base(DeclarativeBase):
 
 
 # =====================================================================
-# Tenancy (ADR-077) — organisations, utilisateurs, appartenances.
-# Auth déléguée à l'infra VibeLab (headers gate/Authentik), zéro logique
-# de login ici. Les rôles vivent dans `memberships.role` (voir ROLES).
+# Tenancy (ADR-077 amendée par ADR-086) — organisations, utilisateurs,
+# appartenances. Auth applicative : comptes locaux (bcrypt + sessions)
+# + OIDC optionnel. Les rôles d'org vivent dans `memberships.role`.
 # =====================================================================
 class Organization(Base):
     __tablename__ = "organizations"
@@ -53,10 +53,43 @@ class User(Base):
     last_seen_at: Mapped[Optional[datetime]] = mapped_column(
         TIMESTAMP(timezone=True), nullable=True
     )
-    # Cache local du bit `lab-team` (dérivé de X-Gate-Groups) — non source de
-    # vérité : les groupes du header priment à chaque requête.
+    # Héritage ADR-077 (cache du bit `lab-team`) — conservée pour l'historique,
+    # plus jamais lue depuis ADR-086. La source de vérité est is_platform_admin.
     is_superuser_cached: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
+    )
+    # --- Auth applicative (ADR-086) ---
+    # NULL = pas de mot de passe local (compte SSO-only ou jamais activé).
+    password_hash: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # 'local' | 'oidc' — provider du dernier mode de création/connexion.
+    auth_provider: Mapped[str] = mapped_column(
+        Text, nullable=False, default="local", server_default="local"
+    )
+    # Identité OIDC (réconciliation anti-takeover, ADR-061/086).
+    oidc_issuer: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    oidc_external_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Source de vérité du rôle plateforme (remplace la dérivation lab-team).
+    is_platform_admin: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="false"
+    )
+
+
+class AuthToken(Base):
+    """Lien one-shot de définition de mot de passe (ADR-086 §1, TTL 48 h)."""
+
+    __tablename__ = "auth_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
+    purpose: Mapped[str] = mapped_column(
+        Text, nullable=False, default="set_password", server_default="set_password"
+    )
+    token: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    used_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=True
     )
 
 

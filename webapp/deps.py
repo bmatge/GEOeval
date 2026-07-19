@@ -2,7 +2,7 @@
 Dépendances FastAPI pour tenancy + RBAC.
 
 Utilisées par les routes préfixées `/o/{org_slug}/…`. Le middleware
-`GateAuthMiddleware` a déjà posé `request.state.user` (CurrentUser | None).
+`AuthMiddleware` a déjà posé `request.state.user` (CurrentUser | None).
 
 Erreurs volontairement discrètes :
     * pas d'user      → 401
@@ -35,7 +35,7 @@ def require_user(request: Request) -> CurrentUser:
     if user is None:
         raise HTTPException(
             status_code=401,
-            detail="Authentification requise (headers gate absents et DEV_FAKE_EMAIL non posé).",
+            detail="Authentification requise (connecte-toi via /login).",
         )
     return user
 

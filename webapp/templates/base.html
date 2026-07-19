@@ -8,18 +8,6 @@
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@gouvfr/dsfr@1.13.0/dist/utility/utility.min.css">
 </head>
 <body>
-<div class="fr-notice fr-notice--info">
-  <div class="fr-container">
-    <div class="fr-notice__body">
-      <p>
-        <span class="fr-notice__title">Nouvelle version disponible :</span>
-        <span class="fr-notice__desc">GEOeval v2 — multi-organisations, 345 modèles via OpenRouter,
-        budgets, réponses de référence et notation humaine.</span>
-        <a class="fr-link" href="https://geoeval-v2.lab.miweb.run" target="_blank" rel="noopener">Découvrir la v2</a>
-      </p>
-    </div>
-  </div>
-</div>
 <header role="banner" class="fr-header">
   <div class="fr-header__body">
     <div class="fr-container">
@@ -44,10 +32,10 @@
             <p class="fr-header__service-tagline">Suivre la visibilité de l'information dans les IA</p>
           </div>
         </div>
-        {% if user %}
         <div class="fr-header__tools">
           <div class="fr-header__tools-links">
             <ul class="fr-btns-group">
+              {% if user %}
               <li>
                 <span class="fr-hint-text fr-mr-2w">
                   {{ user.email }}{% if user.is_platform_admin %} · <em>admin plateforme</em>{% endif %}
@@ -57,10 +45,17 @@
               <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="{{ url_prefix }}/settings">Paramètres de l'org</a></li>
               {% endif %}
               <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/">Changer d'organisation</a></li>
+              <li>
+                <form method="post" action="/logout">
+                  <button type="submit" class="fr-btn fr-btn--tertiary fr-btn--sm">Se déconnecter</button>
+                </form>
+              </li>
+              {% elif active != 'auth' %}
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/login">Se connecter</a></li>
+              {% endif %}
             </ul>
           </div>
         </div>
-        {% endif %}
       </div>
     </div>
   </div>
@@ -128,6 +123,7 @@
                 <li><a class="fr-nav__link" href="/admin/openrouter-import">Import OpenRouter</a></li>
                 <li><a class="fr-nav__link" href="/admin/pricing">Tarifs des IA</a></li>
                 <li><a class="fr-nav__link" href="/admin/organizations">Organisations</a></li>
+                <li><a class="fr-nav__link" href="/admin/users">Utilisateurs</a></li>
                 <li><a class="fr-nav__link" href="/admin/audit">Journal d'audit global</a></li>
                 <li><a class="fr-nav__link" href="/admin/gold-annotations/import">Notation humaine</a></li>
                 <li><a class="fr-nav__link" href="/methodology/judges">Accord des notateurs</a></li>

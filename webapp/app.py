@@ -14,6 +14,8 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import secrets as _secrets
 from pathlib import Path
 from typing import Optional
 
@@ -21,6 +23,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
+from starlette.middleware.sessions import SessionMiddleware
 
 from db import SessionLocal
 from load import load_tests
@@ -39,7 +42,8 @@ from webapp import (
     services,
     tenancy,
 )
-from webapp.auth import CurrentUser, GateAuthMiddleware
+from webapp import accounts, auth_routes
+from webapp.auth import AuthMiddleware, CurrentUser
 from webapp.deps import (
     get_db,
     require_org,
@@ -59,8 +63,35 @@ BASE_DIR = Path(__file__).resolve().parent
 templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
 
 app = FastAPI(title="GEOeval")
-app.add_middleware(GateAuthMiddleware)
+
+# Ordre des middlewares (dernier ajouté = plus externe) : SessionMiddleware doit
+# envelopper AuthMiddleware, qui lit request.session (ADR-086).
+_session_secret = os.environ.get("GEOEVAL_SESSION_SECRET", "").strip()
+if not _session_secret:
+    _session_secret = _secrets.token_urlsafe(32)
+    logging.getLogger("webapp").warning(
+        "GEOEVAL_SESSION_SECRET absent : secret de session éphémère généré "
+        "(les sessions ne survivront pas au redémarrage — dev uniquement)."
+    )
+app.add_middleware(AuthMiddleware)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=_session_secret,
+    max_age=7 * 24 * 3600,
+    same_site="lax",
+    https_only=os.environ.get("GEOEVAL_COOKIE_SECURE", "0").strip() in ("1", "true", "yes"),
+)
+app.include_router(auth_routes.router)
 scheduler.start()
+
+
+@app.exception_handler(401)
+async def _redirect_unauthenticated(request: Request, exc: HTTPException):
+    """Visiteur anonyme sur une page HTML : redirection vers /login plutôt
+    qu'un 401 JSON brut (les navigations GET uniquement)."""
+    if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+        return RedirectResponse(f"/login?next={request.url.path}", status_code=302)
+    return JSONResponse(status_code=401, content={"detail": exc.detail})
 
 
 def _opt_int(value: Optional[str]) -> Optional[int]:
@@ -119,14 +150,8 @@ def _nav_fallback(db: Session, user: Optional[CurrentUser]) -> tuple:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
     user: Optional[CurrentUser] = getattr(request.state, "user", None)
-    # Pas de user (headers gate manquants et pas de DEV_FAKE_EMAIL) :
-    # on affiche une page d'accueil neutre expliquant la situation.
     if user is None:
-        return templates.TemplateResponse(
-            request=request,
-            name="landing_anonymous.html",
-            context={"active": "home"},
-        )
+        return RedirectResponse("/login", status_code=302)
 
     if user.is_platform_admin:
         orgs = tenancy.list_all_orgs(db)
@@ -1682,6 +1707,77 @@ def admin_org_create(
             meta={"email": first_admin_email},
         )
     return RedirectResponse("/admin/organizations", status_code=303)
+
+
+# =====================================================================
+# Admin plateforme — utilisateurs (ADR-086) : rôle plateforme + liens de
+# définition de mot de passe (sans SMTP, à transmettre hors-bande).
+# =====================================================================
+@app.get("/admin/users", response_class=HTMLResponse)
+def admin_users(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    reset_link: str = "",
+    reset_email: str = "",
+    error: str = "",
+):
+    nav_org, nav_role = _nav_fallback(db, user)
+    return render(
+        request, "admin_users.html", active="admin",
+        org=nav_org, role=nav_role,
+        users=accounts.list_users(db),
+        reset_link=reset_link, reset_email=reset_email, error=error,
+    )
+
+
+@app.post("/admin/users/{user_id}/platform-admin")
+def admin_user_toggle_admin(
+    user_id: int,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    value: str = Form(...),
+):
+    try:
+        target = accounts.set_platform_admin(
+            db, user_id=user_id, value=value == "1", acting_user_id=user.id
+        )
+    except ValueError as e:
+        from urllib.parse import quote
+
+        return RedirectResponse(f"/admin/users?error={quote(str(e))}", status_code=303)
+    audit.record(
+        db, user_id=user.id, org_id=None,
+        action="promote_admin" if value == "1" else "demote_admin",
+        entity_type="user", entity_id=target.id, meta={"email": target.email},
+    )
+    return RedirectResponse("/admin/users", status_code=303)
+
+
+@app.post("/admin/users/{user_id}/reset-link")
+def admin_user_reset_link(
+    user_id: int,
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    from urllib.parse import quote
+
+    from models import User as _UserModel
+
+    target = db.get(_UserModel, user_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Utilisateur introuvable.")
+    tok = accounts.create_set_password_token(db, user_id=target.id)
+    audit.record(
+        db, user_id=user.id, org_id=None, action="password_reset_link",
+        entity_type="user", entity_id=target.id, meta={"email": target.email},
+    )
+    link = f"{request.url.scheme}://{request.url.netloc}/reset/{tok.token}"
+    return RedirectResponse(
+        f"/admin/users?reset_link={quote(link)}&reset_email={quote(target.email)}",
+        status_code=303,
+    )
 
 
 @app.get("/admin/audit", response_class=HTMLResponse)
