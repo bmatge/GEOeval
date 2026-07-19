@@ -249,6 +249,46 @@ def dashboard(request: Request, ctx=Depends(require_org), db: Session = Depends(
 
 
 # =====================================================================
+# API JSON de stats (dsfr-data / ChartsBuilder) — lecture, viewer+.
+# Consommées same-origin par les composants <dsfr-data-source> des pages
+# tableau de bord et évaluations (cookies de session envoyés par fetch).
+# =====================================================================
+@app.get("/o/{org_slug}/api/stats/summary")
+def api_stats_summary(ctx=Depends(require_org), db: Session = Depends(get_db)):
+    org, _ = ctx
+    # Tableau à un élément : format attendu par dsfr-data-kpi (1er enregistrement).
+    return JSONResponse([services.org_stats_summary(db, org.id)])
+
+
+@app.get("/o/{org_slug}/api/stats/leaderboard")
+def api_stats_leaderboard(ctx=Depends(require_org), db: Session = Depends(get_db)):
+    org, _ = ctx
+    return JSONResponse(services.leaderboard(db, org.id))
+
+
+@app.get("/o/{org_slug}/api/stats/runs")
+def api_stats_runs(ctx=Depends(require_org), db: Session = Depends(get_db)):
+    """Évaluations en ordre chronologique (axe X des courbes d'évolution)."""
+    org, _ = ctx
+    rows = services.list_runs(db, org.id)
+    out = [
+        dict(
+            run_id=r["run_id"],
+            label=(
+                f"#{r['run_id']} · {r['started_at'].strftime('%d/%m')}"
+                if r["started_at"] else f"#{r['run_id']}"
+            ),
+            model=r["model_version"],
+            n_evals=r["n_evals"],
+            avg_response=r["avg_response"],
+            avg_citation=r["avg_citation"],
+        )
+        for r in reversed(rows)
+    ]
+    return JSONResponse(out)
+
+
+# =====================================================================
 # Runs (par org)
 # =====================================================================
 @app.get("/o/{org_slug}/runs", response_class=HTMLResponse)

@@ -3,7 +3,52 @@
 {% block content %}
 <h1>Tableau de bord</h1>
 
-<h2 class="fr-mt-4w">Classement des IA</h2>
+{% if leaderboard %}
+{# --- Sources de données (API JSON org-scopée, cf. /api/stats/*) --- #}
+<dsfr-data-source id="stats-summary" url="{{ url_prefix }}/api/stats/summary"></dsfr-data-source>
+<dsfr-data-source id="stats-leaderboard" url="{{ url_prefix }}/api/stats/leaderboard"></dsfr-data-source>
+<dsfr-data-source id="stats-runs" url="{{ url_prefix }}/api/stats/runs"></dsfr-data-source>
+
+{# --- KPIs --- #}
+<dsfr-data-kpi-group cols="4" class="fr-mt-2w">
+  <dsfr-data-kpi source="stats-summary" value="avg_response"
+    heading="Qualité des réponses" label="score moyen sur 10" format="decimal"
+    threshold-green="7" threshold-orange="4" icon="ri-chat-check-line"></dsfr-data-kpi>
+  <dsfr-data-kpi source="stats-summary" value="avg_citation"
+    heading="Qualité des citations" label="score moyen sur 10" format="decimal"
+    threshold-green="7" threshold-orange="4" icon="ri-links-line"></dsfr-data-kpi>
+  <dsfr-data-kpi source="stats-summary" value="n_runs"
+    heading="Évaluations" label="menées" color-token="bleu"
+    icon="ri-play-circle-line"></dsfr-data-kpi>
+  <dsfr-data-kpi source="stats-summary" value="n_models"
+    heading="IA testées" label="modèles distincts" color-token="bleu"
+    icon="ri-robot-2-line"></dsfr-data-kpi>
+</dsfr-data-kpi-group>
+
+{# --- Podium + évolution --- #}
+<div class="fr-grid-row fr-grid-row--gutters fr-mt-3w">
+  <div class="fr-col-12 fr-col-md-5">
+    <h2 class="fr-h4">Classement des IA</h2>
+    <p class="fr-hint-text">Score moyen de qualité de réponse (0–10).</p>
+    <dsfr-data-podium source="stats-leaderboard"
+      label-field="model_version" subtitle-field="model_name"
+      value-field="avg_response" value-unit="/10" bar-max="10"
+      max-items="5" selected-palette="sequentialDescending"></dsfr-data-podium>
+  </div>
+  <div class="fr-col-12 fr-col-md-7">
+    <dsfr-data-chart id="chart-evolution" source="stats-runs" type="line"
+      label-field="label" value-field="avg_response" value-field-2="avg_citation"
+      name='["Qualité réponse","Qualité citations"]'
+      y-min="0" y-max="10"
+      databox databox-title="Évolution des scores par évaluation"
+      databox-source="GEOeval — moyennes des notes de juges"></dsfr-data-chart>
+    <dsfr-data-a11y for="chart-evolution" source="stats-runs"
+      description="Évolution dans le temps des scores moyens de qualité de réponse et de citations, par évaluation."></dsfr-data-a11y>
+  </div>
+</div>
+{% endif %}
+
+<h2 class="fr-mt-4w">Classement détaillé</h2>
 <p class="fr-hint-text">Scores moyens (0–10) agrégés sur toutes les évaluations.</p>
 {% if leaderboard %}
 <div class="fr-table fr-table--bordered">
@@ -64,4 +109,7 @@
 {% else %}
 <p>Aucune évaluation enregistrée.</p>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+{% if leaderboard %}{% include "_dsfr_data_deps.html" %}{% endif %}
 {% endblock %}

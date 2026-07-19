@@ -176,6 +176,29 @@ def get_run_detail(session: Session, org_id: int, run_id: int) -> Optional[dict[
     )
 
 
+def org_stats_summary(session: Session, org_id: int) -> dict[str, Any]:
+    """Agrégats globaux d'une org pour les KPIs du tableau de bord (dsfr-data)."""
+    row = session.execute(
+        select(
+            func.count(func.distinct(RunRow.run_id)).label("n_runs"),
+            func.count(RunEvaluation.test_id).label("n_evals"),
+            func.avg(RunEvaluation.response_quality_score).label("avg_response"),
+            func.avg(RunEvaluation.citation_quality_score).label("avg_citation"),
+            func.count(func.distinct(RunRow.tested_model_id)).label("n_models"),
+        )
+        .select_from(RunRow)
+        .outerjoin(RunEvaluation, RunEvaluation.run_id == RunRow.run_id)
+        .where(RunRow.organization_id == org_id)
+    ).one()
+    return dict(
+        n_runs=int(row.n_runs),
+        n_evals=int(row.n_evals),
+        avg_response=_f(row.avg_response),
+        avg_citation=_f(row.avg_citation),
+        n_models=int(row.n_models),
+    )
+
+
 # -----------------------------
 # Modèles (catalogue global — pas de filtre par org)
 # -----------------------------
