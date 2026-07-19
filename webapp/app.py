@@ -273,6 +273,13 @@ def api_stats_questions(request: Request, ctx=Depends(public_org), db: Session =
     return JSONResponse(services.question_stats(db, org.id))
 
 
+@app.get("/o/{org_slug}/api/stats/evolution")
+def api_stats_evolution(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
+    """Scores par IA et par n° de passage (format long — courbes par IA)."""
+    org, _ = ctx
+    return JSONResponse(services.model_evolution(db, org.id))
+
+
 @app.get("/o/{org_slug}/api/stats/runs")
 def api_stats_runs(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     """Évaluations en ordre chronologique (axe X des courbes d'évolution)."""
