@@ -46,6 +46,7 @@ from webapp import accounts, auth_routes
 from webapp.auth import AuthMiddleware, CurrentUser
 from webapp.deps import (
     get_db,
+    public_org,
     require_org,
     require_platform_admin,
     require_role,
@@ -150,16 +151,15 @@ def _nav_fallback(db: Session, user: Optional[CurrentUser]) -> tuple:
 @app.get("/", response_class=HTMLResponse)
 def index(request: Request, db: Session = Depends(get_db)):
     user: Optional[CurrentUser] = getattr(request.state, "user", None)
-    if user is None:
-        return RedirectResponse("/login", status_code=302)
-
-    if user.is_platform_admin:
+    # Visiteur anonyme : landing publique listant les organisations (les
+    # tableaux de bord et évaluations sont consultables sans compte — ADR-087).
+    if user is None or user.is_platform_admin:
         orgs = tenancy.list_all_orgs(db)
     else:
         orgs = tenancy.list_orgs_for_user(db, user.id)
 
     # Un seul choix : redirige direct sur son dashboard.
-    if len(orgs) == 1:
+    if user is not None and len(orgs) == 1:
         return RedirectResponse(f"/o/{orgs[0].slug}/", status_code=302)
 
     return templates.TemplateResponse(
@@ -220,7 +220,7 @@ for _p in _LEGACY_PATHS:
 # Dashboard (par org)
 # =====================================================================
 @app.get("/o/{org_slug}/", response_class=HTMLResponse)
-def org_home(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+def org_home(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, role = ctx
     return render(
         request,
@@ -235,7 +235,7 @@ def org_home(request: Request, ctx=Depends(require_org), db: Session = Depends(g
 
 
 @app.get("/o/{org_slug}/dashboard", response_class=HTMLResponse)
-def dashboard(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+def dashboard(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, role = ctx
     return render(
         request,
@@ -254,20 +254,27 @@ def dashboard(request: Request, ctx=Depends(require_org), db: Session = Depends(
 # tableau de bord et évaluations (cookies de session envoyés par fetch).
 # =====================================================================
 @app.get("/o/{org_slug}/api/stats/summary")
-def api_stats_summary(ctx=Depends(require_org), db: Session = Depends(get_db)):
+def api_stats_summary(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, _ = ctx
     # Tableau à un élément : format attendu par dsfr-data-kpi (1er enregistrement).
     return JSONResponse([services.org_stats_summary(db, org.id)])
 
 
 @app.get("/o/{org_slug}/api/stats/leaderboard")
-def api_stats_leaderboard(ctx=Depends(require_org), db: Session = Depends(get_db)):
+def api_stats_leaderboard(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, _ = ctx
     return JSONResponse(services.leaderboard(db, org.id))
 
 
+@app.get("/o/{org_slug}/api/stats/questions")
+def api_stats_questions(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
+    """Scores moyens par question, pires d'abord (barres horizontales)."""
+    org, _ = ctx
+    return JSONResponse(services.question_stats(db, org.id))
+
+
 @app.get("/o/{org_slug}/api/stats/runs")
-def api_stats_runs(ctx=Depends(require_org), db: Session = Depends(get_db)):
+def api_stats_runs(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     """Évaluations en ordre chronologique (axe X des courbes d'évolution)."""
     org, _ = ctx
     rows = services.list_runs(db, org.id)
@@ -292,7 +299,7 @@ def api_stats_runs(ctx=Depends(require_org), db: Session = Depends(get_db)):
 # Runs (par org)
 # =====================================================================
 @app.get("/o/{org_slug}/runs", response_class=HTMLResponse)
-def runs(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+def runs(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, role = ctx
     return render(
         request, "runs.html", active="runs", org=org, role=role,
@@ -301,7 +308,7 @@ def runs(request: Request, ctx=Depends(require_org), db: Session = Depends(get_d
 
 
 @app.get("/o/{org_slug}/runs/{run_id}", response_class=HTMLResponse)
-def run_detail(run_id: int, request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
+def run_detail(run_id: int, request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     org, role = ctx
     detail = services.get_run_detail(db, org.id, run_id)
     if detail is None:

@@ -176,6 +176,42 @@ def get_run_detail(session: Session, org_id: int, run_id: int) -> Optional[dict[
     )
 
 
+def question_stats(session: Session, org_id: int) -> list[dict[str, Any]]:
+    """Scores moyens par question (toutes évaluations confondues), pires d'abord.
+
+    Alimente le graphique « quelles questions sont bien/mal notées » du
+    tableau de bord (dsfr-data, barres horizontales).
+    """
+    stmt = (
+        select(
+            Test.test_id,
+            Test.prompt,
+            func.count(RunEvaluation.judge_model_id).label("n_evals"),
+            func.avg(RunEvaluation.response_quality_score).label("avg_response"),
+            func.avg(RunEvaluation.citation_quality_score).label("avg_citation"),
+        )
+        .join(RunEvaluation, RunEvaluation.test_id == Test.test_id)
+        .join(RunRow, RunRow.run_id == RunEvaluation.run_id)
+        .where(Test.organization_id == org_id, RunRow.organization_id == org_id)
+        .group_by(Test.test_id, Test.prompt)
+        .order_by(func.avg(RunEvaluation.response_quality_score).asc().nullslast())
+    )
+    out = []
+    for r in session.execute(stmt).all():
+        excerpt = r.prompt if len(r.prompt) <= 60 else r.prompt[:57] + "…"
+        out.append(
+            dict(
+                test_id=r.test_id,
+                label=f"Q{r.test_id} · {excerpt}",
+                prompt=r.prompt,
+                n_evals=int(r.n_evals),
+                avg_response=_f(r.avg_response),
+                avg_citation=_f(r.avg_citation),
+            )
+        )
+    return out
+
+
 def org_stats_summary(session: Session, org_id: int) -> dict[str, Any]:
     """Agrégats globaux d'une org pour les KPIs du tableau de bord (dsfr-data)."""
     row = session.execute(

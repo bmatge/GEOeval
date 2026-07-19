@@ -14,7 +14,9 @@
       des réponses et la qualité des citations.
     </p>
     <a class="fr-btn fr-btn--lg" href="{{ url_prefix }}/dashboard">Voir le classement</a>
+    {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
     <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="{{ url_prefix }}/launch">Lancer une évaluation</a>
+    {% endif %}
   </div>
   <div class="fr-col-12 fr-col-md-4">
     <div class="fr-tile fr-tile--no-border" style="text-align:center">
