@@ -24,4 +24,7 @@ echo "[entrypoint] seed idempotente (seed.sql)..."
 psql -v ON_ERROR_STOP=1 -q -f seed.sql
 
 echo "[entrypoint] démarrage uvicorn sur 0.0.0.0:3000"
-exec uvicorn webapp.app:app --host 0.0.0.0 --port 3000
+# --proxy-headers : derrière Traefik, X-Forwarded-Proto=https doit être honoré
+# (cookies Secure + redirect_uri OIDC en https — ADR-086).
+exec uvicorn webapp.app:app --host 0.0.0.0 --port 3000 \
+    --proxy-headers --forwarded-allow-ips='*'

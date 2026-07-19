@@ -105,7 +105,7 @@
           <details>
             <summary class="fr-link">afficher le lien</summary>
             <input class="fr-input fr-mt-1w" readonly onclick="this.select()"
-                   value="{{ request.url.scheme }}://{{ request.url.netloc }}{{ url_prefix }}/accept-invite?token={{ inv.token }}">
+                   value="{{ request.url.scheme }}://{{ request.url.netloc }}/invitations/{{ inv.token }}">
           </details>
           <form method="post" action="{{ url_prefix }}/invitations/{{ inv.id }}/revoke" style="display:inline"
                 onsubmit="return confirm('Révoquer cette invitation ?');">

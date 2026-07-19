@@ -20,8 +20,19 @@ services:
       # Albert : fourni par les secrets partagés de la plateforme (SOPS, ADR-056)
       ALBERT_API_KEY: ${ALBERT_API_KEY:-}
       ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
-      # Auth (ADR-077, PR#12) : en prod, le gate injecte X-Gate-*. En dev
-      # local via docker-compose, DEV_FAKE_EMAIL simule un user connu.
+      # Auth applicative (ADR-086) : sessions + comptes locaux, OIDC opt-in.
+      GEOEVAL_SESSION_SECRET: ${GEOEVAL_SESSION_SECRET:-}
+      GEOEVAL_COOKIE_SECURE: ${GEOEVAL_COOKIE_SECURE:-}
+      GEOEVAL_ADMIN_EMAILS: ${GEOEVAL_ADMIN_EMAILS:-}
+      AUTH_PROXY_ENABLED: ${AUTH_PROXY_ENABLED:-}
+      OIDC_ENABLED: ${OIDC_ENABLED:-}
+      OIDC_ISSUER: ${OIDC_ISSUER:-}
+      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+      OIDC_SCOPES: ${OIDC_SCOPES:-}
+      OIDC_PROVIDER_LABEL: ${OIDC_PROVIDER_LABEL:-}
+      OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+      # Dev local uniquement — ne JAMAIS poser en prod (bypass de l'auth).
       DEV_FAKE_EMAIL: ${DEV_FAKE_EMAIL:-}
       DEV_FAKE_GROUPS: ${DEV_FAKE_GROUPS:-}
       # Fernet BYOK (ADR-078, PR#14) — voir .env.example pour la génération.

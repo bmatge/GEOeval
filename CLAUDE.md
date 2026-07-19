@@ -12,9 +12,11 @@ UI web FastAPI + DSFR, runs en tâche de fond + planification intégrée.
 - Langage : Python 3.12, type hints
 - Framework : FastAPI + Jinja2 (DSFR 1.13), SQLAlchemy 2 (psycopg2), uvicorn
 - Infra : PostgreSQL 16, Docker (contrat spawn VibeLab : web `:3000` + db interne),
-  déployé sur https://geoeval.lab.miweb.run (magic-link, `AUTH=link` sticky)
+  déployé sur https://geoeval.lab.miweb.run (`AUTH=public` — l'app gère elle-même
+  l'authentification : comptes locaux + SSO OIDC optionnel, ADR-086)
 - Dépendances critiques : `openai` (aussi pour Albert / endpoints compatibles), `mistralai`
-  (v2 — import via fallback `mistralai.client`), `google-genai`
+  (v2 — import via fallback `mistralai.client`), `google-genai` ; auth : `bcrypt`,
+  `authlib`, `itsdangerous`
 
 ## 3. Comment lancer
 
@@ -70,7 +72,10 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - Installer une lib non listée dans `requirements.txt` sans en parler
 - Toucher aux secrets : `.env` local, `/opt/apps/geoeval/.env` sur le VPS (diagnostic par
   noms de variables uniquement, jamais afficher les valeurs)
-- Relancer `spawn up geoeval --auth …` avec un autre mode : `AUTH=link` est voulu et sticky
+- Relancer `spawn up geoeval --auth …` avec un autre mode : `AUTH=public` est voulu et
+  sticky depuis ADR-086 (l'app porte sa propre auth — remettre un gate devant créerait
+  un double login)
+- Poser `DEV_FAKE_EMAIL` en prod (bypass complet de l'auth applicative)
 
 ## 8. Références externes
 
