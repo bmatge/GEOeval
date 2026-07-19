@@ -7,7 +7,7 @@
 {# --- Sources de données (API JSON org-scopée, cf. /api/stats/*) --- #}
 <dsfr-data-source id="stats-summary" url="{{ url_prefix }}/api/stats/summary"></dsfr-data-source>
 <dsfr-data-source id="stats-leaderboard" url="{{ url_prefix }}/api/stats/leaderboard"></dsfr-data-source>
-<dsfr-data-source id="stats-runs" url="{{ url_prefix }}/api/stats/runs"></dsfr-data-source>
+<dsfr-data-source id="stats-questions" url="{{ url_prefix }}/api/stats/questions"></dsfr-data-source>
 
 {# --- KPIs --- #}
 <dsfr-data-kpi-group cols="4" class="fr-mt-2w">
@@ -36,14 +36,28 @@
       max-items="5" selected-palette="sequentialDescending"></dsfr-data-podium>
   </div>
   <div class="fr-col-12 fr-col-md-7">
-    <dsfr-data-chart id="chart-evolution" source="stats-runs" type="line"
-      label-field="label" value-field="avg_response" value-field-2="avg_citation"
+    <dsfr-data-chart id="chart-models" source="stats-leaderboard" type="bar"
+      label-field="model_version" value-fields="avg_response,avg_citation"
       name='["Qualité réponse","Qualité citations"]'
-      y-min="0" y-max="10"
-      databox databox-title="Évolution des scores par évaluation"
+      y-min="0" y-max="10" unit-tooltip="/10"
+      databox databox-title="Scores moyens par IA"
       databox-source="GEOeval — moyennes des notes de juges"></dsfr-data-chart>
-    <dsfr-data-a11y for="chart-evolution" source="stats-runs"
-      description="Évolution dans le temps des scores moyens de qualité de réponse et de citations, par évaluation."></dsfr-data-a11y>
+    <dsfr-data-a11y for="chart-models" source="stats-leaderboard"
+      description="Scores moyens de qualité de réponse et de citations pour chaque IA testée."></dsfr-data-a11y>
+  </div>
+</div>
+
+{# --- Scores par question (pires d'abord) --- #}
+<div class="fr-grid-row fr-mt-3w">
+  <div class="fr-col-12">
+    <dsfr-data-chart id="chart-questions" source="stats-questions" type="bar" horizontal
+      label-field="label" value-fields="avg_response,avg_citation"
+      name='["Qualité réponse","Qualité citations"]'
+      y-min="0" y-max="10" unit-tooltip="/10"
+      databox databox-title="Scores par question (les moins bien notées d'abord)"
+      databox-source="GEOeval — moyennes des notes de juges, toutes IA confondues"></dsfr-data-chart>
+    <dsfr-data-a11y for="chart-questions" source="stats-questions"
+      description="Scores moyens par question, toutes IA confondues, triés des questions les moins bien notées aux mieux notées."></dsfr-data-a11y>
   </div>
 </div>
 {% endif %}

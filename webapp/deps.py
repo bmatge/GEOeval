@@ -64,6 +64,29 @@ def require_org(
     return org, effective_role
 
 
+def public_org(
+    org_slug: str = Path(...),
+    request: Request = None,
+    db: Session = Depends(get_db),
+):
+    """Résout l'org SANS exiger de connexion (pages publiques en lecture — ADR-087).
+
+    Renvoie (org, role) : role est celui du user connecté s'il y en a un
+    (viewer/editor/org_admin, org_admin implicite pour un platform_admin),
+    None pour un visiteur anonyme. 404 si l'org n'existe pas.
+    """
+    org = get_org_by_slug(db, org_slug)
+    if org is None:
+        raise HTTPException(status_code=404, detail="Organisation introuvable.")
+    user: Optional[CurrentUser] = getattr(request.state, "user", None)
+    role = None
+    if user is not None:
+        role = user.memberships.get(org.id) or (
+            "org_admin" if user.is_platform_admin else None
+        )
+    return org, role
+
+
 def require_role(min_role: str):
     """Vérifie que le rôle effectif dans l'org est ≥ min_role."""
 

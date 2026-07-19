@@ -4,16 +4,24 @@
 <h1>Évaluations</h1>
 {% if runs %}
 <dsfr-data-source id="stats-runs" url="{{ url_prefix }}/api/stats/runs"></dsfr-data-source>
-<div class="fr-grid-row fr-mb-3w">
-  <div class="fr-col-12 fr-col-md-10">
-    <dsfr-data-chart id="chart-evolution" source="stats-runs" type="line"
-      label-field="label" value-field="avg_response" value-field-2="avg_citation"
-      name='["Qualité réponse","Qualité citations"]'
-      y-min="0" y-max="10"
-      databox databox-title="Évolution des scores par évaluation"
+<div class="fr-grid-row fr-grid-row--gutters fr-mb-3w">
+  <div class="fr-col-12 fr-col-md-6">
+    <dsfr-data-chart id="chart-evol-reponse" source="stats-runs" type="line"
+      label-field="label" value-field="avg_response" series-field="model"
+      y-min="0" y-max="10" unit-tooltip="/10" selected-palette="categorical"
+      databox databox-title="Qualité des réponses — évolution par IA"
       databox-source="GEOeval — moyennes des notes de juges"></dsfr-data-chart>
-    <dsfr-data-a11y for="chart-evolution" source="stats-runs"
-      description="Évolution dans le temps des scores moyens de qualité de réponse et de citations, par évaluation."></dsfr-data-a11y>
+    <dsfr-data-a11y for="chart-evol-reponse" source="stats-runs"
+      description="Évolution dans le temps du score moyen de qualité de réponse, une courbe par IA testée."></dsfr-data-a11y>
+  </div>
+  <div class="fr-col-12 fr-col-md-6">
+    <dsfr-data-chart id="chart-evol-citations" source="stats-runs" type="line"
+      label-field="label" value-field="avg_citation" series-field="model"
+      y-min="0" y-max="10" unit-tooltip="/10" selected-palette="categorical"
+      databox databox-title="Qualité des citations — évolution par IA"
+      databox-source="GEOeval — moyennes des notes de juges"></dsfr-data-chart>
+    <dsfr-data-a11y for="chart-evol-citations" source="stats-runs"
+      description="Évolution dans le temps du score moyen de qualité des citations, une courbe par IA testée."></dsfr-data-a11y>
   </div>
 </div>
 <div class="fr-table fr-table--bordered">

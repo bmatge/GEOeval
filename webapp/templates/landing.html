@@ -2,7 +2,13 @@
 {% block title %}Choisir une organisation{% endblock %}
 {% block content %}
 <h1>Bienvenue sur GEOeval</h1>
+{% if user %}
 <p class="fr-text--lead">Choisissez une organisation pour continuer.</p>
+{% else %}
+<p class="fr-text--lead">Suivi de la visibilité de l'information publique dans les IA.
+Les tableaux de bord et évaluations sont consultables librement —
+<a class="fr-link" href="/login">connectez-vous</a> pour lancer ou configurer des évaluations.</p>
+{% endif %}
 
 {% if orgs %}
 <div class="fr-grid-row fr-grid-row--gutters fr-mt-4w">
