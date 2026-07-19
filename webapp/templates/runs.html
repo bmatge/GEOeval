@@ -3,6 +3,19 @@
 {% block content %}
 <h1>Évaluations</h1>
 {% if runs %}
+<dsfr-data-source id="stats-runs" url="{{ url_prefix }}/api/stats/runs"></dsfr-data-source>
+<div class="fr-grid-row fr-mb-3w">
+  <div class="fr-col-12 fr-col-md-10">
+    <dsfr-data-chart id="chart-evolution" source="stats-runs" type="line"
+      label-field="label" value-field="avg_response" value-field-2="avg_citation"
+      name='["Qualité réponse","Qualité citations"]'
+      y-min="0" y-max="10"
+      databox databox-title="Évolution des scores par évaluation"
+      databox-source="GEOeval — moyennes des notes de juges"></dsfr-data-chart>
+    <dsfr-data-a11y for="chart-evolution" source="stats-runs"
+      description="Évolution dans le temps des scores moyens de qualité de réponse et de citations, par évaluation."></dsfr-data-a11y>
+  </div>
+</div>
 <div class="fr-table fr-table--bordered">
   <table>
     <thead>
@@ -31,4 +44,7 @@
 <div class="fr-callout"><p class="fr-callout__text">Aucune évaluation.
   <a class="fr-link" href="{{ url_prefix }}/launch">Lancer la première →</a></p></div>
 {% endif %}
+{% endblock %}
+{% block scripts %}
+{% if runs %}{% include "_dsfr_data_deps.html" %}{% endif %}
 {% endblock %}
