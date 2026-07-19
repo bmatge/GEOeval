@@ -37,7 +37,7 @@
   <div class="fr-select-group">
     <label class="fr-label" for="response_quality_prompt_id">Grille de notation — qualité de la réponse</label>
     <select class="fr-select" id="response_quality_prompt_id" name="response_quality_prompt_id">
-      <option value="">— aucune —</option>
+      <option value="">— grille par défaut —</option>
       {% for p in prompts %}
       <option value="{{ p.prompt_id }}" {% if test and test.response_quality_prompt_id == p.prompt_id %}selected{% endif %}>
         {{ p.prompt_id }} · {{ p.prompt_name }} ({{ p.prompt_type_label }})
@@ -49,7 +49,7 @@
   <div class="fr-select-group">
     <label class="fr-label" for="citation_quality_prompt_id">Grille de notation — qualité des citations</label>
     <select class="fr-select" id="citation_quality_prompt_id" name="citation_quality_prompt_id">
-      <option value="">— aucune —</option>
+      <option value="">— grille par défaut —</option>
       {% for p in prompts %}
       <option value="{{ p.prompt_id }}" {% if test and test.citation_quality_prompt_id == p.prompt_id %}selected{% endif %}>
         {{ p.prompt_id }} · {{ p.prompt_name }} ({{ p.prompt_type_label }})

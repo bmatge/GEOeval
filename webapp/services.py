@@ -385,6 +385,30 @@ def get_test(session: Session, org_id: int, test_id: int) -> Optional[Test]:
     return test
 
 
+# prompt_types de la seed : 1 = response_quality, 2 = citation_quality.
+_PROMPT_TYPE_RESPONSE = 1
+_PROMPT_TYPE_CITATION = 2
+
+
+def default_prompt_ids(session: Session) -> tuple[Optional[int], Optional[int]]:
+    """Grilles de notation par défaut : première grille de chaque type.
+
+    L'évaluation exige les deux grilles (INNER JOIN dans evaluate_run) — une
+    question sans grille passerait la phase RUN puis ferait planter le job.
+    """
+    resp = session.execute(
+        select(func.min(EvaluationPrompt.prompt_id)).where(
+            EvaluationPrompt.prompt_type_id == _PROMPT_TYPE_RESPONSE
+        )
+    ).scalar()
+    cit = session.execute(
+        select(func.min(EvaluationPrompt.prompt_id)).where(
+            EvaluationPrompt.prompt_type_id == _PROMPT_TYPE_CITATION
+        )
+    ).scalar()
+    return resp, cit
+
+
 def create_test(
     session: Session,
     org_id: int,
@@ -395,13 +419,14 @@ def create_test(
     response_quality_prompt_id: Optional[int],
     citation_quality_prompt_id: Optional[int],
 ) -> Test:
+    default_resp, default_cit = default_prompt_ids(session)
     test = Test(
         organization_id=org_id,
         perimeter_id=perimeter_id,
         prompt=prompt,
         expected_answer=expected_answer or None,
-        response_quality_prompt_id=response_quality_prompt_id,
-        citation_quality_prompt_id=citation_quality_prompt_id,
+        response_quality_prompt_id=response_quality_prompt_id or default_resp,
+        citation_quality_prompt_id=citation_quality_prompt_id or default_cit,
         validity_start_at=datetime.now(timezone.utc),
         validity_end_at=None,
     )
@@ -423,10 +448,11 @@ def update_test(
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
+    default_resp, default_cit = default_prompt_ids(session)
     test.prompt = prompt
     test.expected_answer = expected_answer or None
-    test.response_quality_prompt_id = response_quality_prompt_id
-    test.citation_quality_prompt_id = citation_quality_prompt_id
+    test.response_quality_prompt_id = response_quality_prompt_id or default_resp
+    test.citation_quality_prompt_id = citation_quality_prompt_id or default_cit
     session.commit()
     return test
 
