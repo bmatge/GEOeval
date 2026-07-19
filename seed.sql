@@ -10,13 +10,14 @@
 -- =====================================================================
 
 -- ---------------------------------------------------------------------
--- 0) Organisation seed (ADR-077) — les tests/runs préexistants y sont
---    rattachés par migrations.sql (backfill). Le catalogue de modèles et
---    les prompts d'évaluation restent globaux (non rattachés à une org).
+-- 0) Organisations : AUCUNE seed. Une installation vierge démarre sans
+--    org — elles se créent via l'UI (/admin/organizations, admin bootstrappé
+--    par GEOEVAL_ADMIN_EMAILS). L'ancienne org seed « bertrand » (ADR-077 §4,
+--    utile au backfill v1→v2) ressuscitait à chaque boot après sa
+--    suppression volontaire (session 2026-07-20) — retirée.
+--    Seuls le catalogue de modèles et les prompts d'évaluation (globaux)
+--    sont seedés ici.
 -- ---------------------------------------------------------------------
-INSERT INTO organizations (id, name, slug)
-VALUES (1, 'Bertrand', 'bertrand')
-ON CONFLICT (id) DO NOTHING;
 
 -- ---------------------------------------------------------------------
 -- 1) Catalogue des modèles
@@ -89,37 +90,9 @@ INSERT INTO evaluation_prompts (prompt_id, prompt_type_id, prompt_name, prompt_t
 ON CONFLICT (prompt_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------
--- 4) Tests (questions) — exemple
---    - expected_answer NON NULL  => le test est "prêt" (ready) et sera évalué.
---    - Plusieurs variantes acceptées peuvent être séparées par le token ' OU '
---      (evaluate.py garde la meilleure note parmi les variantes).
---    - validity_end_at NULL       => test "actif" (active_only dans load_tests).
+-- 4) Tests (questions) : AUCUNE seed — les questions se créent via l'UI
+--    (elles appartiennent à une org, qui n'existe plus en seed).
 -- ---------------------------------------------------------------------
--- Le périmètre « Général » de l'org 1 est créé par migrations.sql (rejouées
--- avant seed.sql par docker-entrypoint.sh). On le résout par sous-requête pour
--- rester robuste à son id auto-incrémenté.
-INSERT INTO tests
-    (test_id, organization_id, perimeter_id, prompt, expected_answer,
-     response_quality_prompt_id, citation_quality_prompt_id,
-     validity_start_at, validity_end_at)
-VALUES
-    (
-        1, 1,
-        (SELECT id FROM perimeters WHERE organization_id = 1 AND slug = 'general'),
-        'Quelle est la capitale de l''Australie ?',
-        'Canberra',
-        1, 2,
-        now(), NULL
-    ),
-    (
-        2, 1,
-        (SELECT id FROM perimeters WHERE organization_id = 1 AND slug = 'general'),
-        'En quelle année a été signé le traité de Rome instituant la CEE ?',
-        '1957 OU en 1957 OU le 25 mars 1957',
-        1, 2,
-        now(), NULL
-    )
-ON CONFLICT (test_id) DO NOTHING;
 
 -- ---------------------------------------------------------------------
 -- 5) Resynchronisation des séquences d'auto-incrément

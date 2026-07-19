@@ -19,9 +19,14 @@ ALTER TABLE tests           ADD COLUMN IF NOT EXISTS organization_id BIGINT;
 ALTER TABLE runs            ADD COLUMN IF NOT EXISTS organization_id BIGINT;
 ALTER TABLE scheduled_runs  ADD COLUMN IF NOT EXISTS organization_id BIGINT;
 
--- Org seed (indispensable pour le backfill qui suit).
+-- Org seed : uniquement s'il reste des données v1 orphelines à rattacher
+-- (backfill v1→v2). Sans cette garde, l'org « bertrand » ressuscitait à
+-- chaque boot après sa suppression volontaire (session 2026-07-20).
 INSERT INTO organizations (id, name, slug)
-VALUES (1, 'Bertrand', 'bertrand')
+SELECT 1, 'Bertrand', 'bertrand'
+WHERE EXISTS (SELECT 1 FROM tests          WHERE organization_id IS NULL)
+   OR EXISTS (SELECT 1 FROM runs           WHERE organization_id IS NULL)
+   OR EXISTS (SELECT 1 FROM scheduled_runs WHERE organization_id IS NULL)
 ON CONFLICT (id) DO NOTHING;
 
 -- Backfill : toutes les entités préexistantes vont dans l'org seed.
@@ -130,11 +135,20 @@ ALTER TABLE tests           ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
 ALTER TABLE scheduled_runs  ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
 ALTER TABLE runs            ADD COLUMN IF NOT EXISTS perimeter_id BIGINT;
 
+-- Périmètre « Général » : uniquement pour les orgs ayant des données
+-- orphelines à rattacher (backfill PR#18) — pas pour toute org sans
+-- périmètre, sinon chaque nouvelle org récolte un « general » vide à
+-- chaque boot (pollution constatée sur les orgs de démo, 2026-07-20).
 INSERT INTO perimeters (organization_id, name, slug, description)
 SELECT o.id, 'Général', 'general', 'Périmètre par défaut créé automatiquement.'
 FROM organizations o
 WHERE NOT EXISTS (
     SELECT 1 FROM perimeters p WHERE p.organization_id = o.id AND p.slug = 'general'
+)
+AND (
+    EXISTS (SELECT 1 FROM tests t          WHERE t.organization_id  = o.id AND t.perimeter_id  IS NULL)
+ OR EXISTS (SELECT 1 FROM runs r           WHERE r.organization_id  = o.id AND r.perimeter_id  IS NULL)
+ OR EXISTS (SELECT 1 FROM scheduled_runs s WHERE s.organization_id  = o.id AND s.perimeter_id IS NULL)
 );
 
 UPDATE tests t

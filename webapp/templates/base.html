@@ -76,16 +76,16 @@
             <a class="fr-nav__link" href="{{ url_prefix }}/dashboard"
                {% if active == 'dashboard' %}aria-current="page"{% endif %}>Tableau de bord</a>
           </li>
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="{{ url_prefix }}/runs"
+               {% if active == 'runs' %}aria-current="page"{% endif %}>Évaluations</a>
+          </li>
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
           <li class="fr-nav__item">
             <a class="fr-nav__link" href="{{ url_prefix }}/launch"
                {% if active == 'launch' %}aria-current="page"{% endif %}>Lancer une évaluation</a>
           </li>
           {% endif %}
-          <li class="fr-nav__item">
-            <a class="fr-nav__link" href="{{ url_prefix }}/runs"
-               {% if active == 'runs' %}aria-current="page"{% endif %}>Évaluations</a>
-          </li>
 
           {# --- Configurer (dropdown, editor+) --- #}
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
