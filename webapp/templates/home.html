@@ -13,6 +13,11 @@
       indépendants (autres IA, humains, ou les deux). Objectif : suivre dans le temps la fiabilité
       des réponses et la qualité des citations.
     </p>
+    <p class="fr-badge fr-badge--info fr-mb-2w">Prototype — POC</p>
+    <p class="fr-text--sm fr-mb-3w">
+      GEOeval est un <strong>prototype d'exploration (POC)</strong> et non un outil réel de
+      production : les chiffres et classements affichés n'ont qu'une valeur de démonstration.
+    </p>
     <a class="fr-btn fr-btn--lg" href="{{ url_prefix }}/dashboard">Voir le classement</a>
     {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
     <a class="fr-btn fr-btn--secondary fr-btn--lg fr-ml-2w" href="{{ url_prefix }}/launch">Lancer une évaluation</a>
