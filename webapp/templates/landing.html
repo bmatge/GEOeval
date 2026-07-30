@@ -2,6 +2,14 @@
 {% block title %}Choisir une organisation{% endblock %}
 {% block content %}
 <h1>Bienvenue sur GEOeval</h1>
+<div class="fr-notice fr-notice--info fr-mb-3w">
+  <div class="fr-container">
+    <div class="fr-notice__body">
+      <p class="fr-notice__title">GEOeval est un prototype (POC) — ce n'est pas un outil de
+      production : les données présentées servent uniquement à la démonstration.</p>
+    </div>
+  </div>
+</div>
 {% if user %}
 <p class="fr-text--lead">Choisissez une organisation pour continuer.</p>
 {% else %}

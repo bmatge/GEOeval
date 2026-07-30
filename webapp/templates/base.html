@@ -27,7 +27,8 @@
           </div>
           <div class="fr-header__service">
             <a href="{{ (url_prefix ~ '/') if org else '/' }}" title="Accueil — GEOeval">
-              <p class="fr-header__service-title">GEOeval{% if org %} · {{ org.name }}{% endif %}</p>
+              <p class="fr-header__service-title">GEOeval{% if org %} · {{ org.name }}{% endif %}
+                <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">Prototype</span></p>
             </a>
             <p class="fr-header__service-tagline">Suivre la visibilité de l'information dans les IA</p>
           </div>

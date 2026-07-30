@@ -12,8 +12,9 @@ UI web FastAPI + DSFR, runs en tâche de fond + planification intégrée.
 - Langage : Python 3.12, type hints
 - Framework : FastAPI + Jinja2 (DSFR 1.13), SQLAlchemy 2 (psycopg2), uvicorn
 - Infra : PostgreSQL 16, Docker (contrat spawn VibeLab : web `:3000` + db interne),
-  déployé sur https://geoeval.lab.miweb.run (`AUTH=public` — l'app gère elle-même
-  l'authentification : comptes locaux + SSO OIDC optionnel, ADR-086)
+  déployé sur https://geoeval.lab.miweb.run (`AUTH=link` depuis le 2026-07-30 — gate
+  magic-link devant, PUIS auth applicative : comptes locaux + SSO OIDC optionnel,
+  ADR-086 amendée)
 - Dépendances critiques : `openai` (aussi pour Albert / endpoints compatibles), `mistralai`
   (v2 — import via fallback `mistralai.client`), `google-genai` ; auth : `bcrypt`,
   `authlib`, `itsdangerous`
@@ -72,9 +73,10 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - Installer une lib non listée dans `requirements.txt` sans en parler
 - Toucher aux secrets : `.env` local, `/opt/apps/geoeval/.env` sur le VPS (diagnostic par
   noms de variables uniquement, jamais afficher les valeurs)
-- Relancer `spawn up geoeval --auth …` avec un autre mode : `AUTH=public` est voulu et
-  sticky depuis ADR-086 (l'app porte sa propre auth — remettre un gate devant créerait
-  un double login)
+- Relancer `spawn up geoeval --auth …` avec un autre mode : `AUTH=link` est voulu depuis
+  le 2026-07-30 (gate magic-link + auth applicative derrière — double login assumé).
+  ⚠️ Le SSO applicatif dépend de l'application Authentik `geoeval-sso` (provider
+  `geoeval-oidc`) : le slug `geoeval` appartient à `app-auth.py` (bypass gate ADR-062)
 - Poser `DEV_FAKE_EMAIL` en prod (bypass complet de l'auth applicative)
 
 ## 8. Références externes
