@@ -6,8 +6,8 @@ from types import SimpleNamespace
 
 import pytest
 
-import llm_clients
-from llm_clients import (
+from geoeval.core import llm_clients
+from geoeval.core.llm_clients import (
     LLMCallError,
     _non_retryable_reason,
     call_with_retry,

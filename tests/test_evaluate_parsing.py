@@ -5,7 +5,7 @@ from decimal import Decimal
 
 import pytest
 
-from evaluate import (
+from geoeval.core.evaluate import (
     CONFORMITY_LABELS,
     JudgeResult,
     build_prompt_json_guardrails,

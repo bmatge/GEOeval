@@ -3,7 +3,7 @@
 # dossier de déploiement (/opt/apps/<nom>/.env sur le VPS), jamais commité.
 #
 # Pour le dev local (Postgres seul sur localhost:5432) :
-#   docker compose -f docker-compose.local.yml up -d
+#   docker compose -f deploy/docker-compose.local.yml up -d
 
 services:
   web:

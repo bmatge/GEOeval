@@ -1,6 +1,6 @@
 """Tests d'intégration : schéma PostgreSQL + pages principales (TestClient).
 
-Reproduit le chemin de docker-entrypoint.sh (create_all → migrations → seed) puis
+Reproduit le chemin de deploy/docker-entrypoint.sh (create_all → migrations → seed) puis
 vérifie que les pages touchées par chaque PR répondent. Marqueur `integration` :
 sauté sans DATABASE_URL.
 """
@@ -15,7 +15,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_schema_complet_apres_migrations(db_schema):
-    from models import Base
+    from geoeval.db.models import Base
 
     tables = set(inspect(db_schema).get_table_names())
     missing = set(Base.metadata.tables) - tables
@@ -26,8 +26,8 @@ def test_migrations_et_seed_idempotentes(db_schema):
     """Rejouer migrations.sql + seed.sql ne doit rien casser (contrat du conteneur)."""
     from tests.conftest import ROOT, _run_sql_file
 
-    _run_sql_file(ROOT / "migrations.sql")
-    _run_sql_file(ROOT / "seed.sql")
+    _run_sql_file(ROOT / "geoeval" / "db" / "migrations.sql")
+    _run_sql_file(ROOT / "geoeval" / "db" / "seed.sql")
 
 
 def test_seed_catalogue_modeles(db_session):

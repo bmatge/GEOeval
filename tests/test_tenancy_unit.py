@@ -1,9 +1,9 @@
-"""Règles de rôles et validation de slug (webapp/tenancy.py), sans base."""
+"""Règles de rôles et validation de slug (geoeval/web/tenancy.py), sans base."""
 from __future__ import annotations
 
 import pytest
 
-from webapp.tenancy import ROLES, create_org, role_at_least
+from geoeval.web.tenancy import ROLES, create_org, role_at_least
 
 
 def test_hierarchie_des_roles():

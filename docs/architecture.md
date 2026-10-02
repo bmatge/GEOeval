@@ -10,7 +10,7 @@ chaque fournisseur LLM.
 
 Un seul processus uvicorn porte tout : les routes HTML, le worker de runs (thread) et le
 planificateur (thread). Les règles métier sont réparties entre la couche services et les
-contrôleurs de `webapp/app.py`.
+contrôleurs de `geoeval/web/app.py`.
 
 ```mermaid
 flowchart LR
@@ -22,7 +22,7 @@ flowchart LR
     GATE["Traefik + gate magic-link<br/>(AUTH=link)"]
     subgraph WEB["Conteneur geoeval-web — 1 processus uvicorn"]
       MW["AuthMiddleware<br/>session cookie · headers proxy · DEV_FAKE_EMAIL"]
-      APP["webapp/app.py<br/>83 routes : 77 HTML + 6 JSON<br/>+ règles budget et allowlist dans les contrôleurs"]
+      APP["geoeval/web/app.py<br/>83 routes : 77 HTML + 6 JSON<br/>+ règles budget et allowlist dans les contrôleurs"]
       SVC["services · tenancy · budget · pricing<br/>org_models · credentials · audit"]
       JOBS["JobManager<br/>thread unique · file et logs en mémoire"]
       SCHED["Scheduler<br/>thread · poll 30 s"]
@@ -84,8 +84,8 @@ flowchart LR
     ING["Ingress / reverse proxy"]
     subgraph WEB["Déploiement web — N réplicas"]
       AUTH["Authentification<br/>UI : session ProConnect (OIDC)<br/>API : jeton porteur d'organisation"]
-      API["webapp/api/v1<br/>JSON · Pydantic · OpenAPI · pagination · erreurs normalisées"]
-      UI["webapp/ui<br/>routers HTML DSFR minces"]
+      API["geoeval/web/api/v1<br/>JSON · Pydantic · OpenAPI · pagination · erreurs normalisées"]
+      UI["geoeval/web/ui<br/>routers HTML DSFR minces"]
       SVC["Couche services = toutes les règles<br/>RBAC · budget · allowlist modèles · ADR-076 · audit"]
       HZ["/healthz · /readyz · /metrics"]
     end
@@ -138,7 +138,7 @@ flowchart LR
   NEX -.->|"build CI/CD"| Nubo
 ```
 
-Principe API first : toute fonctionnalité existe d'abord dans `webapp/api/v1`. L'UI ne
+Principe API first : toute fonctionnalité existe d'abord dans `geoeval/web/api/v1`. L'UI ne
 peut rien faire que l'API ne permette pas. L'UI n'appelle pas l'API en HTTP : les deux
 partagent la couche services, qui est le seul endroit où vivent les règles.
 
@@ -193,7 +193,7 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 
 | Règle | Source | Aujourd'hui | Cible API first |
 |---|---|---|---|
-| RBAC trois rôles + admin plateforme | ADR-077 | `webapp/deps.py` (dépendances FastAPI) | Dépendances partagées API et UI, rôle porté par le jeton ou la session |
+| RBAC trois rôles + admin plateforme | ADR-077 | `geoeval/web/deps.py` (dépendances FastAPI) | Dépendances partagées API et UI, rôle porté par le jeton ou la session |
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
 | Plafond budget mois et jour | ADR-080 | **`app.py` lancer et planifier (contrôleur)** | Service `launch_run()` unique, appelé par API et UI |
 | Liste blanche des modèles par org | EPIC-001 | **`app.py` (contrôleur)** | Même service `launch_run()` |
@@ -201,8 +201,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |
 | Retry, fail-fast, quota dur | — | `llm_clients.call_with_retry` | Inchangé |
 | Sortie JSON stricte des juges, score 0–10 | ADR-079 | `evaluate.parse_judge_output` | Inchangé |
-| Coût réel USD → EUR à l'ingestion | ADR-080 §6.3 | `webapp/usage.record` | Inchangé |
-| Journal d'audit | ADR-077 | `webapp/audit.record` depuis les contrôleurs | Appelé depuis les services |
+| Coût réel USD → EUR à l'ingestion | ADR-080 §6.3 | `geoeval/web/usage.record` | Inchangé |
+| Journal d'audit | ADR-077 | `geoeval/web/audit.record` depuis les contrôleurs | Appelé depuis les services |
 | Sérialisation des runs (quotas API) | — | Thread unique | Concurrence bornée par fournisseur dans le worker |
 
 Les deux lignes en gras sont le point à corriger en premier dans le chantier 1.3 : tant

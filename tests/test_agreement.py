@@ -1,9 +1,9 @@
-"""Kappa de Cohen et Spearman (webapp/agreement.py) — calculs à la main."""
+"""Kappa de Cohen et Spearman (geoeval/web/agreement.py) — calculs à la main."""
 from __future__ import annotations
 
 import pytest
 
-from webapp.agreement import cohen_kappa, spearman_rho
+from geoeval.web.agreement import cohen_kappa, spearman_rho
 
 
 def test_kappa_accord_parfait():

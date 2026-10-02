@@ -37,16 +37,16 @@ incompatible avec Python ; c'est une question à poser à l'équipe Nubo avant l
 |---|----------|---------------------|
 | 1 | **Tests + CI** (pytest, ruff, GitHub Actions, build Docker) | Prérequis à tout refacto ; aucune couverture aujourd'hui |
 | 2 | **Worker hors du processus web** : jobs persistés en base, processus `worker` séparé, verrou `SELECT … FOR UPDATE SKIP LOCKED`, arrêt gracieux SIGTERM | File en mémoire + thread unique : jobs perdus au redémarrage, scheduler dupliqué dès 2 réplicas |
-| 3 | **Découpage API / UI de `webapp/app.py`** (2 176 lignes, 83 routes) : `webapp/api/v1` (JSON, Pydantic, OpenAPI) + `webapp/ui` (HTML minces), règles rapatriées dans les services, jetons d'organisation pour les clients machine | Lisibilité ; et surtout **API first** (§2.4) |
+| 3 | **Découpage API / UI de `geoeval/web/app.py`** (2 176 lignes, 83 routes) : `geoeval/web/api/v1` (JSON, Pydantic, OpenAPI) + `geoeval/web/ui` (HTML minces), règles rapatriées dans les services, jetons d'organisation pour les clients machine | Lisibilité ; et surtout **API first** (§2.4) |
 | 4 | **Alembic** à la place de `migrations.sql`, exécuté **hors démarrage** (Job / étape pipeline) | `init_db + migrations + seed` à chaque boot = course entre réplicas |
 | 5 | **Observabilité** : logs JSON structurés sur stdout (request_id, job_id), `/healthz`, `/readyz`, export métriques | Inexistant aujourd'hui ; exigé par toute plateforme d'exploitation |
-| 6 | **DSFR, Chart.js et dsfr-chart vendorisés** dans `webapp/static` | Chargés depuis un CDN public : incompatibles réseau fermé / CSP stricte |
+| 6 | **DSFR, Chart.js et dsfr-chart vendorisés** dans `geoeval/web/static` | Chargés depuis un CDN public : incompatibles réseau fermé / CSP stricte |
 
 ### 2.2 Lot 2 — spécifique Nubo
 
 | # | Chantier | Notes |
 |---|----------|-------|
-| 7 | **ProConnect** en remplacement de la double couche VibeLab (gate magic-link + comptes locaux) | Réutiliser `webapp/oidc.py` (générique). Spécificités : userinfo en JWT signé, claims `siret`, `usual_name`, `given_name`, `idp_id`, déconnexion via `end_session_endpoint`. Rattachement org possible sur `siret`. Conserver un compte local de secours. |
+| 7 | **ProConnect** en remplacement de la double couche VibeLab (gate magic-link + comptes locaux) | Réutiliser `geoeval/web/oidc.py` (générique). Spécificités : userinfo en JWT signé, claims `siret`, `usual_name`, `given_name`, `idp_id`, déconnexion via `end_session_endpoint`. Rattachement org possible sur `siret`. Conserver un compte local de secours. |
 | 8 | **Chaîne de livraison Nexus / Jenkins** | Image de base depuis le miroir, `PIP_INDEX_URL` Nexus, dépendances figées avec hashes, SBOM, Jenkinsfile lint → tests → build → push → déploiement |
 | 9 | **Secrets de plateforme** | `.env` → secrets Nubo ; procédure de rotation de `GEOEVAL_KEY_SECRET` (Fernet BYOK) |
 | 10 | **Manifests de déploiement** (web, worker, migration) | Même image pour les trois rôles |
@@ -59,7 +59,7 @@ est un framework d'API, et la couche services est déjà séparée du rendu.
 
 Règles adoptées :
 
-1. **Toute fonctionnalité existe d'abord dans `webapp/api/v1`** (schémas Pydantic en entrée
+1. **Toute fonctionnalité existe d'abord dans `geoeval/web/api/v1`** (schémas Pydantic en entrée
    et sortie, OpenAPI exposé et versionné, pagination, format d'erreur unique).
 2. **L'UI ne peut rien faire que l'API ne permette pas**, mais **n'appelle pas l'API en
    HTTP** : API et UI partagent la couche services (pas de double auth ni de latence).
@@ -88,6 +88,29 @@ cloud souverain, l'egress est filtré. Avant d'investir dans le lot 2 :
 Albert (Etalab) reste le juge souverain appelé en direct. La réponse à cette question pèse
 plus que tout choix de framework.
 
+### 2.5 Organisation du dépôt (amendement 2026-10-02)
+
+La racine du POC mélangeait modules métier, scripts, SQL et fichiers de déploiement.
+Arbitrage : **package `geoeval/` hiérarchisé**, déplacement en PR dédiée juste après la
+PR tests + CI, CLI historiques conservés dans `scripts/legacy/`.
+
+```
+geoeval/            package applicatif (une seule racine d'imports)
+  core/             run, evaluate, load, llm_clients       — cœur benchmark, sans FastAPI
+  db/               session, models, migrations.sql, seed.sql
+  web/              app, services, auth, tenancy, …, templates/   → futur api/ + ui/
+  worker/           jobs, scheduler                         → futur processus worker (lot 1.2)
+scripts/            init_db, set_password, run_web ; legacy/ (main, mainUnitaire)
+deploy/             docker-entrypoint.sh, docker-compose.local.yml
+docs/  tests/       documentation (ADR, schémas) et tests
+Dockerfile, docker-compose.yml   restent à la racine : contrat spawn VibeLab (ADR-038)
+```
+
+Écartés : nettoyage léger (la racine reste un fourre-tout de modules) et layout
+`src/geoeval` installable (étape d'installation en plus pour un gain faible sur une
+application non publiée). Les scripts s'exécutent depuis la racine par
+`python -m scripts.<nom>`, ce qui évite tout bricolage de `sys.path`.
+
 ## 3. Alternatives écartées
 
 - **Réécriture Django** : admin, auth et migrations offerts, mais tout cela existe déjà dans
@@ -106,7 +129,7 @@ plus que tout choix de framework.
 - Chaque chantier tient en une PR et **ne touche jamais à l'historique des runs** (ADR-076).
 - `CLAUDE.md` est mis à jour au fil des lots (il annonce 7 tables, il y en a 23).
 - Cette ADR est amendée quand les réponses Nubo (socle imposé, egress) sont connues.
-- Amendement 2026-10-02 : principe API first (§2.3) et schémas `docs/architecture.md`.
+- Amendement 2026-10-02 : principe API first (§2.3), schémas `docs/architecture.md`, organisation du dépôt (§2.5).
 
 ## 5. Première PR (lot 1, chantier 1)
 
