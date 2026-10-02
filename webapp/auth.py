@@ -30,6 +30,9 @@ from models import Membership, Organization, User
 
 logger = logging.getLogger("webapp.auth")
 
+# Groupe « admin plateforme » reçu du proxy (AUTH_PROXY_ENABLED=1) ou simulé en dev
+# (DEV_FAKE_GROUPS). Transitoire : les habilitations vivent en base (ADR-089) ;
+# avec ProConnect aucun groupe n'arrive du fournisseur.
 PLATFORM_ADMIN_GROUP = "lab-team"
 SESSION_USER_KEY = "uid"
 

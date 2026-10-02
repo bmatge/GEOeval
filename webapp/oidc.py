@@ -10,7 +10,14 @@ référence en dur à un IdP (Authentik aujourd'hui, ProConnect demain) :
     OIDC_CLIENT_SECRET=...
     OIDC_SCOPES="openid email profile"     (défaut)
     OIDC_PROVIDER_LABEL="Authentik"        (défaut — texte du bouton /login)
-    OIDC_ADMIN_GROUP=lab-team              (optionnel — claim groups ⇒ admin plateforme)
+    OIDC_ADMIN_GROUP=lab-team              (TRANSITOIRE Authentik — claim groups ⇒ admin
+                                            plateforme ; vide par défaut, à ne pas poser
+                                            avec ProConnect, qui n'émet pas de groups)
+
+Principe (ADR-089) : le fournisseur OIDC authentifie, il n'habilite pas. Les rôles
+d'organisation (`memberships`) et le rôle plateforme (`users.is_platform_admin`) vivent
+en base et se gèrent dans l'application (invitations, /admin/users). Le bootstrap du
+premier admin passe par GEOEVAL_ADMIN_EMAILS.
 
 Flux authorization-code + PKCE via authlib ; découverte `.well-known`.
 """
@@ -71,11 +78,23 @@ def get_client():
 
 
 def claims_admin(claims: dict[str, Any]) -> bool:
-    """Vrai si le claim `groups` contient OIDC_ADMIN_GROUP (promotion uniquement)."""
+    """Vrai si le claim `groups` contient OIDC_ADMIN_GROUP (promotion uniquement).
+
+    Mécanisme de transition pour Authentik : inactif tant que OIDC_ADMIN_GROUP est
+    vide (défaut). ProConnect n'émet pas de claim `groups` ; les habilitations
+    vivent en base (ADR-089). Journalisé en WARNING à chaque usage effectif.
+    """
     group = admin_group()
     if not group:
         return False
     groups = claims.get("groups") or []
     if isinstance(groups, str):
         groups = [groups]
-    return group in groups
+    matched = group in groups
+    if matched:
+        logger.warning(
+            "promotion admin plateforme via le claim OIDC groups=%r (OIDC_ADMIN_GROUP) : "
+            "mécanisme transitoire, préférer GEOEVAL_ADMIN_EMAILS puis /admin/users",
+            group,
+        )
+    return matched
