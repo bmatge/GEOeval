@@ -7,13 +7,11 @@ POC + pas d'ajout de dépendance).
 from __future__ import annotations
 
 import math
-from decimal import Decimal
-from typing import Any, Iterable, Optional, Sequence
+from typing import Any, Optional, Sequence
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from evaluate import CONFORMITY_LABELS
 from models import GoldAnnotation, RunEvaluation
 
 

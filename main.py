@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 if __name__ == "__main__":
     logger.info("début")
     start = time.perf_counter()
-    
+
     # Modèles testés et juge désignés par NOM (model_version), résolus en model_id
     # en interne via la table `models`.
     tested_models = ["gpt-5.2", "mistral-large-latest", "gemini-pro-latest"]

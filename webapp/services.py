@@ -16,7 +16,7 @@ from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy import func, select
-from sqlalchemy.orm import Session, aliased
+from sqlalchemy.orm import Session
 
 from models import (
     EvaluationPrompt,

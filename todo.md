@@ -18,6 +18,16 @@
   `docs/adr/ADR-080-openrouter-provider-unique-websearch.md`).
   Statut : Proposé. Prochaine étape = Phase 0 (spike geo-targeting FR + Mistral natif/Exa).
 
+## Pilote — ADR-088 (stack conservée, refacto incrémental vers Nubo)
+Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/architecture.md`.
+- [x] Lot 1.1 — tests + CI (pytest, ruff, GitHub Actions, docker build)
+- [ ] Lot 1.2 — worker hors du processus web (jobs en base, `SKIP LOCKED`, SIGTERM)
+- [ ] Lot 1.3 — découpage API first : `webapp/api/v1` (Pydantic, OpenAPI, jetons d'org) + `webapp/ui` ; budget et allowlist rapatriés dans les services
+- [ ] Lot 1.4 — Alembic hors démarrage
+- [ ] Lot 1.5 — logs JSON, `/healthz`, `/readyz`, métriques
+- [ ] Lot 1.6 — DSFR / Chart.js vendorisés
+- [ ] Lot 2 — ProConnect, Nexus/Jenkins, secrets, manifests (après réponses Nubo : socle imposé ? egress LLM ?)
+
 ## À faire
 - Rendre `main.py` paramétrable en ligne de commande (argparse) plutôt que des listes en dur.
 - Améliorer l'extraction de citations (utiliser les métadonnées de sources des API au lieu d'une regex).

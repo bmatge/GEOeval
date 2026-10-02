@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from decimal import Decimal
-from typing import Any, Callable, Optional, Tuple, List
+from typing import Any, Callable, Optional
 
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
