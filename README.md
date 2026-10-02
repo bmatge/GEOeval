@@ -202,8 +202,9 @@ python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base
 ## API v1 (ADR-088 §2.3 — API first)
 
 Sous-application montée sur `/api/v1`, documentation interactive sur `/api/v1/docs`.
-Ressources par organisation : `/api/v1/orgs/{slug}/…` (périmètres, questions, modèles, évaluations,
-statistiques, planifications, jobs, jetons). Les évaluations et statistiques sont lisibles sans
+Ressources par organisation : `/api/v1/orgs/{slug}/…` (périmètres, questions et vérité de référence,
+modèles, évaluations, statistiques, planifications, jobs, jetons), en lecture et en écriture pour le corpus
+(editor+). Jamais de suppression de question : désactivation (ADR-076). Les évaluations et statistiques sont lisibles sans
 authentification ; le reste demande un **jeton d'organisation** (`Authorization: Bearer geoeval_…`,
 créé par un org_admin dans *Paramètres*) ou une session navigateur. Erreurs au format
 `application/problem+json` (RFC 9457).

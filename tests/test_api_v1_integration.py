@@ -22,6 +22,7 @@ def corpus(db_session, test_org):
     org_id = test_org["id"]
     for sql in ("DELETE FROM job_logs", "DELETE FROM jobs"):
         db_session.execute(text(sql))
+    db_session.execute(text("DELETE FROM test_ground_truth WHERE test_id IN (SELECT test_id FROM tests WHERE organization_id = :o)"), {"o": org_id})
     for tbl in ("scheduled_runs", "tests", "perimeters", "budgets", "api_tokens"):
         db_session.execute(text(f"DELETE FROM {tbl} WHERE organization_id = :o"), {"o": org_id})
     org_models.clear_allowlist(db_session, org_id)

@@ -140,7 +140,7 @@ flowchart LR
 ```
 
 Principe API first : toute fonctionnalité existe d'abord dans `geoeval/web/api/v1`
-(livré au lot 1.3b : lecture, lancement, jobs, jetons ; écriture du corpus au lot 1.3c). L'UI ne
+(livré : 1.3b lecture, lancement, jobs, jetons ; 1.3c écriture du corpus et des planifications). L'UI ne
 peut rien faire que l'API ne permette pas. L'UI n'appelle pas l'API en HTTP : les deux
 partagent la couche services, qui est le seul endroit où vivent les règles.
 
@@ -199,6 +199,7 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
 | Plafond budget mois et jour | ADR-080 | `geoeval/web/launching.py` (lot 1.3a ; aussi appliqué à « exécuter maintenant ») | Idem, exposé par l'API v1 (lot 1.3b) |
 | Liste blanche des modèles par org | EPIC-001 | `geoeval/web/launching.py` (lot 1.3a) | Idem |
+| Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
 | Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |
 | Retry, fail-fast, quota dur | — | `llm_clients.call_with_retry` | Inchangé |

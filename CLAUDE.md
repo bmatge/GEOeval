@@ -47,7 +47,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 ├── geoeval/               → package applicatif (ADR-088 §2.5), racine unique des imports
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
 │   ├── db/                → session.py, models.py (23 tables), migrations.sql (idempotent), seed.sql
-│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py (règles : liste blanche, devis, budget), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/
+│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/
 │   └── worker/            → main.py (processus worker, SIGTERM gracieux), jobs.py (file `jobs` + `job_logs`, SKIP LOCKED), scheduler.py (verrou advisory)
 ├── scripts/               → init_db, set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml

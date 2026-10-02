@@ -4,7 +4,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Generic, Literal, Optional, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 T = TypeVar("T")
 
@@ -70,7 +70,13 @@ class GroundTruthOut(_Orm):
     reference_answer: str
     reference_urls: list[Any] = Field(default_factory=list)
     valid_from: datetime
+    valid_to: Optional[datetime] = None
     notes: Optional[str] = None
+
+    @field_validator("reference_urls", mode="before")
+    @classmethod
+    def _none_as_empty(cls, v):
+        return v or []
 
 
 class QuestionOut(_Orm):
@@ -246,3 +252,64 @@ class TokenOut(_Orm):
 
 class TokenCreatedOut(TokenOut):
     token: str = Field(description="Jeton en clair, affiché une seule fois.")
+
+
+# ---- Écriture du corpus (lot 1.3c) ----------------------------------
+class PerimeterIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    slug: str = Field(min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9\-]*$")
+    kind: Optional[str] = Field(None, max_length=50)
+    home_url: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=2000)
+
+
+class PerimeterPatch(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    kind: Optional[str] = Field(None, max_length=50)
+    home_url: Optional[str] = Field(None, max_length=500)
+    description: Optional[str] = Field(None, max_length=2000)
+
+
+class QuestionIn(BaseModel):
+    perimeter_id: int
+    prompt: str = Field(min_length=1)
+    expected_answer: Optional[str] = None
+    response_quality_prompt_id: Optional[int] = None
+    citation_quality_prompt_id: Optional[int] = None
+
+
+class QuestionPatch(BaseModel):
+    perimeter_id: Optional[int] = None
+    prompt: Optional[str] = Field(None, min_length=1)
+    expected_answer: Optional[str] = None
+    response_quality_prompt_id: Optional[int] = None
+    citation_quality_prompt_id: Optional[int] = None
+
+
+class GroundTruthIn(BaseModel):
+    reference_answer: str = Field(min_length=1)
+    reference_urls: list[str] = Field(default_factory=list)
+    notes: Optional[str] = None
+
+
+class ScheduleIn(BaseModel):
+    """Création d'une planification. `schedule_kind` ∈ once | daily | weekly | every_n_hours ;
+    `at` (YYYY-MM-DDTHH:MM, heure de Paris) pour once, `time` (HH:MM) pour daily et weekly,
+    `weekday` (0 = lundi) pour weekly, `hours` pour every_n_hours."""
+    perimeter_id: int
+    name: str = Field(min_length=1, max_length=200)
+    tested_models: list[str] = Field(min_length=1)
+    judge_models: list[str] = Field(min_length=1)
+    repeats: int = Field(1, ge=1, le=10)
+    test_ids: list[int] = Field(min_length=1)
+    note: Optional[str] = Field(None, max_length=500)
+    schedule_kind: Literal["once", "daily", "weekly", "every_n_hours"]
+    at: Optional[str] = None
+    time: Optional[str] = None
+    weekday: Optional[int] = Field(None, ge=0, le=6)
+    hours: Optional[int] = Field(None, ge=1)
+
+
+class SchedulePatch(BaseModel):
+    enabled: Optional[bool] = None
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
