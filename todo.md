@@ -24,7 +24,7 @@ Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/arc
 - [x] Lot 1.1b — réorganisation du dépôt en package `geoeval/` (ADR-088 §2.5)
 - [x] Lot 1.2 — worker hors du processus web (tables `jobs`/`job_logs`, `SKIP LOCKED`, scheduler sous verrou, SIGTERM gracieux, service `worker` du compose)
 - [x] Lot 1.3a — `geoeval/web/ui/` routers HTML par domaine, `rendering.py`, service `launching.py` (budget + liste blanche hors des contrôleurs, run-now soumis au budget)
-- [ ] Lot 1.3b — API v1 `/api/v1/orgs/{slug}/…` : lecture + lancement + jobs, jetons d'organisation (`api_tokens`), problem+json, OpenAPI
+- [x] Lot 1.3b — API v1 `/api/v1/orgs/{slug}/…` : lecture + lancement + jobs, jetons d'organisation (`api_tokens`), problem+json, OpenAPI `/api/v1/docs`
 - [ ] Lot 1.3c — API v1 écriture : questions, périmètres, planifications
 - [ ] Lot 1.4 — Alembic hors démarrage
 - [ ] Lot 1.5 — logs JSON, `/healthz`, `/readyz`, métriques

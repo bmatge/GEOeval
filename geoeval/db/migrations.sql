@@ -323,3 +323,22 @@ CREATE TABLE IF NOT EXISTS job_logs (
     message TEXT        NOT NULL
 );
 CREATE INDEX IF NOT EXISTS ix_job_logs_job_id ON job_logs(job_id);
+
+-- ---------------------------------------------------------------------
+-- ADR-088 lot 1.3b — jetons d'API par organisation (clients machine).
+-- Empreinte SHA-256 du jeton ; le clair n'est jamais stocké.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS api_tokens (
+    id              BIGSERIAL   PRIMARY KEY,
+    organization_id INTEGER     NOT NULL REFERENCES organizations(id),
+    name            TEXT        NOT NULL,
+    role            TEXT        NOT NULL,
+    prefix          TEXT        NOT NULL,
+    token_hash      TEXT        NOT NULL UNIQUE,
+    created_by      INTEGER     REFERENCES users(id),
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    expires_at      TIMESTAMPTZ,
+    last_used_at    TIMESTAMPTZ,
+    revoked_at      TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS ix_api_tokens_organization_id ON api_tokens(organization_id);
