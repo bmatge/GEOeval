@@ -1,11 +1,11 @@
-"""Calcul des prochaines échéances (webapp/scheduler.py), heures de Paris → UTC."""
+"""Calcul des prochaines échéances (geoeval/worker/scheduler.py), heures de Paris → UTC."""
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from webapp.scheduler import compute_next_run, describe_schedule
+from geoeval.worker.scheduler import compute_next_run, describe_schedule
 
 # Jeudi 15 janvier 2026, 10:00 UTC = 11:00 Paris (hiver, UTC+1).
 WINTER = datetime(2026, 1, 15, 10, 0, tzinfo=timezone.utc)

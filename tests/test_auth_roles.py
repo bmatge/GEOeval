@@ -8,8 +8,8 @@ from __future__ import annotations
 import logging
 
 
-from webapp import oidc
-from webapp.auth import PLATFORM_ADMIN_GROUP, _dev_fake_groups, _parse_groups, bootstrap_admin_emails, proxy_auth_enabled
+from geoeval.web import oidc
+from geoeval.web.auth import PLATFORM_ADMIN_GROUP, _dev_fake_groups, _parse_groups, bootstrap_admin_emails, proxy_auth_enabled
 
 
 def test_claim_groups_ignore_sans_config(monkeypatch):
@@ -21,7 +21,7 @@ def test_claim_groups_ignore_sans_config(monkeypatch):
 
 def test_claim_groups_opt_in_authentik(monkeypatch, caplog):
     monkeypatch.setenv("OIDC_ADMIN_GROUP", "lab-team")
-    with caplog.at_level(logging.WARNING, logger="webapp.oidc"):
+    with caplog.at_level(logging.WARNING, logger="geoeval.web.oidc"):
         assert oidc.claims_admin({"groups": ["lab-team"]}) is True
     assert "transitoire" in caplog.text
     assert oidc.claims_admin({"groups": ["autre"]}) is False

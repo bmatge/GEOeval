@@ -21,6 +21,7 @@
 ## Pilote — ADR-088 (stack conservée, refacto incrémental vers Nubo)
 Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/architecture.md`.
 - [x] Lot 1.1 — tests + CI (pytest, ruff, GitHub Actions, docker build)
+- [x] Lot 1.1b — réorganisation du dépôt en package `geoeval/` (ADR-088 §2.5)
 - [ ] Lot 1.2 — worker hors du processus web (jobs en base, `SKIP LOCKED`, SIGTERM)
 - [ ] Lot 1.3 — découpage API first : `webapp/api/v1` (Pydantic, OpenAPI, jetons d'org) + `webapp/ui` ; budget et allowlist rapatriés dans les services
 - [ ] Lot 1.4 — Alembic hors démarrage

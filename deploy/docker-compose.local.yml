@@ -1,0 +1,29 @@
+# PostgreSQL local pour GEOeval.
+#
+#   docker compose -f deploy/docker-compose.local.yml up -d   # démarre la base (depuis la racine)
+#   python -m scripts.init_db                                 # crée le schéma
+#   psql "$PGURL" -f geoeval/db/seed.sql                      # seed (URL libpq, sans +psycopg2)
+#
+# DATABASE_URL correspondant (à mettre dans .env) :
+#   postgresql+psycopg2://geoeval:geoeval@localhost:5432/geoeval
+
+services:
+  db:
+    image: postgres:16
+    container_name: geoeval-postgres
+    environment:
+      POSTGRES_USER: geoeval
+      POSTGRES_PASSWORD: geoeval
+      POSTGRES_DB: geoeval
+    ports:
+      - "5432:5432"
+    volumes:
+      - geoeval_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U geoeval -d geoeval"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  geoeval_pgdata:

@@ -1,11 +1,11 @@
-"""Validation des lignes du gold set CSV (webapp/gold.py)."""
+"""Validation des lignes du gold set CSV (geoeval/web/gold.py)."""
 from __future__ import annotations
 
 from decimal import Decimal
 
 import pytest
 
-from webapp.gold import _validate_label, _validate_score
+from geoeval.web.gold import _validate_label, _validate_score
 
 
 def test_score_virgule_francaise():
