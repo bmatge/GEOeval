@@ -1,12 +1,12 @@
 """Planifications — lecture (membres) et exécution immédiate (editor+)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from sqlalchemy.orm import Session
 
-from geoeval.web import audit, launching, services
+from geoeval.web import audit, launching, scheduling, services
 from geoeval.web.api.deps import Principal, require_role
-from geoeval.web.api.schemas import JobOut, ScheduleOut
+from geoeval.web.api.schemas import JobOut, ScheduleIn, ScheduleOut, SchedulePatch
 from geoeval.web.deps import get_db
 from geoeval.worker import jobs as jobqueue
 from geoeval.worker import scheduler
@@ -43,3 +43,46 @@ def run_now(schedule_id: int, principal: Principal = Depends(require_role("edito
     audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="run_now", entity_type="scheduled_run",
                  entity_id=sr.schedule_id, meta={"job_id": job.id, **principal.audit_meta()})
     return jobqueue.as_dict(job)
+
+
+# ---- Écriture (lot 1.3c, editor+) -----------------------------------
+@router.post("", response_model=ScheduleOut, status_code=status.HTTP_201_CREATED,
+             summary="Créer une planification (editor+) — mêmes règles qu'un lancement + échéance valide")
+def create_schedule(body: ScheduleIn, principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
+    config = scheduling.build_config(body.schedule_kind, at=body.at, time=body.time, weekday=body.weekday, hours=body.hours)
+    sr = scheduling.create_schedule(
+        db, principal.org.id, perimeter_id=body.perimeter_id, name=body.name, tested_models=body.tested_models,
+        judge_models=body.judge_models, repeats=body.repeats, test_ids=body.test_ids, note=body.note,
+        schedule_kind=body.schedule_kind, schedule_config=config,
+        role=principal.role, is_platform_admin=principal.is_platform_admin,
+    )
+    audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="create", entity_type="scheduled_run",
+                 entity_id=sr.schedule_id, meta={"name": sr.name, "kind": sr.schedule_kind, **principal.audit_meta()})
+    return _out(sr)
+
+
+@router.patch("/{schedule_id}", response_model=ScheduleOut, summary="Activer / désactiver ou renommer (editor+)")
+def update_schedule(schedule_id: int, body: SchedulePatch, principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
+    sr = services.get_schedule(db, principal.org.id, schedule_id)
+    if sr is None:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
+    fields = body.model_dump(exclude_unset=True)
+    if "name" in fields:
+        scheduling.rename(db, sr, fields["name"])
+    if "enabled" in fields and fields["enabled"] != sr.enabled:
+        scheduling.set_enabled(db, principal.org.id, sr, fields["enabled"])
+    audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="update", entity_type="scheduled_run",
+                 entity_id=sr.schedule_id, meta={"fields": sorted(fields), **principal.audit_meta()})
+    db.refresh(sr)
+    return _out(sr)
+
+
+@router.delete("/{schedule_id}", status_code=status.HTTP_204_NO_CONTENT, summary="Supprimer une planification (editor+)")
+def delete_schedule(schedule_id: int, principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
+    sr = services.get_schedule(db, principal.org.id, schedule_id)
+    if sr is None:
+        raise HTTPException(status_code=404, detail="Planification introuvable.")
+    scheduling.delete(db, principal.org.id, sr)
+    audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="delete", entity_type="scheduled_run",
+                 entity_id=schedule_id, meta=principal.audit_meta())
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

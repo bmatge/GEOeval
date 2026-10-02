@@ -11,6 +11,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
 from geoeval.web import (
+    scheduling,
     launching,
     perimeters,
     services,
@@ -80,56 +81,18 @@ def schedule_new_submit(
 ):
     org, role = ctx
     try:
-        params = launching.validate_selection(
-            db, org.id, perimeter_id=perimeter_id, tested_models=tested_models,
-            judge_models=judge_models, repeats=repeats, test_ids=test_ids,
+        config = scheduling.build_config(
+            schedule_kind, at=once_at or None, time=(daily_time if schedule_kind == "daily" else weekly_time) or None,
+            weekday=weekly_weekday, hours=every_hours,
+        )
+        scheduling.create_schedule(
+            db, org.id, perimeter_id=perimeter_id, name=name, tested_models=tested_models,
+            judge_models=judge_models, repeats=repeats, test_ids=test_ids, note=note or None,
+            schedule_kind=schedule_kind, schedule_config=config,
             role=role, is_platform_admin=user.is_platform_admin,
         )
     except launching.LaunchError as exc:
         raise http_error(exc)
-
-    if schedule_kind == "once":
-        if not once_at:
-            raise HTTPException(status_code=400, detail="Indique la date et l'heure d'exécution.")
-        config = {"at": once_at}
-    elif schedule_kind == "daily":
-        if not daily_time:
-            raise HTTPException(status_code=400, detail="Indique l'heure quotidienne.")
-        config = {"time": daily_time}
-    elif schedule_kind == "weekly":
-        if not weekly_time:
-            raise HTTPException(status_code=400, detail="Indique le jour et l'heure hebdomadaires.")
-        config = {"weekday": weekly_weekday, "time": weekly_time}
-    elif schedule_kind == "every_n_hours":
-        if every_hours < 1:
-            raise HTTPException(status_code=400, detail="L'intervalle doit être d'au moins 1 heure.")
-        config = {"hours": every_hours}
-    else:
-        raise HTTPException(status_code=400, detail=f"Type de planification inconnu : {schedule_kind!r}.")
-
-    next_run = scheduler.compute_next_run(schedule_kind, config)
-    if next_run is None:
-        raise HTTPException(status_code=400, detail="La date d'exécution est déjà passée.")
-
-    # Devis prévisionnel + plafond budgétaire (règle portée par le service).
-    try:
-        launching.estimate_and_check_budget(db, org.id, params)
-    except launching.LaunchError as exc:
-        raise http_error(exc)
-
-    services.create_schedule(
-        db,
-        org.id,
-        perimeter_id=perimeter_id,
-        name=name.strip(),
-        tested_models=params["tested_models"],
-        judges=params["judges"],
-        test_ids=params["test_ids"],
-        note=note or None,
-        schedule_kind=schedule_kind,
-        schedule_config=config,
-        next_run_at=next_run,
-    )
     return RedirectResponse(f"/o/{org.slug}/schedules", status_code=303)
 
 
@@ -143,16 +106,10 @@ def schedule_toggle(
     sr = services.get_schedule(db, org.id, schedule_id)
     if sr is None:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
-    if sr.enabled:
-        services.set_schedule_enabled(db, org.id, schedule_id, False)
-    else:
-        next_run = scheduler.compute_next_run(sr.schedule_kind, sr.schedule_config)
-        if next_run is None:
-            raise HTTPException(
-                status_code=400,
-                detail="Impossible de réactiver : la date one-shot est passée. Crée une nouvelle planification.",
-            )
-        services.set_schedule_enabled(db, org.id, schedule_id, True, next_run_at=next_run)
+    try:
+        scheduling.set_enabled(db, org.id, sr, not sr.enabled)
+    except launching.LaunchError as exc:
+        raise http_error(exc)
     return RedirectResponse(f"/o/{org.slug}/schedules", status_code=303)
 
 

@@ -21,6 +21,7 @@ def corpus(db_session, test_org):
     org_id = test_org["id"]
     db_session.execute(text("DELETE FROM jobs"))
     db_session.execute(text("DELETE FROM scheduled_runs WHERE organization_id = :o"), {"o": org_id})
+    db_session.execute(text("DELETE FROM test_ground_truth WHERE test_id IN (SELECT test_id FROM tests WHERE organization_id = :o)"), {"o": org_id})
     db_session.execute(text("DELETE FROM tests WHERE organization_id = :o"), {"o": org_id})
     db_session.execute(text("DELETE FROM perimeters WHERE organization_id = :o"), {"o": org_id})
     db_session.execute(text("DELETE FROM budgets WHERE organization_id = :o"), {"o": org_id})
