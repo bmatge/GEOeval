@@ -4,8 +4,8 @@ Fixtures partagées (ADR-088, lot 1).
 Deux familles de tests :
 - unitaires : aucune base, importent directement geoeval.core / geoeval.web ;
 - intégration (marqueur `integration`) : PostgreSQL requis via DATABASE_URL.
-  Le schéma est (re)créé comme le fait deploy/docker-entrypoint.sh : init_db
-  (create_all) → migrations.sql → seed.sql, tous idempotents.
+  Le schéma est (re)créé comme le fait le service `migrate` : alembic upgrade head
+  (révision 0001 convergente) → seed.sql, idempotents.
 
 Sans DATABASE_URL, les tests d'intégration sont sautés, pas en échec.
 """
@@ -54,13 +54,13 @@ def _run_sql_file(path: Path) -> None:
 
 @pytest.fixture(scope="session")
 def db_schema():
-    """Schéma + migrations + seed, une fois par session de tests."""
+    """Schéma par le chemin réel de déploiement (lot 1.4) : alembic upgrade head
+    puis seed idempotente — exactement ce que fait `python -m scripts.migrate`."""
+    from geoeval.db import migrate as m
     from geoeval.db.session import engine
-    from geoeval.db.models import Base
 
-    Base.metadata.create_all(engine)
-    _run_sql_file(ROOT / "geoeval" / "db" / "migrations.sql")
-    _run_sql_file(ROOT / "geoeval" / "db" / "seed.sql")
+    m.upgrade()
+    m.apply_seed(engine)
     return engine
 
 

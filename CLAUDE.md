@@ -25,7 +25,7 @@ UI web FastAPI + DSFR, runs en tâche de fond + planification intégrée.
 # Dev local (Postgres seul)
 docker compose -f deploy/docker-compose.local.yml up -d
 cp .env.example .env                    # DATABASE_URL + clés API
-python -m scripts.init_db && psql "$PGURL" -f geoeval/db/seed.sql   # PGURL = URL libpq (sans +psycopg2)
+python -m scripts.migrate               # alembic upgrade head + seed idempotente (remplace init_db + psql seed)
 python -m scripts.run_web               # UI sur http://127.0.0.1:8000
 python -m geoeval.worker.main           # worker (runs + planificateur) — ou GEOEVAL_INLINE_WORKER=1 dans le web
 
@@ -46,7 +46,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 .
 ├── geoeval/               → package applicatif (ADR-088 §2.5), racine unique des imports
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
-│   ├── db/                → session.py, models.py (23 tables), migrations.sql (idempotent), seed.sql
+│   ├── db/                → session.py, models.py (25 tables, index déclarés), migrate.py + alembic/ (révisions ; 0001 = base convergente, schema_base.sql), migrations.sql (GELÉ), seed.sql
 │   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/
 │   ├── observability/     → logs.py (JSON/texte, request_id, job_id), middleware.py (X-Request-ID, journal d'accès, métriques HTTP), metrics.py (Prometheus), health.py
 │   └── worker/            → main.py (processus worker, SIGTERM gracieux), health.py (:9100 /healthz /readyz /metrics), jobs.py (file `jobs`, SKIP LOCKED), scheduler.py (verrou advisory)
@@ -54,7 +54,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
 ├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, epics/, spikes/
-└── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; services web (entrypoint : db → init_db → migrations → seed → uvicorn :3000), worker, db
+└── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; services migrate (one-shot), web (entrypoint : attente db → uvicorn :3000), worker, db
 ```
 
 ## 5. Conventions
@@ -62,8 +62,11 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - Style : type hints systématiques ; docstrings courtes en français
 - Branches : `master` protégé par convention, **tout passe par PR** (merge par Bertrand)
 - Commits : Conventional Commits (`feat:`, `fix:`, `docs:`…), messages en français
-- Migrations : jamais d'ALTER manuel — ajouter à `geoeval/db/migrations.sql` (idempotent,
-  `ADD COLUMN IF NOT EXISTS`), rejoué à chaque démarrage du conteneur
+- Migrations (lot 1.4) : jamais d'ALTER manuel, jamais de modification de `migrations.sql` (gelé).
+  Modifier `models.py`, puis `alembic -c geoeval/db/alembic.ini revision --autogenerate -m "…"`,
+  relire la révision, `python -m scripts.migrate`. Le test `test_aucune_derive_orm_base` échoue si
+  models.py et la base divergent. Les migrations s'exécutent dans le service `migrate` AVANT web et
+  worker, jamais au démarrage du web.
 
 ## 6. Ce que Claude doit toujours faire
 

@@ -1,3 +1,10 @@
+-- ⚠️ GELÉ depuis le lot 1.4 (ADR-088) : ce script n'évolue plus.
+-- Il n'est joué que par la révision Alembic 0001 sur une base EXISTANTE, pour la
+-- faire converger vers l'instantané geoeval/db/alembic/schema_base.sql.
+-- Toute évolution du schéma = une révision Alembic :
+--     alembic -c geoeval/db/alembic.ini revision --autogenerate -m "ma_modif"
+-- puis `python -m scripts.migrate`. Le test test_aucune_derive_orm_base échoue
+-- si models.py et la base divergent.
 -- Migrations idempotentes (rejouées à chaque démarrage du conteneur, après
 -- init_db.py — create_all crée les tables manquantes mais n'ALTÈRE jamais
 -- les tables existantes, d'où ce fichier pour les colonnes ajoutées).

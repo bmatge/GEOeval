@@ -1,34 +1,35 @@
 """
-Crée le schéma de la base GEOeval (toutes les tables définies dans models.py).
+DÉPRÉCIÉ (ADR-088 lot 1.4) : le schéma est géré par Alembic. Utiliser
 
-Usage:
-    python -m scripts.init_db            # crée les tables manquantes
-    python -m scripts.init_db --drop     # DROP puis recrée tout (⚠️ destructif)
+    python -m scripts.migrate
 
-La connexion utilise DATABASE_URL (voir .env / .env.example).
-Aucune donnée n'est insérée ici : voir geoeval/db/seed.sql pour le peuplement.
+Ce script reste pour le dev local : `--drop` supprime toutes les tables puis
+rejoue les migrations (⚠️ destructif). Sans option, il délègue à scripts.migrate.
 """
 from __future__ import annotations
 
 import sys
 
-from geoeval.db.session import engine
-from geoeval.db.models import Base
 
+def main() -> int:
+    from geoeval.db import migrate as m
 
-def main() -> None:
-    drop = "--drop" in sys.argv[1:]
+    if "--drop" in sys.argv[1:]:
+        from sqlalchemy import create_engine, text
 
-    if drop:
-        print("⚠️  DROP de toutes les tables GEOeval...")
+        from geoeval.db.models import Base
+
+        print("⚠️  DROP de toutes les tables GEOeval (et de alembic_version)...")
+        engine = create_engine(m.database_url())
         Base.metadata.drop_all(engine)
-
-    print("Création du schéma (create_all)...")
-    Base.metadata.create_all(engine)
-
-    tables = ", ".join(sorted(Base.metadata.tables))
-    print(f"OK. Tables présentes : {tables}")
+        with engine.begin() as conn:
+            conn.execute(text("DROP TABLE IF EXISTS alembic_version"))
+        engine.dispose()
+    print("init_db est déprécié : délégation à scripts.migrate (alembic upgrade head + seed).")
+    summary = m.migrate()
+    print(f"OK. Révision {summary['after']} (head {summary['head']}), dérive ORM/base : {summary['drift']}.")
+    return 0 if summary["drift"] == 0 else 2
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

@@ -1,6 +1,12 @@
 #!/bin/sh
-# Entrypoint conteneur : attend PostgreSQL, crée le schéma, applique la seed
-# (idempotente, ON CONFLICT DO NOTHING) puis démarre l'UI web sur :3000.
+# Entrypoint du service web : attend PostgreSQL puis démarre uvicorn sur :3000.
+#
+# Lot 1.4 (ADR-088) : le schéma n'est PLUS géré ici. Le service `migrate`
+# (python -m scripts.migrate : alembic upgrade head + seed) s'exécute avant, et
+# web / worker en dépendent (service_completed_successfully). Plus de course entre
+# réplicas, et un échec de migration arrête le déploiement au lieu de laisser un
+# web démarrer sur un schéma incomplet. /readyz répond 503 tant que le schéma
+# n'est pas là.
 set -e
 
 : "${PGHOST:=db}"
@@ -13,15 +19,6 @@ echo "[entrypoint] attente de PostgreSQL ($PGHOST)..."
 until pg_isready -q; do
     sleep 1
 done
-
-echo "[entrypoint] création du schéma (scripts/init_db.py)..."
-python -m scripts.init_db
-
-echo "[entrypoint] migrations idempotentes (migrations.sql)..."
-psql -v ON_ERROR_STOP=1 -q -f geoeval/db/migrations.sql
-
-echo "[entrypoint] seed idempotente (seed.sql)..."
-psql -v ON_ERROR_STOP=1 -q -f geoeval/db/seed.sql
 
 echo "[entrypoint] démarrage uvicorn sur 0.0.0.0:3000"
 # --proxy-headers : derrière Traefik, X-Forwarded-Proto=https doit être honoré
