@@ -88,7 +88,7 @@ flowchart LR
       API["geoeval/web/api/v1<br/>JSON · Pydantic · OpenAPI · pagination · erreurs normalisées"]
       UI["geoeval/web/ui<br/>routers HTML DSFR minces"]
       SVC["Couche services = toutes les règles<br/>RBAC · budget · allowlist modèles · ADR-076 · audit"]
-      HZ["/healthz · /readyz · /metrics"]
+      HZ["/healthz · /readyz · /metrics<br/>(lot 1.5 : livré, web et worker :9100)"]
     end
     subgraph WK["Déploiement worker — N réplicas"]
       W["worker.py<br/>claim : SELECT … FOR UPDATE SKIP LOCKED<br/>arrêt gracieux SIGTERM · reprise"]
@@ -100,7 +100,7 @@ flowchart LR
     MIG["Job de migration<br/>Alembic, hors démarrage"]
     DB[("PostgreSQL managé<br/>23 tables + jobs · job_logs")]
     SEC["Secrets plateforme<br/>clés LLM · Fernet BYOK · session"]
-    LOGS["Logs JSON stdout → collecte plateforme"]
+    LOGS["Logs JSON stdout → collecte plateforme<br/>(lot 1.5 : request_id, job_id, org_id)"]
   end
 
   subgraph EXT["Flux sortants — allowlist egress à obtenir"]

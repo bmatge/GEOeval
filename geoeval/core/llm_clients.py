@@ -10,6 +10,9 @@ from typing import Callable, Optional, Tuple, Type, Any, TYPE_CHECKING
 
 from dotenv import load_dotenv
 
+from geoeval.observability import metrics as _metrics
+from geoeval.observability.context import llm_family_var
+
 # NB : les SDK LLM (openai, mistralai, google-genai) sont importés PARESSEUSEMENT
 # dans les fonctions de création de client ci-dessous. On peut ainsi n'installer
 # que les SDK des providers réellement utilisés (ex. Mistral + Gemini sans OpenAI).
@@ -133,6 +136,9 @@ def _byok_override(model: Any, organization_id: Optional[int]) -> tuple[Optional
 def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
     """Client LLM pour un modèle avec résolution en cascade des credentials.
 
+    Pose aussi la famille du fournisseur dans le contexte d'observabilité : les
+    appels qui suivent (call_with_retry) sont étiquetés par famille.
+
     Ordre de résolution (ADR-078 §2) :
         org_credentials (BYOK, si organization_id fourni)
         → models.api_key / base_url / headers (config plateforme)
@@ -140,6 +146,7 @@ def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
     Mis en cache par configuration effective.
     """
     family = provider_family(model.model_name)
+    llm_family_var.set(family or "unknown")
     if family is None:
         raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
 
@@ -373,24 +380,32 @@ def call_with_retry(
     immédiatement en LLMCallError, sans épuiser les retries.
     """
     last_exc: Optional[BaseException] = None
+    family = llm_family_var.get()
 
     for attempt in range(max_retries):
+        started = time.perf_counter()
         try:
             out = fn()
+            _metrics.LLM_DURATION.labels(family).observe(time.perf_counter() - started)
+            _metrics.LLM_CALLS.labels(family, "ok").inc()
             if success_delay > 0:
                 time.sleep(success_delay)
             return out
         except retry_exceptions as e:
+            _metrics.LLM_DURATION.labels(family).observe(time.perf_counter() - started)
             reason = _non_retryable_reason(e)
             if reason is not None:
+                _metrics.LLM_CALLS.labels(family, "non_retryable").inc()
                 detail = str(e)
                 if len(detail) > 300:
                     detail = detail[:300] + "…"
                 raise LLMCallError(f"{reason} — inutile de réessayer. Détail : {detail}") from e
+            _metrics.LLM_CALLS.labels(family, "retry").inc()
             last_exc = e
             sleep = min(max_sleep, base_sleep * (2 ** attempt))
             _sleep_with_jitter(sleep)
 
+    _metrics.LLM_CALLS.labels(family, "exhausted").inc()
     raise last_exc  # type: ignore[misc]
 
 

@@ -28,7 +28,10 @@ from typing import Optional
 from sqlalchemy import text
 
 from geoeval.db.session import SessionLocal
+from geoeval.observability import metrics
+from geoeval.observability.logs import configure_logging
 from geoeval.worker import jobs, scheduler
+from geoeval.worker.health import start_health_server
 
 logger = logging.getLogger("geoeval.worker.main")
 
@@ -71,6 +74,7 @@ def run_forever(stop: threading.Event, *, worker_id: Optional[str] = None) -> No
     last_recover = 0.0
     last_tick = 0.0
     while not stop.is_set():
+        metrics.touch_worker_alive()
         try:
             now = time.monotonic()
             if now - last_recover >= RECOVER_EVERY_SECONDS:
@@ -121,11 +125,10 @@ def start_inline_thread() -> bool:
 # Processus autonome
 # ---------------------------------------------------------------------
 def main() -> None:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-    )
+    configure_logging("worker")
     stop = threading.Event()
+    metrics.touch_worker_alive()
+    start_health_server()
 
     def _on_signal(signum, _frame) -> None:
         logger.warning("signal %s reçu : arrêt demandé, fin du job en cours", signal.Signals(signum).name)

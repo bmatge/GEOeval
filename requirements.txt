@@ -24,3 +24,6 @@ bcrypt>=4.1                # hash des mots de passe locaux
 itsdangerous>=2.1          # cookies de session signés (SessionMiddleware Starlette)
 authlib>=1.3               # client OIDC générique (authorization-code + PKCE)
 httpx>=0.27                # transport authlib (découverte .well-known, token endpoint)
+
+# --- Observabilité (ADR-088 lot 1.5) ---
+prometheus-client>=0.20   # /metrics web et worker (pure Python, sans dépendance transitive)

@@ -26,17 +26,15 @@ from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
-from geoeval.web import auth_routes
+from geoeval.observability.logs import configure_logging
+from geoeval.observability.middleware import RequestContextMiddleware
+from geoeval.web import auth_routes, ops
 from geoeval.web.api import create_api_app
 from geoeval.web.auth import AuthMiddleware
 from geoeval.web.ui import ROUTERS
 from geoeval.worker.main import inline_worker_enabled, start_inline_thread
 
-logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
-)
-logging.getLogger().setLevel(logging.INFO)
+configure_logging("web")
 
 app = FastAPI(title="GEOeval")
 
@@ -57,6 +55,7 @@ app.add_middleware(
     same_site="lax",
     https_only=os.environ.get("GEOEVAL_COOKIE_SECURE", "0").strip() in ("1", "true", "yes"),
 )
+app.include_router(ops.router)
 app.include_router(auth_routes.router)
 # Lot 1.2 : le worker et le planificateur tournent dans un processus séparé
 # (python -m geoeval.worker.main). Mode inline opt-in pour le dev local.
@@ -79,3 +78,6 @@ for _router in ROUTERS:
 # API v1 (lot 1.3b) : sous-application, docs sur /api/v1/docs, erreurs problem+json.
 # Les middlewares du parent (sessions, AuthMiddleware) s'appliquent aussi à elle.
 app.mount("/api/v1", create_api_app(), name="api_v1")
+
+# Lot 1.5 : request_id, journal d'accès structuré, métriques HTTP — le plus externe.
+app.add_middleware(RequestContextMiddleware)

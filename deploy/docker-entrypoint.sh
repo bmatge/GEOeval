@@ -26,5 +26,6 @@ psql -v ON_ERROR_STOP=1 -q -f geoeval/db/seed.sql
 echo "[entrypoint] démarrage uvicorn sur 0.0.0.0:3000"
 # --proxy-headers : derrière Traefik, X-Forwarded-Proto=https doit être honoré
 # (cookies Secure + redirect_uri OIDC en https — ADR-086).
+# --no-access-log : le journal d'accès est émis par le middleware (JSON, request_id).
 exec uvicorn geoeval.web.app:app --host 0.0.0.0 --port 3000 \
-    --proxy-headers --forwarded-allow-ips='*'
+    --proxy-headers --forwarded-allow-ips='*' --no-access-log
