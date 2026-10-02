@@ -38,6 +38,18 @@ x-geoeval-env: &geoeval-env
   GEOEVAL_KEY_SECRET: ${GEOEVAL_KEY_SECRET:-}
 
 services:
+  # Migrations (ADR-088 lot 1.4) : one-shot, avant web et worker. Même image,
+  # `alembic upgrade head` + seed idempotente. Sur Nubo : Job / initContainer.
+  migrate:
+    build: .
+    command: ["python", "-m", "scripts.migrate"]
+    restart: "no"
+    environment: *geoeval-env
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [default]
+
   web:
     build: .
     restart: unless-stopped
@@ -48,6 +60,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:3000/readyz', timeout=3).status == 200 else 1)"]
       interval: 30s
@@ -74,8 +88,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
-      web:
-        condition: service_started   # le web joue init_db + migrations ; le worker attend le schéma
+      migrate:
+        condition: service_completed_successfully
     networks: [default]
     stop_grace_period: 15m           # SIGTERM : le modèle en cours se termine, les suivants ne démarrent pas
     healthcheck:

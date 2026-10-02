@@ -23,7 +23,8 @@ def test_schema_complet_apres_migrations(db_schema):
 
 
 def test_migrations_et_seed_idempotentes(db_schema):
-    """Rejouer migrations.sql + seed.sql ne doit rien casser (contrat du conteneur)."""
+    """Rejouer migrations.sql (gelé, utilisé par la révision 0001 sur base existante)
+    et seed.sql ne doit rien casser."""
     from tests.conftest import ROOT, _run_sql_file
 
     _run_sql_file(ROOT / "geoeval" / "db" / "migrations.sql")

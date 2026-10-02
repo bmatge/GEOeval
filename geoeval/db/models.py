@@ -9,12 +9,14 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     Boolean,
     ForeignKey,
+    Index,
     Integer,
     Numeric,
     Text,
     TIMESTAMP,
     UniqueConstraint,
     func,
+    text,
 )
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -45,6 +47,10 @@ class Organization(Base):
 class User(Base):
     __tablename__ = "users"
 
+    __table_args__ = (
+        Index("uq_users_oidc_identity", "oidc_issuer", "oidc_external_id", unique=True,
+              postgresql_where=text("oidc_issuer IS NOT NULL AND oidc_external_id IS NOT NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     email: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
     first_seen_at: Mapped[datetime] = mapped_column(
@@ -79,6 +85,7 @@ class AuthToken(Base):
 
     __tablename__ = "auth_tokens"
 
+    __table_args__ = (Index("ix_auth_tokens_user_id", "user_id"),)
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
     purpose: Mapped[str] = mapped_column(
@@ -112,6 +119,10 @@ class Membership(Base):
 class Invitation(Base):
     __tablename__ = "invitations"
 
+    __table_args__ = (
+        Index("ix_invitations_email", "email"),
+        Index("ix_invitations_org_id", "org_id"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
     email: Mapped[str] = mapped_column(Text, nullable=False)
@@ -134,6 +145,10 @@ class Invitation(Base):
 class AuditLog(Base):
     __tablename__ = "audit_log"
 
+    __table_args__ = (
+        Index("ix_audit_log_org_at", "org_id", text("at DESC")),
+        Index("ix_audit_log_user_at", "user_id", text("at DESC")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     org_id: Mapped[Optional[int]] = mapped_column(
@@ -156,6 +171,10 @@ class AuditLog(Base):
 class Test(Base):
     __tablename__ = "tests"
 
+    __table_args__ = (
+        Index("ix_tests_organization_id", "organization_id"),
+        Index("ix_tests_perimeter_id", "perimeter_id"),
+    )
     test_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
@@ -192,6 +211,10 @@ class Test(Base):
 class Perimeter(Base):
     __tablename__ = "perimeters"
 
+    __table_args__ = (
+        Index("ix_perimeters_org_id", "organization_id"),
+        Index("uq_perimeters_org_slug", "organization_id", "slug", unique=True),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
@@ -216,6 +239,7 @@ class OrgCredential(Base):
     """
     __tablename__ = "org_credentials"
     __table_args__ = (
+        Index("uq_org_credentials_org_model", "organization_id", "model_id", unique=True),
         {"info": {"unique_org_model": ("organization_id", "model_id")}},
     )
 
@@ -247,6 +271,7 @@ class OrgModel(Base):
     __tablename__ = "org_models"
     __table_args__ = (
         UniqueConstraint("organization_id", "model_id", name="uq_org_models_org_model"),
+        Index("ix_org_models_org_id", "organization_id"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -296,6 +321,10 @@ class ScheduledRun(Base):
     """Run programmé (one-shot ou récurrent), exécuté par geoeval/worker/scheduler.py."""
     __tablename__ = "scheduled_runs"
 
+    __table_args__ = (
+        Index("ix_scheduled_runs_organization_id", "organization_id"),
+        Index("ix_scheduled_runs_perimeter_id", "perimeter_id"),
+    )
     schedule_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
@@ -325,6 +354,10 @@ class ScheduledRun(Base):
 class RunRow(Base):
     __tablename__ = "runs"
 
+    __table_args__ = (
+        Index("ix_runs_organization_id", "organization_id"),
+        Index("ix_runs_perimeter_id", "perimeter_id"),
+    )
     run_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
@@ -378,6 +411,9 @@ class ModelPricing(Base):
     """
     __tablename__ = "model_pricing"
 
+    __table_args__ = (
+        Index("ix_model_pricing_active", "model_id", postgresql_where=text("effective_to IS NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     model_id: Mapped[int] = mapped_column(
         ForeignKey("models.model_id"), nullable=False
@@ -397,6 +433,10 @@ class UsageRecord(Base):
     """Consommation row-par-appel LLM. `billed_to` = 'platform' | 'byok' (ADR-078 §5)."""
     __tablename__ = "usage"
 
+    __table_args__ = (
+        Index("ix_usage_org_ts", "organization_id", text("ts DESC")),
+        Index("ix_usage_run_id", "run_id"),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False
@@ -472,6 +512,10 @@ class GoldAnnotation(Base):
     """
     __tablename__ = "gold_annotations"
 
+    __table_args__ = (
+        Index("ix_gold_annotations_run_id", "run_id"),
+        Index("uq_gold_annotations_test_run_annotator", "test_id", "run_id", "annotator_email", unique=True),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
     run_id: Mapped[int] = mapped_column(ForeignKey("runs.run_id"), nullable=False)
@@ -490,6 +534,9 @@ class GoldAnnotation(Base):
 class TestGroundTruth(Base):
     __tablename__ = "test_ground_truth"
 
+    __table_args__ = (
+        Index("ix_test_ground_truth_active", "test_id", postgresql_where=text("valid_to IS NULL")),
+    )
     id: Mapped[int] = mapped_column(primary_key=True)
     test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
     version: Mapped[int] = mapped_column(Integer, nullable=False)
@@ -512,6 +559,7 @@ class TestGroundTruth(Base):
 class Job(Base):
     __tablename__ = "jobs"
 
+    __table_args__ = (Index("ix_jobs_queue", "status", text("priority DESC"), "created_at"),)
     id: Mapped[str] = mapped_column(Text, primary_key=True)
     organization_id: Mapped[int] = mapped_column(
         ForeignKey("organizations.id"), nullable=False, index=True

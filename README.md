@@ -199,6 +199,18 @@ python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base
 
 ---
 
+## Migrations de schéma (ADR-088 lot 1.4)
+
+Alembic, piloté par `python -m scripts.migrate` (attente de la base → `alembic upgrade head` → seed
+idempotente). Dans le compose, le service `migrate` s'exécute **avant** web et worker. La révision
+`0001` est convergente : base vierge → instantané `geoeval/db/alembic/schema_base.sql` ; base existante →
+rejeu de `geoeval/db/migrations.sql` (gelé). Aucun `alembic stamp` manuel.
+
+```bash
+python -m scripts.migrate --check                                   # révision courante vs head + dérive ORM/base
+alembic -c geoeval/db/alembic.ini revision --autogenerate -m "ma_modif"   # nouvelle révision depuis models.py
+```
+
 ## Exploitation (ADR-088 lot 1.5)
 
 - **Logs** : une ligne JSON par événement sur stdout (`GEOEVAL_LOG_FORMAT=json`, défaut hors terminal),

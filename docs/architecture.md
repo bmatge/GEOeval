@@ -97,7 +97,7 @@ flowchart LR
       EVAL["evaluate.py"]
       LLMC["llm_clients<br/>cascade BYOK → modèle → secret plateforme<br/>via proxy de sortie"]
     end
-    MIG["Job de migration<br/>Alembic, hors démarrage"]
+    MIG["Service migrate (one-shot)<br/>alembic upgrade head + seed<br/>(lot 1.4 : livré, révision 0001 convergente)"]
     DB[("PostgreSQL managé<br/>23 tables + jobs · job_logs")]
     SEC["Secrets plateforme<br/>clés LLM · Fernet BYOK · session"]
     LOGS["Logs JSON stdout → collecte plateforme<br/>(lot 1.5 : request_id, job_id, org_id)"]

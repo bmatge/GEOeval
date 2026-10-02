@@ -26,7 +26,7 @@ Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/arc
 - [x] Lot 1.3a — `geoeval/web/ui/` routers HTML par domaine, `rendering.py`, service `launching.py` (budget + liste blanche hors des contrôleurs, run-now soumis au budget)
 - [x] Lot 1.3b — API v1 `/api/v1/orgs/{slug}/…` : lecture + lancement + jobs, jetons d'organisation (`api_tokens`), problem+json, OpenAPI `/api/v1/docs`
 - [x] Lot 1.3c — API v1 écriture : périmètres (POST/PATCH/DELETE), questions (POST/PATCH, désactivation, vérité de référence versionnée), planifications (POST/PATCH/DELETE) ; service `scheduling.py`
-- [ ] Lot 1.4 — Alembic hors démarrage
+- [x] Lot 1.4 — Alembic : révision 0001 convergente (base vierge → schema_base.sql, base existante → migrations.sql gelé), service `migrate` one-shot avant web et worker, garde-fou de dérive ORM/base en CI
 - [x] Lot 1.5 — logs JSON (request_id, job_id), `/healthz` `/readyz` `/metrics` web et worker (:9100), métriques Prometheus HTTP / jobs / LLM, healthchecks compose
 - [ ] Lot 1.6 — DSFR / Chart.js vendorisés
 - [ ] Lot 2 — ProConnect, Nexus/Jenkins, secrets, manifests (après réponses Nubo : socle imposé ? egress LLM ?)
