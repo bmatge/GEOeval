@@ -7,7 +7,7 @@ programmations sont rattachées à lui. La slug est unique dans l'organisation.
 from __future__ import annotations
 
 import re
-from typing import Any, Optional
+from typing import Optional
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session

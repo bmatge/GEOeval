@@ -1,0 +1,4 @@
+# Outillage de développement (ADR-088, lot 1) — non installé dans l'image Docker.
+-r requirements.txt
+pytest>=8.0
+ruff>=0.6
