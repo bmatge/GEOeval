@@ -48,7 +48,8 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
 │   ├── db/                → session.py, models.py (23 tables), migrations.sql (idempotent), seed.sql
 │   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/
-│   └── worker/            → main.py (processus worker, SIGTERM gracieux), jobs.py (file `jobs` + `job_logs`, SKIP LOCKED), scheduler.py (verrou advisory)
+│   ├── observability/     → logs.py (JSON/texte, request_id, job_id), middleware.py (X-Request-ID, journal d'accès, métriques HTTP), metrics.py (Prometheus), health.py
+│   └── worker/            → main.py (processus worker, SIGTERM gracieux), health.py (:9100 /healthz /readyz /metrics), jobs.py (file `jobs`, SKIP LOCKED), scheduler.py (verrou advisory)
 ├── scripts/               → init_db, set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
@@ -95,6 +96,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - ADR-088 (stack conservée, API first, refacto en 2 lots vers Nubo) · ADR-089 (hiérarchie d'entités,
   budgets consolidés, pools, contrats LLM, ProConnect) : `docs/adr/` · schémas : `docs/architecture.md`
 - Backlog : issues GitHub **désactivées** sur ce repo → suivre via PR + `todo.md`
+- Sondes : `/healthz` `/readyz` `/metrics` (web) et `:9100` (worker) · logs JSON sur stdout (`GEOEVAL_LOG_FORMAT`)
 - Proto : https://geoeval.lab.miweb.run · API v1 : `/api/v1/docs` (jeton `Authorization: Bearer`, créé dans Paramètres de l'org) · plateforme : ADR-038 (spawn), ADR-056 (secrets partagés)
 
 ---

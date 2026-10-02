@@ -20,6 +20,7 @@ import logging
 import os
 import socket
 import threading
+import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
@@ -31,6 +32,8 @@ from geoeval.core.load import load_tests
 from geoeval.core.run import execute_run
 from geoeval.db.models import Job, JobLog
 from geoeval.db.session import SessionLocal
+from geoeval.observability import metrics
+from geoeval.observability.context import job_id_var, org_id_var
 
 logger = logging.getLogger("geoeval.worker.jobs")
 
@@ -187,6 +190,7 @@ def _heartbeat_loop(job_id: str, stop: threading.Event) -> None:
     while not stop.wait(HEARTBEAT_SECONDS):
         try:
             _set(job_id)
+            metrics.touch_worker_alive()
         except Exception:  # noqa: BLE001
             logger.exception("battement de cœur du job %s en échec", job_id)
 
@@ -227,6 +231,10 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
     hb_stop = threading.Event()
     threading.Thread(target=_heartbeat_loop, args=(job_id, hb_stop), daemon=True, name=f"hb-{job_id}").start()
 
+    ctx_job = job_id_var.set(job_id)
+    ctx_org = None
+    started = time.monotonic()
+    outcome = "error"
     run_ids: list[int] = []
     try:
         with SessionLocal() as session:
@@ -240,6 +248,7 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
         note: Optional[str] = params.get("note") or None
         test_ids: Optional[list[int]] = params.get("test_ids") or None
         organization_id = int(params["organization_id"])
+        ctx_org = org_id_var.set(organization_id)
         perimeter_id = params.get("perimeter_id")
         if perimeter_id is not None:
             perimeter_id = int(perimeter_id)
@@ -290,8 +299,10 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
                 session.commit()
 
         _set(job_id, status=STATUS_DONE, phase="terminé", finished_at=func.now())
+        outcome = "done"
         logger.info("Job %s terminé (runs %s)", job_id, run_ids)
     except JobInterrupted as exc:
+        outcome = "interrupted"
         logger.warning("Job %s : %s", job_id, exc)
         _set(job_id, status=STATUS_ERROR, error=str(exc), phase="interrompu", finished_at=func.now())
     except Exception as exc:  # noqa: BLE001
@@ -300,3 +311,8 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
     finally:
         hb_stop.set()
         root.removeHandler(handler)
+        metrics.JOBS_EXECUTED.labels(outcome).inc()
+        metrics.JOB_DURATION.observe(time.monotonic() - started)
+        if ctx_org is not None:
+            org_id_var.reset(ctx_org)
+        job_id_var.reset(ctx_job)

@@ -199,6 +199,16 @@ python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base
 
 ---
 
+## Exploitation (ADR-088 lot 1.5)
+
+- **Logs** : une ligne JSON par événement sur stdout (`GEOEVAL_LOG_FORMAT=json`, défaut hors terminal),
+  avec `service`, `request_id` (repris de `X-Request-ID` ou généré, renvoyé dans la réponse), `job_id`,
+  `org_id`. Journal d'accès par gabarit de route avec durée.
+- **Sondes** : web `/healthz` (processus), `/readyz` (base + schéma, 503 sinon) ; worker sur le port
+  interne `GEOEVAL_WORKER_PORT` (9100) : `/healthz` (503 si aucun signe de vie depuis 90 s), `/readyz`.
+- **Métriques Prometheus** : `/metrics` (web et worker) — requêtes HTTP par route et statut, durées,
+  jobs exécutés et durée, file de jobs par statut, appels LLM par famille et issue.
+
 ## API v1 (ADR-088 §2.3 — API first)
 
 Sous-application montée sur `/api/v1`, documentation interactive sur `/api/v1/docs`.
