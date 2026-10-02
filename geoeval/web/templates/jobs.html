@@ -2,8 +2,8 @@
 {% block title %}Suivi des évaluations{% endblock %}
 {% block content %}
 <h1>Suivi des évaluations</h1>
-<p class="fr-hint-text">Historique en mémoire des lancements récents (perdu au redéploiement).
-Les évaluations terminées restent en base — voir <a class="fr-link" href="{{ url_prefix }}/runs">Évaluations</a>.</p>
+<p class="fr-hint-text">Lancements récents, exécutés par le worker (file persistée en base, conservée au redéploiement).
+Les évaluations terminées sont dans <a class="fr-link" href="{{ url_prefix }}/runs">Évaluations</a>.</p>
 {% if jobs %}
 <div class="fr-table fr-table--bordered">
   <table>

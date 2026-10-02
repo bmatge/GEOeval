@@ -289,3 +289,37 @@ UPDATE tests SET citation_quality_prompt_id =
     (SELECT MIN(prompt_id) FROM evaluation_prompts WHERE prompt_type_id = 2)
 WHERE citation_quality_prompt_id IS NULL
   AND EXISTS (SELECT 1 FROM evaluation_prompts WHERE prompt_type_id = 2);
+
+-- ---------------------------------------------------------------------
+-- ADR-088 lot 1.2 — file de jobs persistée + logs d'exécution.
+-- Les workers (geoeval.worker.main) réclament par FOR UPDATE SKIP LOCKED.
+-- ---------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS jobs (
+    id              TEXT        PRIMARY KEY,
+    organization_id INTEGER     NOT NULL REFERENCES organizations(id),
+    status          TEXT        NOT NULL DEFAULT 'queued',
+    priority        INTEGER     NOT NULL DEFAULT 0,
+    params          JSONB       NOT NULL,
+    phase           TEXT        NOT NULL DEFAULT '',
+    "current"       INTEGER     NOT NULL DEFAULT 0,
+    total           INTEGER     NOT NULL DEFAULT 0,
+    error           TEXT,
+    run_ids         JSONB       NOT NULL DEFAULT '[]'::jsonb,
+    attempt         INTEGER     NOT NULL DEFAULT 0,
+    worker_id       TEXT,
+    created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    claimed_at      TIMESTAMPTZ,
+    heartbeat_at    TIMESTAMPTZ,
+    finished_at     TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS ix_jobs_organization_id ON jobs(organization_id);
+CREATE INDEX IF NOT EXISTS ix_jobs_queue ON jobs(status, priority DESC, created_at);
+
+CREATE TABLE IF NOT EXISTS job_logs (
+    id      BIGSERIAL   PRIMARY KEY,
+    job_id  TEXT        NOT NULL REFERENCES jobs(id) ON DELETE CASCADE,
+    ts      TIMESTAMPTZ NOT NULL DEFAULT now(),
+    level   TEXT        NOT NULL,
+    message TEXT        NOT NULL
+);
+CREATE INDEX IF NOT EXISTS ix_job_logs_job_id ON job_logs(job_id);

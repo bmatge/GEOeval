@@ -6,7 +6,7 @@ Les diagrammes sont en Mermaid (rendus par GitHub). Trois vues : l'existant, la 
 déroulé d'un run. Puis deux tableaux : où vivent les règles métier, et comment on atteint
 chaque fournisseur LLM.
 
-## 1. Existant (POC sur VibeLab)
+## 1. Existant (POC sur VibeLab, avant le lot 1.2)
 
 Un seul processus uvicorn porte tout : les routes HTML, le worker de runs (thread) et le
 planificateur (thread). Les règles métier sont réparties entre la couche services et les
@@ -62,8 +62,9 @@ flowchart LR
   MW -.-> IDP
 ```
 
-Limites visibles sur ce schéma : un redémarrage perd la file et les logs de jobs ; deux
-réplicas doubleraient le planificateur ; les contrôles budget et allowlist ne protègent que
+Limites visibles sur ce schéma (levées par le lot 1.2 : table `jobs`, processus
+`geoeval.worker.main`, verrou consultatif pour le planificateur) : un redémarrage perdait la
+file et les logs de jobs ; deux réplicas auraient doublé le planificateur ; les contrôles budget et allowlist ne protègent que
 le chemin HTML ; l'egress n'est pas filtré.
 
 ## 2. Cible pilote (lot 1 + API first + lot 2 Nubo)
