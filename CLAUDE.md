@@ -27,6 +27,7 @@ docker compose -f deploy/docker-compose.local.yml up -d
 cp .env.example .env                    # DATABASE_URL + clés API
 python -m scripts.init_db && psql "$PGURL" -f geoeval/db/seed.sql   # PGURL = URL libpq (sans +psycopg2)
 python -m scripts.run_web               # UI sur http://127.0.0.1:8000
+python -m geoeval.worker.main           # worker (runs + planificateur) — ou GEOEVAL_INLINE_WORKER=1 dans le web
 
 # Tests + lint (ADR-088) — DATABASE_URL posé = tests d'intégration inclus, sinon sautés
 pip install -r requirements-dev.txt
@@ -47,12 +48,12 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
 │   ├── db/                → session.py, models.py (23 tables), migrations.sql (idempotent), seed.sql
 │   ├── web/               → app.py (routes), services.py (DAO), auth*, tenancy, budget… + templates/ DSFR
-│   └── worker/            → jobs.py (worker thread), scheduler.py (poll 30 s) — futur processus séparé
+│   └── worker/            → main.py (processus worker, SIGTERM gracieux), jobs.py (file `jobs` + `job_logs`, SKIP LOCKED), scheduler.py (verrou advisory)
 ├── scripts/               → init_db, set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
 ├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, epics/, spikes/
-└── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; entrypoint : db → init_db → migrations → seed → uvicorn :3000
+└── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; services web (entrypoint : db → init_db → migrations → seed → uvicorn :3000), worker, db
 ```
 
 ## 5. Conventions

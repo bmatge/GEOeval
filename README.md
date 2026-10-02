@@ -227,7 +227,9 @@ Pages disponibles :
 Détails d'implémentation :
 
 - **`geoeval/web/app.py`** — routes FastAPI. **`geoeval/web/services.py`** — requêtes/agrégations.
-  **`geoeval/worker/jobs.py`** — exécution des runs en tâche de fond (un worker unique sérialise les
+  **`geoeval/worker/`** — file de jobs persistée (`jobs`, `job_logs`) et processus worker
+  `python -m geoeval.worker.main` (ADR-088 lot 1.2 ; `GEOEVAL_INLINE_WORKER=1` pour un thread dans le web en dev).
+  Historique : exécution des runs en tâche de fond (un worker unique sérialise les
   runs ; les logs GEOeval sont capturés par job et affichés en direct via polling `/api/jobs/{id}`).
 - Les runs longs (N modèles × M tests + juges) tournent **hors requête HTTP** : l'UI reste réactive
   et suit la progression grâce aux callbacks `progress_cb` ajoutés à `execute_run` / `evaluate_run`.

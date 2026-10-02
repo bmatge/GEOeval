@@ -1,23 +1,22 @@
 """
 Exécution des runs programmés (table scheduled_runs).
 
-Un thread unique relit la table toutes les 30 s et soumet au JobManager les
-planifications arrivées à échéance. Tout l'état vit en base : les
-planifications survivent aux redéploiements (contrairement aux jobs, en
-mémoire). Les heures saisies dans l'UI sont en Europe/Paris ; next_run_at est
-stocké en UTC.
+Le processus worker (geoeval.worker.main) appelle `tick_if_leader()` toutes les
+POLL_SECONDS : les planifications échues sont mises en file dans `jobs`, sous
+verrou consultatif PostgreSQL pour qu'un seul worker le fasse à la fois. Tout
+l'état vit en base. Les heures saisies dans l'UI sont en Europe/Paris ;
+next_run_at est stocké en UTC.
 """
 from __future__ import annotations
 
 import logging
-import threading
 from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
 
-from geoeval.db.session import SessionLocal
 from geoeval.db.models import ScheduledRun
 
 logger = logging.getLogger("geoeval.worker.scheduler")
@@ -82,62 +81,60 @@ def describe_schedule(kind: str, config: dict[str, Any]) -> str:
         return f"toutes les {config['hours']} h"
     return kind
 
+# Clé du verrou consultatif PostgreSQL (portée transaction) : un seul tick à la
+# fois, quel que soit le nombre de workers. 0x47454F45 = "GEOE".
+SCHEDULER_LOCK_KEY = 0x47454F45
 
-def _tick() -> None:
-    # Import tardif : évite le cycle scheduler -> jobs -> (rien) au chargement.
-    from geoeval.worker.jobs import manager
+
+def tick(session: Session) -> int:
+    """Met en file les planifications échues et recalcule leur prochaine échéance.
+    Ne commite pas : l'appelant tient la transaction (et le verrou)."""
+    from geoeval.worker import jobs
 
     now = datetime.now(timezone.utc)
-    with SessionLocal() as session:
-        due = session.execute(
-            select(ScheduledRun).where(
-                ScheduledRun.enabled.is_(True),
-                ScheduledRun.next_run_at.is_not(None),
-                ScheduledRun.next_run_at <= now,
-            )
-        ).scalars().all()
+    due = session.execute(
+        select(ScheduledRun).where(
+            ScheduledRun.enabled.is_(True),
+            ScheduledRun.next_run_at.is_not(None),
+            ScheduledRun.next_run_at <= now,
+        )
+    ).scalars().all()
 
-        for sr in due:
-            job = manager.submit(
-                dict(
-                    organization_id=sr.organization_id,
-                    perimeter_id=sr.perimeter_id,
-                    tested_models=list(sr.tested_models),
-                    judges=list(sr.judges),
-                    note=sr.note or f"planifié : {sr.name}",
-                    test_ids=list(sr.test_ids) if sr.test_ids else None,
-                )
-            )
-            logger.info("planification %s (%s) -> job %s", sr.schedule_id, sr.name, job.id)
-            sr.last_run_at = now
-            sr.last_job_id = job.id
-            if sr.schedule_kind == "once":
-                sr.enabled = False
-                sr.next_run_at = None
-            else:
-                sr.next_run_at = compute_next_run(sr.schedule_kind, sr.schedule_config, after=now)
-        session.commit()
-
-
-def _loop() -> None:
-    while True:
-        try:
-            _tick()
-        except Exception:  # noqa: BLE001 — le scheduler ne doit jamais mourir
-            logger.exception("tick scheduler en échec")
-        threading.Event().wait(POLL_SECONDS)
+    for sr in due:
+        job = jobs.submit(
+            session,
+            dict(
+                organization_id=sr.organization_id,
+                perimeter_id=sr.perimeter_id,
+                tested_models=list(sr.tested_models),
+                judges=list(sr.judges),
+                note=sr.note or f"planifié : {sr.name}",
+                test_ids=list(sr.test_ids) if sr.test_ids else None,
+            ),
+            commit=False,
+        )
+        logger.info("planification %s (%s) -> job %s", sr.schedule_id, sr.name, job.id)
+        sr.last_run_at = now
+        sr.last_job_id = job.id
+        if sr.schedule_kind == "once":
+            sr.enabled = False
+            sr.next_run_at = None
+        else:
+            sr.next_run_at = compute_next_run(sr.schedule_kind, sr.schedule_config, after=now)
+    return len(due)
 
 
-_started = False
-_lock = threading.Lock()
-
-
-def start() -> None:
-    """Démarre le thread scheduler (idempotent, appelé au chargement de l'app)."""
-    global _started
-    with _lock:
-        if _started:
-            return
-        threading.Thread(target=_loop, daemon=True, name="scheduler").start()
-        _started = True
-        logger.info("scheduler démarré (poll %ss)", POLL_SECONDS)
+def tick_if_leader(session: Session) -> Optional[int]:
+    """Exécute `tick()` sous verrou consultatif transactionnel. Renvoie le nombre
+    de planifications traitées, ou None si un autre worker tenait le verrou."""
+    got = session.execute(text("SELECT pg_try_advisory_xact_lock(:k)"), {"k": SCHEDULER_LOCK_KEY}).scalar_one()
+    if not got:
+        session.rollback()
+        return None
+    try:
+        n = tick(session)
+        session.commit()  # libère le verrou
+        return n
+    except Exception:
+        session.rollback()
+        raise

@@ -503,3 +503,46 @@ class TestGroundTruth(Base):
     )
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
     notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+# =====================================================================
+# File de jobs persistée (ADR-088 lot 1.2) — réclamée par les processus
+# worker via SELECT … FOR UPDATE SKIP LOCKED ; logs d'exécution à part.
+# =====================================================================
+class Job(Base):
+    __tablename__ = "jobs"
+
+    id: Mapped[str] = mapped_column(Text, primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    status: Mapped[str] = mapped_column(Text, nullable=False, default="queued")
+    priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    params: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    phase: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    current: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    total: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    error: Mapped[Optional[str]] = mapped_column(Text)
+    run_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, default=list)
+    attempt: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    worker_id: Mapped[Optional[str]] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    claimed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    heartbeat_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    finished_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+class JobLog(Base):
+    __tablename__ = "job_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    job_id: Mapped[str] = mapped_column(
+        ForeignKey("jobs.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    ts: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    level: Mapped[str] = mapped_column(Text, nullable=False)
+    message: Mapped[str] = mapped_column(Text, nullable=False)

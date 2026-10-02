@@ -51,8 +51,9 @@ from geoeval.web.deps import (
     require_role,
     require_user,
 )
+from geoeval.worker import jobs as jobqueue
 from geoeval.worker import scheduler
-from geoeval.worker.jobs import manager
+from geoeval.worker.main import inline_worker_enabled, start_inline_thread
 
 logging.basicConfig(
     level=logging.INFO,
@@ -83,7 +84,10 @@ app.add_middleware(
     https_only=os.environ.get("GEOEVAL_COOKIE_SECURE", "0").strip() in ("1", "true", "yes"),
 )
 app.include_router(auth_routes.router)
-scheduler.start()
+# Lot 1.2 : le worker et le planificateur tournent dans un processus séparé
+# (python -m geoeval.worker.main). Mode inline opt-in pour le dev local.
+if inline_worker_enabled():
+    start_inline_thread()
 
 
 @app.exception_handler(401)
@@ -927,7 +931,7 @@ def launch_submit(
     if not check.ok:
         raise HTTPException(status_code=402, detail=check.reason)
 
-    job = manager.submit(dict(
+    job = jobqueue.submit(db, dict(
         **params, note=note or None,
         organization_id=org.id, perimeter_id=perimeter_id,
     ))
@@ -1360,7 +1364,8 @@ def schedule_run_now(
     sr = services.get_schedule(db, org.id, schedule_id)
     if sr is None:
         raise HTTPException(status_code=404, detail="Planification introuvable.")
-    job = manager.submit(
+    job = jobqueue.submit(
+        db,
         dict(
             organization_id=org.id,
             perimeter_id=sr.perimeter_id,
@@ -1385,36 +1390,32 @@ def schedule_delete(
 
 
 # =====================================================================
-# Jobs (par org — un job carry son organization_id ; isolation vérifiée)
+# Jobs (persistés en base — lot 1.2 ; isolation par organization_id)
 # =====================================================================
-def _org_jobs(org_id: int):
-    return [j for j in manager.list() if int(j.params.get("organization_id", -1)) == org_id]
-
-
 @app.get("/o/{org_slug}/jobs", response_class=HTMLResponse)
-def jobs_list(request: Request, ctx=Depends(require_org)):
+def jobs_list(request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
     org, role = ctx
     return render(request, "jobs.html", active="launch", org=org, role=role,
-                  jobs=[j.as_dict() for j in _org_jobs(org.id)])
+                  jobs=[jobqueue.as_dict(j) for j in jobqueue.list_for_org(db, org.id)])
 
 
 @app.get("/o/{org_slug}/jobs/{job_id}", response_class=HTMLResponse)
-def job_detail(job_id: str, request: Request, ctx=Depends(require_org)):
+def job_detail(job_id: str, request: Request, ctx=Depends(require_org), db: Session = Depends(get_db)):
     org, role = ctx
-    job = manager.get(job_id)
-    if job is None or int(job.params.get("organization_id", -1)) != org.id:
+    job = jobqueue.get_for_org(db, org.id, job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail=f"Job {job_id} introuvable")
     return render(request, "job_detail.html", active="launch", org=org, role=role,
-                  job=job.as_dict())
+                  job=jobqueue.as_dict(job, log=jobqueue.tail_logs(db, job.id)))
 
 
 @app.get("/o/{org_slug}/api/jobs/{job_id}")
-def job_status(job_id: str, ctx=Depends(require_org)):
+def job_status(job_id: str, ctx=Depends(require_org), db: Session = Depends(get_db)):
     org, _ = ctx
-    job = manager.get(job_id)
-    if job is None or int(job.params.get("organization_id", -1)) != org.id:
+    job = jobqueue.get_for_org(db, org.id, job_id)
+    if job is None:
         raise HTTPException(status_code=404, detail="job introuvable")
-    return JSONResponse(job.as_dict())
+    return JSONResponse(jobqueue.as_dict(job, log=jobqueue.tail_logs(db, job.id)))
 
 
 # =====================================================================

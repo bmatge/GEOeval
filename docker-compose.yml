@@ -5,38 +5,43 @@
 # Pour le dev local (Postgres seul sur localhost:5432) :
 #   docker compose -f deploy/docker-compose.local.yml up -d
 
+x-geoeval-env: &geoeval-env
+  DATABASE_URL: postgresql+psycopg2://geoeval:geoeval@db:5432/geoeval
+  # OpenRouter = provider plateforme par défaut (ADR-080)
+  OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+  USD_EUR_RATE: ${USD_EUR_RATE:-}
+  OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+  MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  # Albert : fourni par les secrets partagés de la plateforme (SOPS, ADR-056)
+  ALBERT_API_KEY: ${ALBERT_API_KEY:-}
+  ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
+  # Auth applicative (ADR-086) : sessions + comptes locaux, OIDC opt-in.
+  GEOEVAL_SESSION_SECRET: ${GEOEVAL_SESSION_SECRET:-}
+  GEOEVAL_COOKIE_SECURE: ${GEOEVAL_COOKIE_SECURE:-}
+  GEOEVAL_ADMIN_EMAILS: ${GEOEVAL_ADMIN_EMAILS:-}
+  AUTH_PROXY_ENABLED: ${AUTH_PROXY_ENABLED:-}
+  OIDC_ENABLED: ${OIDC_ENABLED:-}
+  OIDC_ISSUER: ${OIDC_ISSUER:-}
+  OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
+  OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
+  OIDC_SCOPES: ${OIDC_SCOPES:-}
+  OIDC_PROVIDER_LABEL: ${OIDC_PROVIDER_LABEL:-}
+  OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
+  # Dev local uniquement — ne JAMAIS poser en prod (bypass de l'auth).
+  DEV_FAKE_EMAIL: ${DEV_FAKE_EMAIL:-}
+  DEV_FAKE_GROUPS: ${DEV_FAKE_GROUPS:-}
+  # Fernet BYOK (ADR-078, PR#14) — voir .env.example pour la génération.
+  GEOEVAL_KEY_SECRET: ${GEOEVAL_KEY_SECRET:-}
+
 services:
   web:
     build: .
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg2://geoeval:geoeval@db:5432/geoeval
-      # OpenRouter = provider plateforme par défaut (ADR-080)
-      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
-      USD_EUR_RATE: ${USD_EUR_RATE:-}
-      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
-      MISTRAL_API_KEY: ${MISTRAL_API_KEY:-}
-      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
-      # Albert : fourni par les secrets partagés de la plateforme (SOPS, ADR-056)
-      ALBERT_API_KEY: ${ALBERT_API_KEY:-}
-      ALBERT_BASE_URL: ${ALBERT_BASE_URL:-}
-      # Auth applicative (ADR-086) : sessions + comptes locaux, OIDC opt-in.
-      GEOEVAL_SESSION_SECRET: ${GEOEVAL_SESSION_SECRET:-}
-      GEOEVAL_COOKIE_SECURE: ${GEOEVAL_COOKIE_SECURE:-}
-      GEOEVAL_ADMIN_EMAILS: ${GEOEVAL_ADMIN_EMAILS:-}
-      AUTH_PROXY_ENABLED: ${AUTH_PROXY_ENABLED:-}
-      OIDC_ENABLED: ${OIDC_ENABLED:-}
-      OIDC_ISSUER: ${OIDC_ISSUER:-}
-      OIDC_CLIENT_ID: ${OIDC_CLIENT_ID:-}
-      OIDC_CLIENT_SECRET: ${OIDC_CLIENT_SECRET:-}
-      OIDC_SCOPES: ${OIDC_SCOPES:-}
-      OIDC_PROVIDER_LABEL: ${OIDC_PROVIDER_LABEL:-}
-      OIDC_ADMIN_GROUP: ${OIDC_ADMIN_GROUP:-}
-      # Dev local uniquement — ne JAMAIS poser en prod (bypass de l'auth).
-      DEV_FAKE_EMAIL: ${DEV_FAKE_EMAIL:-}
-      DEV_FAKE_GROUPS: ${DEV_FAKE_GROUPS:-}
-      # Fernet BYOK (ADR-078, PR#14) — voir .env.example pour la génération.
-      GEOEVAL_KEY_SECRET: ${GEOEVAL_KEY_SECRET:-}
+      <<: *geoeval-env
+      # Lot 1.2 : le worker est un service séparé ; 1 = repli mono-processus.
+      GEOEVAL_INLINE_WORKER: ${GEOEVAL_INLINE_WORKER:-0}
     depends_on:
       db:
         condition: service_healthy
@@ -48,6 +53,22 @@ services:
       - traefik.http.routers.${APP_NAME}.entrypoints=websecure
       - traefik.http.routers.${APP_NAME}.tls.certresolver=letsencrypt
       - traefik.http.services.${APP_NAME}.loadbalancer.server.port=3000
+
+  # Worker (ADR-088 lot 1.2) : même image, réclame les jobs en base, exécute
+  # runs + évaluations, porte le planificateur. Pas de port ni de label Traefik.
+  # Plusieurs réplicas possibles (docker compose up --scale worker=2).
+  worker:
+    build: .
+    command: ["python", "-m", "geoeval.worker.main"]
+    restart: unless-stopped
+    environment: *geoeval-env
+    depends_on:
+      db:
+        condition: service_healthy
+      web:
+        condition: service_started   # le web joue init_db + migrations ; le worker attend le schéma
+    networks: [default]
+    stop_grace_period: 15m           # SIGTERM : le modèle en cours se termine, les suivants ne démarrent pas
 
   db:
     image: postgres:16
