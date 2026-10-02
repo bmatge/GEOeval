@@ -40,7 +40,7 @@ incompatible avec Python ; c'est une question à poser à l'équipe Nubo avant l
 | 3 | **Découpage API / UI de `geoeval/web/app.py`** (2 176 lignes, 83 routes) : `geoeval/web/api/v1` (JSON, Pydantic, OpenAPI) + `geoeval/web/ui` (HTML minces), règles rapatriées dans les services, jetons d'organisation pour les clients machine | Lisibilité ; et surtout **API first** (§2.4) |
 | 4 | **Alembic** à la place de `migrations.sql`, exécuté **hors démarrage** — livré (lot 1.4) : révision 0001 **convergente** (base vierge → instantané pg_dump figé ; base existante → migrations.sql gelé), service `migrate` one-shot dont web et worker dépendent, garde-fou de dérive ORM/base en CI | `init_db + migrations + seed` à chaque boot = course entre réplicas |
 | 5 | **Observabilité** : logs JSON structurés sur stdout (request_id, job_id), `/healthz`, `/readyz`, export métriques — livré (lot 1.5) : `prometheus-client` retenu (pure Python, standard de fait, pont OpenTelemetry possible), mini serveur HTTP interne pour le worker | Inexistant au POC ; exigé par toute plateforme d'exploitation |
-| 6 | **DSFR, Chart.js et dsfr-chart vendorisés** dans `geoeval/web/static` | Chargés depuis un CDN public : incompatibles réseau fermé / CSP stricte |
+| 6 | **DSFR, Chart.js et dsfr-chart vendorisés** dans `geoeval/web/static` — livré (lot 1.6) : fichiers versionnés dans le dépôt (4,2 Mio, chemins versionnés), manifeste SHA-256 vérifié en CI, `scripts.vendor_assets --refresh` depuis npm ou un miroir Nexus ; pas de chaîne Node | Chargés depuis un CDN public : incompatibles réseau fermé / CSP stricte |
 
 ### 2.2 Lot 2 — spécifique Nubo
 

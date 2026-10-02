@@ -199,6 +199,19 @@ python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base
 
 ---
 
+## Ressources front vendorisées (ADR-088 lot 1.6)
+
+DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont
+servis depuis `/static/vendor/<paquet>-<version>/…` : aucun CDN à l'exécution (réseau fermé, CSP stricte).
+`geoeval/web/static/vendor/MANIFEST.json` porte les versions, licences et empreintes SHA-256, vérifiées en CI.
+
+```bash
+python -m scripts.vendor_assets --verify                      # conformité au manifeste
+python -m scripts.vendor_assets --refresh [--registry <Nexus>] # monter de version (éditer PACKAGES, puis les gabarits)
+```
+
+Licence : MIT pour l'ensemble, sauf la fonte Marianne dont l'usage est réservé à l'État (CGU du DSFR).
+
 ## Migrations de schéma (ADR-088 lot 1.4)
 
 Alembic, piloté par `python -m scripts.migrate` (attente de la base → `alembic upgrade head` → seed

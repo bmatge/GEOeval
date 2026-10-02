@@ -1,0 +1,3 @@
+# Ressources front vendorisées (lot 1.6) : hors diff et stats de langage.
+geoeval/web/static/vendor/** linguist-vendored -diff
+geoeval/web/static/vendor/MANIFEST.json diff
