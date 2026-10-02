@@ -89,7 +89,8 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 
 - Note projet dans le vault : `~/Documents/Obsidian/10-Projects/GEOeval.md`
 - ADR-076 (historique inviolable, config modèles, planification) : vault `30-Knowledge/ADR/`
-- ADR-088 (stack conservée, API first, refacto en 2 lots vers Nubo) : `docs/adr/` · schémas : `docs/architecture.md`
+- ADR-088 (stack conservée, API first, refacto en 2 lots vers Nubo) · ADR-089 (hiérarchie d'entités,
+  budgets consolidés, pools, contrats LLM, ProConnect) : `docs/adr/` · schémas : `docs/architecture.md`
 - Backlog : issues GitHub **désactivées** sur ce repo → suivre via PR + `todo.md`
 - Proto : https://geoeval.lab.miweb.run · plateforme : ADR-038 (spawn), ADR-056 (secrets partagés)
 

@@ -1,6 +1,7 @@
 # Architecture logique GEOeval — POC actuel et cible pilote
 
-Document de référence lié à [ADR-088](adr/ADR-088-stack-conservee-refacto-incremental-nubo.md).
+Document de référence lié à [ADR-088](adr/ADR-088-stack-conservee-refacto-incremental-nubo.md)
+et [ADR-089](adr/ADR-089-modele-cible-echelle-ministerielle.md) (modèle de données cible pour l'échelle).
 Les diagrammes sont en Mermaid (rendus par GitHub). Trois vues : l'existant, la cible, le
 déroulé d'un run. Puis deux tableaux : où vivent les règles métier, et comment on atteint
 chaque fournisseur LLM.
