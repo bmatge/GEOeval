@@ -37,7 +37,7 @@ incompatible avec Python ; c'est une question à poser à l'équipe Nubo avant l
 |---|----------|---------------------|
 | 1 | **Tests + CI** (pytest, ruff, GitHub Actions, build Docker) | Prérequis à tout refacto ; aucune couverture aujourd'hui |
 | 2 | **Worker hors du processus web** : jobs persistés en base, processus `worker` séparé, verrou `SELECT … FOR UPDATE SKIP LOCKED`, arrêt gracieux SIGTERM | File en mémoire + thread unique : jobs perdus au redémarrage, scheduler dupliqué dès 2 réplicas |
-| 3 | **Découpage de `webapp/app.py`** (2 176 lignes, 83 routes) en `APIRouter` par domaine | Lisibilité, revues, parallélisation du travail |
+| 3 | **Découpage API / UI de `webapp/app.py`** (2 176 lignes, 83 routes) : `webapp/api/v1` (JSON, Pydantic, OpenAPI) + `webapp/ui` (HTML minces), règles rapatriées dans les services, jetons d'organisation pour les clients machine | Lisibilité ; et surtout **API first** (§2.4) |
 | 4 | **Alembic** à la place de `migrations.sql`, exécuté **hors démarrage** (Job / étape pipeline) | `init_db + migrations + seed` à chaque boot = course entre réplicas |
 | 5 | **Observabilité** : logs JSON structurés sur stdout (request_id, job_id), `/healthz`, `/readyz`, export métriques | Inexistant aujourd'hui ; exigé par toute plateforme d'exploitation |
 | 6 | **DSFR, Chart.js et dsfr-chart vendorisés** dans `webapp/static` | Chargés depuis un CDN public : incompatibles réseau fermé / CSP stricte |
@@ -51,7 +51,33 @@ incompatible avec Python ; c'est une question à poser à l'équipe Nubo avant l
 | 9 | **Secrets de plateforme** | `.env` → secrets Nubo ; procédure de rotation de `GEOEVAL_KEY_SECRET` (Fernet BYOK) |
 | 10 | **Manifests de déploiement** (web, worker, migration) | Même image pour les trois rôles |
 
-### 2.3 Risque bloquant à lever en premier : les flux sortants
+### 2.3 Principe API first (amendement 2026-10-02)
+
+GEOeval n'est pas API first aujourd'hui : 6 routes JSON en lecture, 94 paramètres de
+formulaire, aucun schéma Pydantic. La stack est pourtant la bonne pour le devenir : FastAPI
+est un framework d'API, et la couche services est déjà séparée du rendu.
+
+Règles adoptées :
+
+1. **Toute fonctionnalité existe d'abord dans `webapp/api/v1`** (schémas Pydantic en entrée
+   et sortie, OpenAPI exposé et versionné, pagination, format d'erreur unique).
+2. **L'UI ne peut rien faire que l'API ne permette pas**, mais **n'appelle pas l'API en
+   HTTP** : API et UI partagent la couche services (pas de double auth ni de latence).
+3. **Toutes les règles vivent dans les services**, jamais dans un contrôleur. Constat
+   actuel : le contrôle budget et la liste blanche des modèles sont dans `app.py` ; une API
+   les contournerait. C'est la première correction du chantier 3.
+4. **Auth machine** : jetons porteurs par organisation, mêmes trois rôles, révocables.
+5. **Pas de SPA** : le back-office DSFR rendu côté serveur reste, il consomme les mêmes
+   services.
+
+Ce que ça rapporte au pilote : runs lancés depuis Jenkins ou un cron externe, export des
+scores vers Grist ou data.gouv, intégration dans d'autres outils, et un front séparé
+possible plus tard sans réécriture.
+
+Schémas d'architecture (existant, cible, déroulé d'un run, règles, routes LLM) :
+[`docs/architecture.md`](../architecture.md).
+
+### 2.4 Risque bloquant à lever en premier : les flux sortants
 
 Le cœur de l'application appelle **OpenAI, Mistral, Google, OpenRouter et Exa**. Sur un
 cloud souverain, l'egress est filtré. Avant d'investir dans le lot 2 :
@@ -80,6 +106,7 @@ plus que tout choix de framework.
 - Chaque chantier tient en une PR et **ne touche jamais à l'historique des runs** (ADR-076).
 - `CLAUDE.md` est mis à jour au fil des lots (il annonce 7 tables, il y en a 23).
 - Cette ADR est amendée quand les réponses Nubo (socle imposé, egress) sont connues.
+- Amendement 2026-10-02 : principe API first (§2.3) et schémas `docs/architecture.md`.
 
 ## 5. Première PR (lot 1, chantier 1)
 

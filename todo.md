@@ -19,10 +19,10 @@
   Statut : Proposé. Prochaine étape = Phase 0 (spike geo-targeting FR + Mistral natif/Exa).
 
 ## Pilote — ADR-088 (stack conservée, refacto incrémental vers Nubo)
-Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md`.
+Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/architecture.md`.
 - [x] Lot 1.1 — tests + CI (pytest, ruff, GitHub Actions, docker build)
 - [ ] Lot 1.2 — worker hors du processus web (jobs en base, `SKIP LOCKED`, SIGTERM)
-- [ ] Lot 1.3 — découpage de `webapp/app.py` en routers
+- [ ] Lot 1.3 — découpage API first : `webapp/api/v1` (Pydantic, OpenAPI, jetons d'org) + `webapp/ui` ; budget et allowlist rapatriés dans les services
 - [ ] Lot 1.4 — Alembic hors démarrage
 - [ ] Lot 1.5 — logs JSON, `/healthz`, `/readyz`, métriques
 - [ ] Lot 1.6 — DSFR / Chart.js vendorisés
