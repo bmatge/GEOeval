@@ -196,8 +196,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 |---|---|---|---|
 | RBAC trois rôles + admin plateforme | ADR-077 | `geoeval/web/deps.py` (dépendances FastAPI) | Dépendances partagées API et UI, rôle porté par le jeton ou la session |
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
-| Plafond budget mois et jour | ADR-080 | **`app.py` lancer et planifier (contrôleur)** | Service `launch_run()` unique, appelé par API et UI |
-| Liste blanche des modèles par org | EPIC-001 | **`app.py` (contrôleur)** | Même service `launch_run()` |
+| Plafond budget mois et jour | ADR-080 | `geoeval/web/launching.py` (lot 1.3a ; aussi appliqué à « exécuter maintenant ») | Idem, exposé par l'API v1 (lot 1.3b) |
+| Liste blanche des modèles par org | EPIC-001 | `geoeval/web/launching.py` (lot 1.3a) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
 | Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |
 | Retry, fail-fast, quota dur | — | `llm_clients.call_with_retry` | Inchangé |
@@ -206,8 +206,10 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Journal d'audit | ADR-077 | `geoeval/web/audit.record` depuis les contrôleurs | Appelé depuis les services |
 | Sérialisation des runs (quotas API) | — | Thread unique | Concurrence bornée par fournisseur dans le worker |
 
-Les deux lignes en gras sont le point à corriger en premier dans le chantier 1.3 : tant
-que ces contrôles sont dans les contrôleurs HTML, une API les contournerait.
+Lot 1.3a : le contrôle budget et la liste blanche ont quitté les contrôleurs HTML pour le
+service `launching`, que l'UI et l'API v1 appelleront à l'identique. Reste à traiter : le
+tick du planificateur ne revérifie pas le budget au moment de l'exécution (chantier E7,
+notifications : sauter et prévenir plutôt que lancer).
 
 ## 5. Routes vers les fournisseurs LLM
 

@@ -64,8 +64,11 @@ Règles adoptées :
 2. **L'UI ne peut rien faire que l'API ne permette pas**, mais **n'appelle pas l'API en
    HTTP** : API et UI partagent la couche services (pas de double auth ni de latence).
 3. **Toutes les règles vivent dans les services**, jamais dans un contrôleur. Constat
-   actuel : le contrôle budget et la liste blanche des modèles sont dans `app.py` ; une API
-   les contournerait. C'est la première correction du chantier 3.
+   initial : le contrôle budget et la liste blanche des modèles étaient dans `app.py` ; une API
+   les aurait contournés. Corrigé par le lot 1.3a (`geoeval/web/launching.py`, routers UI
+   minces dans `geoeval/web/ui/`). Arbitrages 1.3 : trois PR (1.3a découpage + service,
+   1.3b API v1 lecture + lancement + jetons, 1.3c API v1 écriture), jetons d'organisation en
+   base, erreurs RFC 9457 problem+json, préfixe `/api/v1/orgs/{slug}/…`.
 4. **Auth machine** : jetons porteurs par organisation, mêmes trois rôles, révocables.
 5. **Pas de SPA** : le back-office DSFR rendu côté serveur reste, il consomme les mêmes
    services.
