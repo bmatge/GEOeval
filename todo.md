@@ -28,7 +28,7 @@ Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/arc
 - [x] Lot 1.3c — API v1 écriture : périmètres (POST/PATCH/DELETE), questions (POST/PATCH, désactivation, vérité de référence versionnée), planifications (POST/PATCH/DELETE) ; service `scheduling.py`
 - [x] Lot 1.4 — Alembic : révision 0001 convergente (base vierge → schema_base.sql, base existante → migrations.sql gelé), service `migrate` one-shot avant web et worker, garde-fou de dérive ORM/base en CI
 - [x] Lot 1.5 — logs JSON (request_id, job_id), `/healthz` `/readyz` `/metrics` web et worker (:9100), métriques Prometheus HTTP / jobs / LLM, healthchecks compose
-- [ ] Lot 1.6 — DSFR / Chart.js vendorisés
+- [x] Lot 1.6 — DSFR, Chart.js, dsfr-chart, dsfr-data vendorisés (`geoeval/web/static/vendor`, manifeste SHA-256, `scripts.vendor_assets`) — **lot 1 terminé**
 - [ ] Lot 2 — ProConnect, Nexus/Jenkins, secrets, manifests (après réponses Nubo : socle imposé ? egress LLM ?)
 
 ## Échelle — ADR-089 (modèle cible ministériel / interministériel)

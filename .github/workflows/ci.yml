@@ -39,6 +39,8 @@ jobs:
         run: pip install -r requirements-dev.txt
       - name: Lint (ruff)
         run: ruff check .
+      - name: Ressources front vendorisées (manifeste)
+        run: python -m scripts.vendor_assets --verify
       - name: Tests (pytest)
         run: pytest -q
 

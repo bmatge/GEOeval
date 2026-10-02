@@ -23,6 +23,7 @@ import os
 import secrets as _secrets
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
@@ -31,6 +32,7 @@ from geoeval.observability.middleware import RequestContextMiddleware
 from geoeval.web import auth_routes, ops
 from geoeval.web.api import create_api_app
 from geoeval.web.auth import AuthMiddleware
+from geoeval.web.rendering import BASE_DIR
 from geoeval.web.ui import ROUTERS
 from geoeval.worker.main import inline_worker_enabled, start_inline_thread
 
@@ -71,6 +73,10 @@ async def _redirect_unauthenticated(request: Request, exc: HTTPException):
         return RedirectResponse(f"/login?next={request.url.path}", status_code=302)
     return JSONResponse(status_code=401, content={"detail": exc.detail})
 
+
+# Lot 1.6 : ressources front vendorisées (DSFR, Chart.js, dsfr-chart, dsfr-data) —
+# aucun CDN à l'exécution. Chemins versionnés (/static/vendor/dsfr-1.13.0/…).
+app.mount("/static", StaticFiles(directory=str(BASE_DIR / "static")), name="static")
 
 for _router in ROUTERS:
     app.include_router(_router)

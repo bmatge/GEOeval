@@ -47,10 +47,10 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 ├── geoeval/               → package applicatif (ADR-088 §2.5), racine unique des imports
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
 │   ├── db/                → session.py, models.py (25 tables, index déclarés), migrate.py + alembic/ (révisions ; 0001 = base convergente, schema_base.sql), migrations.sql (GELÉ), seed.sql
-│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/
+│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/ + static/vendor/ (DSFR, Chart.js… vendorisés, MANIFEST.json)
 │   ├── observability/     → logs.py (JSON/texte, request_id, job_id), middleware.py (X-Request-ID, journal d'accès, métriques HTTP), metrics.py (Prometheus), health.py
 │   └── worker/            → main.py (processus worker, SIGTERM gracieux), health.py (:9100 /healthz /readyz /metrics), jobs.py (file `jobs`, SKIP LOCKED), scheduler.py (verrou advisory)
-├── scripts/               → init_db, set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
+├── scripts/               → migrate, vendor_assets (--verify / --refresh), set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
 ├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, epics/, spikes/
@@ -91,6 +91,8 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
   ⚠️ Le SSO applicatif dépend de l'application Authentik `geoeval-sso` (provider
   `geoeval-oidc`) : le slug `geoeval` appartient à `app-auth.py` (bypass gate ADR-062)
 - Poser `DEV_FAKE_EMAIL` en prod (bypass complet de l'auth applicative)
+- Référencer un CDN dans un gabarit : les ressources front sont vendorisées (`python -m scripts.vendor_assets --refresh`
+  pour monter de version), un test refuse toute URL externe de ressource
 
 ## 8. Références externes
 
