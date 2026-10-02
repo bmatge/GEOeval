@@ -23,10 +23,10 @@ UI web FastAPI + DSFR, runs en tâche de fond + planification intégrée.
 
 ```bash
 # Dev local (Postgres seul)
-docker compose -f docker-compose.local.yml up -d
+docker compose -f deploy/docker-compose.local.yml up -d
 cp .env.example .env                    # DATABASE_URL + clés API
-python init_db.py && psql "$DATABASE_URL" -f seed.sql
-python run_web.py                       # UI sur http://127.0.0.1:8000
+python -m scripts.init_db && psql "$PGURL" -f geoeval/db/seed.sql   # PGURL = URL libpq (sans +psycopg2)
+python -m scripts.run_web               # UI sur http://127.0.0.1:8000
 
 # Tests + lint (ADR-088) — DATABASE_URL posé = tests d'intégration inclus, sinon sautés
 pip install -r requirements-dev.txt
@@ -43,14 +43,16 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 
 ```
 .
-├── run.py / evaluate.py   → phases RUN (web search) et ÉVALUATION (juges, JSON strict)
-├── llm_clients.py         → client_for_model() (config base + repli env), retry/fail-fast
-├── models.py / db.py      → ORM (23 tables : corpus, runs, multi-tenant, BYOK, budgets, auth) ; init_db.py + migrations.sql + seed.sql
-├── webapp/                → app.py (routes), services.py (DAO), jobs.py (worker), scheduler.py (poll 30 s)
-│   └── templates/         → Jinja2 DSFR (_run_selection.html partagé lancer/planifier)
+├── geoeval/               → package applicatif (ADR-088 §2.5), racine unique des imports
+│   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
+│   ├── db/                → session.py, models.py (23 tables), migrations.sql (idempotent), seed.sql
+│   ├── web/               → app.py (routes), services.py (DAO), auth*, tenancy, budget… + templates/ DSFR
+│   └── worker/            → jobs.py (worker thread), scheduler.py (poll 30 s) — futur processus séparé
+├── scripts/               → init_db, set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
+├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
-├── Dockerfile + docker-entrypoint.sh   → attente db → init_db → migrations → seed → uvicorn :3000
-└── main.py / mainUnitaire.py           → CLI historiques (hors UI)
+├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, epics/, spikes/
+└── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; entrypoint : db → init_db → migrations → seed → uvicorn :3000
 ```
 
 ## 5. Conventions
@@ -58,7 +60,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - Style : type hints systématiques ; docstrings courtes en français
 - Branches : `master` protégé par convention, **tout passe par PR** (merge par Bertrand)
 - Commits : Conventional Commits (`feat:`, `fix:`, `docs:`…), messages en français
-- Migrations : jamais d'ALTER manuel — ajouter à `migrations.sql` (idempotent,
+- Migrations : jamais d'ALTER manuel — ajouter à `geoeval/db/migrations.sql` (idempotent,
   `ADD COLUMN IF NOT EXISTS`), rejoué à chaque démarrage du conteneur
 
 ## 6. Ce que Claude doit toujours faire
@@ -89,7 +91,8 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 
 - Note projet dans le vault : `~/Documents/Obsidian/10-Projects/GEOeval.md`
 - ADR-076 (historique inviolable, config modèles, planification) : vault `30-Knowledge/ADR/`
-- ADR-088 (stack conservée, API first, refacto en 2 lots vers Nubo) : `docs/adr/` · schémas : `docs/architecture.md`
+- ADR-088 (stack conservée, API first, refacto en 2 lots vers Nubo) · ADR-089 (hiérarchie d'entités,
+  budgets consolidés, pools, contrats LLM, ProConnect) : `docs/adr/` · schémas : `docs/architecture.md`
 - Backlog : issues GitHub **désactivées** sur ce repo → suivre via PR + `todo.md`
 - Proto : https://geoeval.lab.miweb.run · plateforme : ADR-038 (spawn), ADR-056 (secrets partagés)
 

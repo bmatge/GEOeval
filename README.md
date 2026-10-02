@@ -18,31 +18,35 @@ Chaque note est un couple `(label, score)` avec `score ∈ [0, 10]`.
 
 ## Architecture
 
-```
-main.py / mainUnitaire.py   ← points d'entrée (orchestration)
-        │
-        ├── load.py         ← charge les tests actifs depuis la base
-        ├── run.py          ← PHASE RUN : appelle les modèles testés, stocke les réponses
-        │       └── llm_clients.py   ← clients API + singletons + retry/backoff
-        └── evaluate.py     ← PHASE ÉVALUATION : appelle les LLM-juges, stocke les notes
-                └── llm_clients.py
+Organisation du dépôt (ADR-088 §2.5) : package `geoeval/` (`core/`, `db/`, `web/`, `worker/`),
+`scripts/`, `deploy/`, `docs/`, `tests/`. Seuls `Dockerfile` et `docker-compose.yml` restent à la racine
+(contrat spawn).
 
-db.py        ← moteur SQLAlchemy + SessionLocal (connexion PostgreSQL via DATABASE_URL)
-models.py    ← modèles ORM SQLAlchemy (schéma de la base)
+```
+scripts/legacy/main.py, mainUnitaire.py   ← CLI historiques (orchestration hors UI)
+        │
+        ├── geoeval/core/load.py         ← charge les tests actifs depuis la base
+        ├── geoeval/core/run.py          ← PHASE RUN : appelle les modèles testés, stocke les réponses
+        │       └── geoeval/core/llm_clients.py   ← clients API + singletons + retry/backoff
+        └── geoeval/core/evaluate.py     ← PHASE ÉVALUATION : appelle les LLM-juges, stocke les notes
+                └── geoeval/core/llm_clients.py
+
+geoeval/db/session.py   ← moteur SQLAlchemy + SessionLocal (connexion PostgreSQL via DATABASE_URL)
+geoeval/db/models.py    ← modèles ORM SQLAlchemy (schéma de la base)
 ```
 
 ### Deux phases
 
 | Phase           | Fichier       | Rôle                                                                                  |
 | --------------- | ------------- | ------------------------------------------------------------------------------------- |
-| **RUN**         | `run.py`      | Pour chaque test, appelle le modèle testé (avec web search) et écrit `runs` + `run_results`. |
-| **ÉVALUATION**  | `evaluate.py` | Pour chaque résultat, appelle le(s) juge(s) et écrit `run_evaluations`.               |
+| **RUN**         | `geoeval/core/run.py`      | Pour chaque test, appelle le modèle testé (avec web search) et écrit `runs` + `run_results`. |
+| **ÉVALUATION**  | `geoeval/core/evaluate.py` | Pour chaque résultat, appelle le(s) juge(s) et écrit `run_evaluations`.               |
 
 ---
 
 ## Modèle de données (PostgreSQL)
 
-Défini dans `models.py` via SQLAlchemy ORM.
+Défini dans `geoeval/db/models.py` via SQLAlchemy ORM.
 
 | Table                 | Rôle                                                                                          |
 | --------------------- | --------------------------------------------------------------------------------------------- |
@@ -68,7 +72,7 @@ Défini dans `models.py` via SQLAlchemy ORM.
 
 ## Flux détaillé
 
-### Phase RUN (`run.py`)
+### Phase RUN (`geoeval/core/run.py`)
 
 1. `load_tests()` récupère les tests **actifs** (`validity_end_at IS NULL`) et **prêts**
    (`expected_answer IS NOT NULL`).
@@ -85,7 +89,7 @@ Toutes les réponses des modèles testés partagent un **system prompt** commun
 (`build_instructions()`) : assistant généraliste francophone, précision numérique exigée,
 date du jour injectée, consigne de répondre plutôt que de demander une clarification.
 
-### Phase ÉVALUATION (`evaluate.py`)
+### Phase ÉVALUATION (`geoeval/core/evaluate.py`)
 
 1. Jointure `run_results × tests × evaluation_prompts` (deux alias : prompt réponse + prompt citation).
 2. Pour chaque juge (spécifié par `model_id` ou nom de modèle + nombre de répétitions) et chaque répétition :
@@ -103,7 +107,7 @@ Les juges sont appelés **sans** outil de recherche web et à basse température
 
 ---
 
-## Fiabilité des appels (`llm_clients.py`)
+## Fiabilité des appels (`geoeval/core/llm_clients.py`)
 
 - **Singletons de clients** OpenAI / Mistral / Gemini (un par process).
 - **Singleton d'agent Mistral** par `model_version`.
@@ -115,7 +119,7 @@ Les juges sont appelés **sans** outil de recherche web et à basse température
 
 ## Points d'entrée
 
-### `main.py` — run + évaluation en boucle
+### `scripts/legacy/main.py` — run + évaluation en boucle
 
 Exécute, pour une liste de modèles testés (`tested_models_id = [2, 3, 4]` en dur), la phase RUN
 puis la phase ÉVALUATION (juge `model_id=5`, 1 passage). Journalisation via `RotatingFileHandler`
@@ -126,7 +130,7 @@ puis la phase ÉVALUATION (juge `model_id=5`, 1 passage). Journalisation via `Ro
 # 2 = gpt-5.2 / 3 = mistral-large-latest / 4 = gemini-pro-latest / 5 = gemini-2.5-pro
 ```
 
-### `mainUnitaire.py` — test unitaire manuel
+### `scripts/legacy/mainUnitaire.py` — test unitaire manuel
 
 Appelle directement `call_gpt52()` sur un prompt d'exemple (vérification d'une affirmation
 économique). Utile pour tester la connexion OpenAI + web search sans base ni orchestration.
@@ -164,20 +168,20 @@ pip install -r requirements.txt
 cp .env.example .env         # puis remplir DATABASE_URL + clés API
 
 # 3. Base PostgreSQL (option A : Docker fourni)
-docker compose -f docker-compose.local.yml up -d   # PostgreSQL sur localhost:5432 (user/pass/db = geoeval)
+docker compose -f deploy/docker-compose.local.yml up -d   # PostgreSQL sur localhost:5432 (user/pass/db = geoeval)
 
 # 4. Schéma + données de démarrage
-python init_db.py            # crée les 7 tables (create_all)
-psql "postgresql://geoeval:geoeval@localhost:5432/geoeval" -f seed.sql
+python -m scripts.init_db    # crée le schéma (create_all)
+psql "postgresql://geoeval:geoeval@localhost:5432/geoeval" -f geoeval/db/seed.sql
 #   (ou, sans psql local :)
-#   docker compose -f docker-compose.local.yml exec -T db psql -U geoeval -d geoeval < seed.sql
+#   docker compose -f deploy/docker-compose.local.yml exec -T db psql -U geoeval -d geoeval < geoeval/db/seed.sql
 
 # 5. Exécuter
-python main.py               # run complet + évaluation
-python mainUnitaire.py       # smoke test OpenAI web search (sans base)
+python -m scripts.legacy.main          # run complet + évaluation
+python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base)
 ```
 
-> Le `seed.sql` fournit les modèles connus, deux prompts d'évaluation et deux tests d'exemple.
+> Le `geoeval/db/seed.sql` fournit les modèles connus, deux prompts d'évaluation et deux tests d'exemple.
 > Remplace/complète la table `tests` avec tes propres questions pour un vrai benchmark.
 
 ### Fichiers du kit de démarrage
@@ -186,24 +190,24 @@ python mainUnitaire.py       # smoke test OpenAI web search (sans base)
 | -------------------- | -------------------------------------------------------------- |
 | `requirements.txt`   | Dépendances Python.                                            |
 | `.env.example`       | Modèle de configuration (à copier en `.env`).                 |
-| `init_db.py`         | Crée le schéma (`--drop` pour tout recréer).                  |
-| `migrations.sql`     | Migrations idempotentes (colonnes ajoutées aux tables existantes). |
-| `seed.sql`           | Données de démarrage (models, prompts d'éval, tests d'exemple).|
-| `docker-compose.local.yml` | PostgreSQL local prêt à l'emploi (dev).                 |
+| `scripts/init_db.py` | Crée le schéma (`--drop` pour tout recréer).                  |
+| `geoeval/db/migrations.sql` | Migrations idempotentes (colonnes ajoutées aux tables existantes). |
+| `geoeval/db/seed.sql` | Données de démarrage (models, prompts d'éval, tests d'exemple).|
+| `deploy/docker-compose.local.yml` | PostgreSQL local prêt à l'emploi (dev).                 |
 | `docker-compose.yml` | Déploiement complet (web + db) au contrat VibeLab/spawn.      |
-| `Dockerfile` + `docker-entrypoint.sh` | Image de l'UI web : attente DB, schéma, seed, uvicorn `:3000`. |
+| `Dockerfile` + `deploy/docker-entrypoint.sh` | Image de l'UI web : attente DB, schéma, seed, uvicorn `:3000`. |
 
 ---
 
 ## Interface web (UI DSFR)
 
 Une UI complète est fournie (FastAPI + Jinja2 + **Système de Design de l'État** / DSFR).
-Elle réutilise directement le cœur Python (`db.py`, `models.py`, `run.py`, `evaluate.py`).
+Elle réutilise directement le cœur Python (`geoeval/db`, `geoeval/core`).
 
 ```bash
-python run_web.py            # http://127.0.0.1:8000
-python run_web.py --reload   # rechargement auto (dev)
-# ou : uvicorn webapp.app:app --reload
+python -m scripts.run_web            # http://127.0.0.1:8000
+python -m scripts.run_web --reload   # rechargement auto (dev)
+# ou : uvicorn geoeval.web.app:app --reload
 ```
 
 Pages disponibles :
@@ -222,8 +226,8 @@ Pages disponibles :
 
 Détails d'implémentation :
 
-- **`webapp/app.py`** — routes FastAPI. **`webapp/services.py`** — requêtes/agrégations.
-  **`webapp/jobs.py`** — exécution des runs en tâche de fond (un worker unique sérialise les
+- **`geoeval/web/app.py`** — routes FastAPI. **`geoeval/web/services.py`** — requêtes/agrégations.
+  **`geoeval/worker/jobs.py`** — exécution des runs en tâche de fond (un worker unique sérialise les
   runs ; les logs GEOeval sont capturés par job et affichés en direct via polling `/api/jobs/{id}`).
 - Les runs longs (N modèles × M tests + juges) tournent **hors requête HTTP** : l'UI reste réactive
   et suit la progression grâce aux callbacks `progress_cb` ajoutés à `execute_run` / `evaluate_run`.
@@ -239,20 +243,20 @@ Détails d'implémentation :
 
 Ces points ressortent de la lecture du code (`todo.md` + bugs repérés) :
 
-- ✅ **Corrigé — juge OpenAI** (`evaluate.py`, branche `openai`) : l'affectation chaînée
+- ✅ **Corrigé — juge OpenAI** (`geoeval/core/evaluate.py`, branche `openai`) : l'affectation chaînée
   involontaire `respo=nse = ...` provoquait un `NameError` (variable `response` inexistante) dès
   qu'un juge OpenAI était utilisé. Remplacée par `response = ...`.
 - ✅ **Corrigé — `todo.md`** : `evaluate_run` accepte désormais des juges par **nom de modèle**
   (`{"model": "gpt-5.2", "repeats": 2}`) ou par id (`{"model_id": 2, "repeats": 2}`), avec
   résolution nom → `model_id` en interne (`resolve_model`). `execute_run` accepte aussi
-  un nom **ou** un id pour le modèle testé. `main.py` utilise maintenant les noms de modèles.
+  un nom **ou** un id pour le modèle testé. `scripts/legacy/main.py` utilise maintenant les noms de modèles.
 - **Extraction de citations naïve** : simple regex sur les URLs du texte, indépendante des
   métadonnées de sources renvoyées par les API (OpenAI renvoie pourtant `web_search_call.action.sources`).
 - ✅ **Corrigé — retry trop large** : `call_with_retry` remonte désormais immédiatement
   (`LLMCallError`, sans retry) les erreurs non transitoires : HTTP 400/401/403/404/422 et les
   429 « quota dur » (plan/facturation, `limit: 0`). Les vrais rate limits par minute et les
   erreurs réseau restent réessayés avec backoff.
-- **Imports morts** dans `evaluate.py` (`Model`, `Tuple`, `List`) et un `__import__("google.genai")`
+- **Imports morts** dans `geoeval/core/evaluate.py` (`Model`, `Tuple`, `List`) et un `__import__("google.genai")`
   contourné pour accéder à `types` dans la branche Gemini du juge.
 
 ---

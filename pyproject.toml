@@ -1,5 +1,5 @@
 [tool.pytest.ini_options]
-# Les modules racine (evaluate, run, llm_clients, models…) s'importent tels quels.
+# Racine du dépôt sur sys.path : `geoeval` et `scripts` s'importent tels quels.
 pythonpath = ["."]
 testpaths = ["tests"]
 markers = [
