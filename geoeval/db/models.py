@@ -546,3 +546,28 @@ class JobLog(Base):
     )
     level: Mapped[str] = mapped_column(Text, nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+
+
+# =====================================================================
+# Jetons d'API par organisation (ADR-088 §2.3, lot 1.3b) — clients machine.
+# Le jeton en clair n'est montré qu'à la création ; seule son empreinte
+# SHA-256 est stockée. Le rôle porté est l'un des trois rôles d'org.
+# =====================================================================
+class ApiToken(Base):
+    __tablename__ = "api_tokens"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(
+        ForeignKey("organizations.id"), nullable=False, index=True
+    )
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    role: Mapped[str] = mapped_column(Text, nullable=False)
+    prefix: Mapped[str] = mapped_column(Text, nullable=False)
+    token_hash: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    expires_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    last_used_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))

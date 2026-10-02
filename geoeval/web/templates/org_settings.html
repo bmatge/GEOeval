@@ -23,6 +23,76 @@
   </div>
 </div>
 
+<h2 class="fr-mt-6w">Jetons d'API</h2>
+<p class="fr-hint-text">Pour les clients machine (<a class="fr-link" href="/api/v1/docs" target="_blank" rel="noopener">documentation de l'API v1</a>) :
+<code>Authorization: Bearer &lt;jeton&gt;</code>. Un jeton porte un rôle de cette organisation. Il n'est affiché qu'une fois.</p>
+
+{% if new_token %}
+<div class="fr-alert fr-alert--success fr-mt-2w">
+  <h3 class="fr-alert__title">Jeton créé — copiez-le maintenant, il ne sera plus affiché</h3>
+  <p><code id="new-token" style="word-break:break-all">{{ new_token }}</code></p>
+</div>
+{% endif %}
+{% if token_error %}
+<div class="fr-alert fr-alert--error fr-alert--sm fr-mt-2w"><p>{{ token_error }}</p></div>
+{% endif %}
+
+<form method="post" action="{{ url_prefix }}/settings/tokens" class="fr-grid-row fr-grid-row--gutters fr-mt-2w">
+  <div class="fr-col-12 fr-col-md-5">
+    <div class="fr-input-group">
+      <label class="fr-label" for="tok-name">Nom du jeton <span class="fr-hint-text">ex. « Jenkins nightly »</span></label>
+      <input class="fr-input" id="tok-name" name="name" required maxlength="100">
+    </div>
+  </div>
+  <div class="fr-col-6 fr-col-md-2">
+    <div class="fr-select-group">
+      <label class="fr-label" for="tok-role">Rôle</label>
+      <select class="fr-select" id="tok-role" name="token_role">
+        {% for r in roles %}<option value="{{ r }}" {% if r == 'viewer' %}selected{% endif %}>{{ r }}</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="fr-col-6 fr-col-md-2">
+    <div class="fr-input-group">
+      <label class="fr-label" for="tok-exp">Expire dans (jours)</label>
+      <input class="fr-input" id="tok-exp" name="expires_in_days" type="number" min="1" max="3650" placeholder="jamais">
+    </div>
+  </div>
+  <div class="fr-col-12 fr-col-md-3 fr-mt-md-6w">
+    <button type="submit" class="fr-btn">Créer le jeton</button>
+  </div>
+</form>
+
+{% if api_tokens %}
+<div class="fr-table fr-table--bordered fr-mt-2w">
+  <table>
+    <thead><tr><th>Nom</th><th>Préfixe</th><th>Rôle</th><th>Créé le</th><th>Expire</th><th>Dernier usage</th><th>État</th><th></th></tr></thead>
+    <tbody>
+      {% for t, active in api_tokens %}
+      <tr>
+        <td>{{ t.name }}</td>
+        <td><code>geoeval_{{ t.prefix }}_…</code></td>
+        <td>{{ t.role }}</td>
+        <td>{{ t.created_at.strftime('%d/%m/%Y') }}</td>
+        <td>{{ t.expires_at.strftime('%d/%m/%Y') if t.expires_at else '—' }}</td>
+        <td>{{ t.last_used_at.strftime('%d/%m/%Y %H:%M') if t.last_used_at else '—' }}</td>
+        <td>{% if t.revoked_at %}<p class="fr-badge fr-badge--error fr-badge--sm">révoqué</p>
+            {% elif not active %}<p class="fr-badge fr-badge--warning fr-badge--sm">expiré</p>
+            {% else %}<p class="fr-badge fr-badge--success fr-badge--sm">actif</p>{% endif %}</td>
+        <td>{% if active %}
+          <form method="post" action="{{ url_prefix }}/settings/tokens/{{ t.id }}/revoke" style="display:inline"
+                onsubmit="return confirm('Révoquer ce jeton ? Les clients qui l\'utilisent seront refusés.')">
+            <button type="submit" class="fr-btn fr-btn--sm fr-btn--secondary">Révoquer</button>
+          </form>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p class="fr-hint-text fr-mt-2w">Aucun jeton pour l'instant.</p>
+{% endif %}
+
 <h2 class="fr-mt-6w">Membres</h2>
 <div class="fr-table">
   <table>

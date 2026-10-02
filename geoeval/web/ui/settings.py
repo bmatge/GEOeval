@@ -15,6 +15,7 @@ from sqlalchemy.orm import Session
 
 from geoeval.db.models import AuditLog, User
 from geoeval.web import (
+    api_tokens,
     audit,
     budget,
     launching,
@@ -42,6 +43,11 @@ def org_settings(
     db: Session = Depends(get_db),
 ):
     org, role = ctx
+    return _render_settings(request, db, org, role)
+
+
+def _render_settings(request, db, org, role, *, new_token: Optional[str] = None, token_error: Optional[str] = None):
+    tokens = api_tokens.list_for_org(db, org.id)
     return render(
         request,
         "org_settings.html",
@@ -51,7 +57,53 @@ def org_settings(
         members=tenancy.list_members(db, org.id),
         invitations=tenancy.list_invitations(db, org.id),
         roles=tenancy.ROLES,
+        api_tokens=[(t, api_tokens.is_valid(t)) for t in tokens],
+        new_token=new_token,
+        token_error=token_error,
     )
+
+
+# ---- Jetons d'API (lot 1.3b — org_admin) -----------------------------
+@router.post("/o/{org_slug}/settings/tokens", response_class=HTMLResponse)
+def api_token_create(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+    token_role: str = Form("viewer"),
+    expires_in_days: str = Form(""),
+):
+    """Crée un jeton et l'affiche UNE fois (pas de redirection : le clair ne
+    doit pas transiter dans une URL)."""
+    org, role = ctx
+    try:
+        token, plaintext = api_tokens.create(
+            db, org_id=org.id, name=name, role=token_role, created_by=user.id,
+            expires_in_days=int(expires_in_days) if expires_in_days.strip() else None,
+        )
+    except ValueError as exc:
+        return _render_settings(request, db, org, role, token_error=str(exc))
+    audit.record(db, user_id=user.id, org_id=org.id, action="create", entity_type="api_token",
+                 entity_id=token.id, meta={"name": token.name, "role": token.role, "prefix": token.prefix})
+    return _render_settings(request, db, org, role, new_token=plaintext)
+
+
+@router.post("/o/{org_slug}/settings/tokens/{token_id}/revoke")
+def api_token_revoke(
+    token_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    try:
+        token = api_tokens.revoke(db, org.id, token_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    audit.record(db, user_id=user.id, org_id=org.id, action="revoke", entity_type="api_token",
+                 entity_id=token.id, meta={"prefix": token.prefix})
+    return RedirectResponse(f"/o/{org.slug}/settings", status_code=303)
 
 
 # ---- Allowlist de modèles (EPIC-001 Phase 4, S4.2 — org_admin) -------

@@ -9,8 +9,8 @@ ou :
 Lot 1.3a (ADR-088 §2.3) : ce module ne porte plus de route. Les pages HTML
 sont des routers minces dans `geoeval.web.ui.*` ; les règles métier vivent
 dans les services (`geoeval.web.launching`, `budget`, `org_models`, …) ; le
-rendu partagé est dans `geoeval.web.rendering`. L'API v1 (lot 1.3b) viendra se
-brancher ici à côté des routers UI.
+rendu partagé est dans `geoeval.web.rendering`. L'API v1 (`geoeval.web.api`) est
+montée sur /api/v1 à côté des routers UI.
 
 Depuis PR#12 (ADR-077) les routes de domaine sont préfixées `/o/{org_slug}/…`.
 Les anciennes URL (`/runs`, `/dashboard`, …) redirigent en 301 vers l'org
@@ -27,6 +27,7 @@ from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.sessions import SessionMiddleware
 
 from geoeval.web import auth_routes
+from geoeval.web.api import create_api_app
 from geoeval.web.auth import AuthMiddleware
 from geoeval.web.ui import ROUTERS
 from geoeval.worker.main import inline_worker_enabled, start_inline_thread
@@ -74,3 +75,7 @@ async def _redirect_unauthenticated(request: Request, exc: HTTPException):
 
 for _router in ROUTERS:
     app.include_router(_router)
+
+# API v1 (lot 1.3b) : sous-application, docs sur /api/v1/docs, erreurs problem+json.
+# Les middlewares du parent (sessions, AuthMiddleware) s'appliquent aussi à elle.
+app.mount("/api/v1", create_api_app(), name="api_v1")

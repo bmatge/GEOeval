@@ -139,7 +139,8 @@ flowchart LR
   NEX -.->|"build CI/CD"| Nubo
 ```
 
-Principe API first : toute fonctionnalité existe d'abord dans `geoeval/web/api/v1`. L'UI ne
+Principe API first : toute fonctionnalité existe d'abord dans `geoeval/web/api/v1`
+(livré au lot 1.3b : lecture, lancement, jobs, jetons ; écriture du corpus au lot 1.3c). L'UI ne
 peut rien faire que l'API ne permette pas. L'UI n'appelle pas l'API en HTTP : les deux
 partagent la couche services, qui est le seul endroit où vivent les règles.
 
