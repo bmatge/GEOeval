@@ -199,6 +199,13 @@ python -m scripts.legacy.mainUnitaire  # smoke test OpenAI web search (sans base
 
 ---
 
+## Hiérarchie des entités (ADR-089, chantier E1)
+
+Les organisations forment un arbre ministère › direction › service (`parent_id` + chemin
+matérialisé). Un admin plateforme crée, qualifie et rattache les entités dans
+`/admin/organizations` ou par l'API (`POST /api/v1/orgs`, `PATCH /api/v1/orgs/{slug}`). La liste
+blanche de modèles d'une entité borne toutes ses sous-entités (intersection sur la chaîne).
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

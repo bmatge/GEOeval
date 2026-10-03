@@ -19,6 +19,7 @@ from geoeval.db.session import SessionLocal
 from geoeval.web import (
     accounts,
     audit,
+    hierarchy,
     gold,
     openrouter_catalog,
     pricing,
@@ -43,13 +44,74 @@ def admin_orgs(
     user: CurrentUser = Depends(require_platform_admin),
     db: Session = Depends(get_db),
 ):
-    orgs = tenancy.list_all_orgs(db)
+    orgs = hierarchy.tree(tenancy.list_all_orgs(db))
     nav_org, nav_role = nav_fallback(db, user)
     return render(
         request, "admin_organizations.html", active="admin",
         org=nav_org, role=nav_role,
         orgs=orgs, roles=tenancy.ROLES,
+        kinds=hierarchy.ORG_KINDS, kind_labels=hierarchy.KIND_LABELS, max_depth=hierarchy.MAX_DEPTH,
     )
+
+
+def _parent_or_400(db: Session, raw: str):
+    raw = (raw or "").strip()
+    if not raw:
+        return None
+    parent = tenancy.get_org(db, int(raw))
+    if parent is None:
+        raise HTTPException(status_code=404, detail="Entité parente introuvable.")
+    return parent
+
+
+@router.get("/admin/organizations/{org_id}/edit", response_class=HTMLResponse)
+def admin_org_edit_form(
+    org_id: int,
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    target = tenancy.get_org(db, org_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Entité introuvable.")
+    # Parents possibles : toute entité hors du sous-arbre de la cible (pas de cycle).
+    forbidden = set(hierarchy.descendant_ids(db, target, include_self=True))
+    candidates = [o for o in hierarchy.tree(tenancy.list_all_orgs(db)) if o.id not in forbidden]
+    nav_org, nav_role = nav_fallback(db, user)
+    return render(
+        request, "admin_organization_edit.html", active="admin",
+        org=nav_org, role=nav_role,
+        target=target, lineage=hierarchy.lineage(db, target), children=hierarchy.children(db, target.id),
+        candidates=candidates, kinds=hierarchy.ORG_KINDS, kind_labels=hierarchy.KIND_LABELS,
+    )
+
+
+@router.post("/admin/organizations/{org_id}/edit")
+def admin_org_edit_submit(
+    org_id: int,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    name: str = Form(...),
+    kind: str = Form("autre"),
+    siret: str = Form(""),
+    parent_id: str = Form(""),
+):
+    target = tenancy.get_org(db, org_id)
+    if target is None:
+        raise HTTPException(status_code=404, detail="Entité introuvable.")
+    old_parent = target.parent_id
+    new_parent = _parent_or_400(db, parent_id)
+    try:
+        hierarchy.update_and_move(db, target, name=name, kind=kind, siret=siret, set_siret=True,
+                                  move_to=new_parent, do_move=True)
+    except hierarchy.HierarchyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+    audit.record(
+        db, user_id=user.id, org_id=target.id, action="update", entity_type="organization", entity_id=target.id,
+        meta={"kind": target.kind, "siret": target.siret, "parent_from": old_parent, "parent_to": target.parent_id},
+    )
+    return RedirectResponse("/admin/organizations", status_code=303)
 
 
 @router.post("/admin/organizations/new")
@@ -59,10 +121,18 @@ def admin_org_create(
     name: str = Form(...),
     slug: str = Form(...),
     first_admin_email: str = Form(""),
+    parent_id: str = Form(""),
+    kind: str = Form("autre"),
+    siret: str = Form(""),
 ):
+    parent = _parent_or_400(db, parent_id)
     try:
-        org = tenancy.create_org(db, name=name, slug=slug, created_by=user.id)
+        org = tenancy.create_org(db, name=name, slug=slug, created_by=user.id, parent=parent, kind=kind, siret=siret)
+    except hierarchy.HierarchyError as e:
+        db.rollback()
+        raise HTTPException(status_code=e.status, detail=e.detail)
     except ValueError as e:
+        db.rollback()
         raise HTTPException(status_code=400, detail=str(e))
 
     audit.record(
@@ -72,7 +142,7 @@ def admin_org_create(
         action="create",
         entity_type="organization",
         entity_id=org.id,
-        meta={"slug": org.slug},
+        meta={"slug": org.slug, "kind": org.kind, "parent_id": org.parent_id},
     )
 
     # Premier admin optionnel : pose ou crée l'user + son membership org_admin.

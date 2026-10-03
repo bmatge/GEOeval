@@ -198,7 +198,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | RBAC trois rôles + admin plateforme | ADR-077 | `geoeval/web/deps.py` (dépendances FastAPI) | Dépendances partagées API et UI, rôle porté par le jeton ou la session |
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
 | Plafond budget mois et jour | ADR-080 | `geoeval/web/launching.py` (lot 1.3a ; aussi appliqué à « exécuter maintenant ») | Idem, exposé par l'API v1 (lot 1.3b) |
-| Liste blanche des modèles par org | EPIC-001 | `geoeval/web/launching.py` (lot 1.3a) | Idem |
+| Liste blanche des modèles par org | EPIC-001, ADR-089 | `geoeval/web/launching.py` + `org_models` : intersection sur la chaîne d'entités via `hierarchy.resolve_restrictive` (E1) | Idem |
+| Paramètres hérités dans l'arbre d'entités | ADR-089 §2.2 | `geoeval/web/hierarchy.py` (E1) : `resolve_nearest`, `resolve_restrictive` | Budget (E3), contrats (E5), notifications (E7) |
 | Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
 | Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |

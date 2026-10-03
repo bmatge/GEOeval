@@ -58,13 +58,25 @@ def create_org(
     name: str,
     slug: str,
     created_by: Optional[int] = None,
+    parent: Optional[Organization] = None,
+    kind: Optional[str] = None,
+    siret: Optional[str] = None,
 ) -> Organization:
+    """Crée une entité, racine par défaut (type « autre »), ou rattachée à `parent`
+    (ADR-089 §2.1 : chemin et profondeur calculés par geoeval.web.hierarchy)."""
     if not re.fullmatch(r"[a-z0-9][a-z0-9\-]{1,63}", slug):
         raise ValueError(
             f"slug invalide {slug!r}: minuscules, chiffres et tirets uniquement (2–64 chars)."
         )
-    org = Organization(name=name.strip(), slug=slug.strip(), created_by=created_by)
-    session.add(org)
+    if not (name or "").strip():
+        raise ValueError("Le nom de l'entité est obligatoire.")
+    if get_org_by_slug(session, slug.strip()) is not None:
+        raise ValueError(f"le slug {slug!r} est déjà utilisé.")
+    from geoeval.web import hierarchy  # import local : hierarchy dépend de models seulement
+
+    org = hierarchy.new_organization(
+        session, name=name, slug=slug, parent=parent, kind=kind, siret=siret, created_by=created_by,
+    )
     session.commit()
     return org
 

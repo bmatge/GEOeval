@@ -8,6 +8,7 @@ from typing import Optional, Any
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     Boolean,
+    CheckConstraint,
     ForeignKey,
     Index,
     Integer,
@@ -31,7 +32,23 @@ class Base(DeclarativeBase):
 # + OIDC optionnel. Les rôles d'org vivent dans `memberships.role`.
 # =====================================================================
 class Organization(Base):
+    """Entité (ADR-089 §2.1) : nœud d'un arbre ministère > direction > service.
+
+    `path` est le chemin matérialisé des identifiants, racine comprise, encadré
+    de « / » (ex. ``/12/45/78/``) : descendants = ``path LIKE '/12/45/%'``.
+    Il est calculé par geoeval.web.hierarchy, jamais saisi.
+    """
+
     __tablename__ = "organizations"
+    __table_args__ = (
+        CheckConstraint("kind IN ('ministere', 'direction', 'service', 'autre')", name="ck_organizations_kind"),
+        CheckConstraint("depth >= 0", name="ck_organizations_depth"),
+        CheckConstraint("parent_id IS NULL OR parent_id <> id", name="ck_organizations_parent_not_self"),
+        CheckConstraint("siret IS NULL OR siret ~ '^[0-9]{14}$'", name="ck_organizations_siret"),
+        Index("ix_organizations_parent_id", "parent_id"),
+        Index("ix_organizations_path", "path", postgresql_ops={"path": "text_pattern_ops"}),
+        Index("ix_organizations_siret", "siret"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     name: Mapped[str] = mapped_column(Text, nullable=False)
@@ -42,6 +59,11 @@ class Organization(Base):
     created_by: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id"), nullable=True
     )
+    parent_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id"), nullable=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'autre'"))
+    path: Mapped[str] = mapped_column(Text, nullable=False)
+    depth: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
+    siret: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class User(Base):

@@ -10,8 +10,15 @@ Sémantique rétro-compatible (défaut proposé par l'epic, acté ici) :
       `is_active=TRUE` sont proposés. Une ligne `is_active=FALSE` masque
       explicitement le modèle (permet une allowlist vide non ambiguë).
 
-Les org_admin et admins plateforme ne sont jamais filtrés : ils voient tout
-le catalogue actif (c'est eux qui gèrent la liste, cf. S4.2).
+Les org_admin et admins plateforme ne sont jamais filtrés par la liste de LEUR
+entité (c'est eux qui la gèrent, cf. S4.2).
+
+Hiérarchie (ADR-089 §2.2, chantier E1) : la liste effective d'une entité est
+l'INTERSECTION des listes posées sur elle et sur tous ses ancêtres (résolveur
+restrictif). Un enfant ne peut jamais élargir ce que son parent autorise ; un
+org_admin d'une sous-entité reste borné par les listes de ses ancêtres. Seul
+l'admin plateforme voit tout le catalogue actif. Sans aucune liste sur la
+chaîne : héritage du catalogue global, comme avant.
 """
 from __future__ import annotations
 
@@ -20,7 +27,7 @@ from typing import Iterable, Optional
 from sqlalchemy import delete as sa_delete, select
 from sqlalchemy.orm import Session
 
-from geoeval.db.models import Model, OrgModel
+from geoeval.db.models import Model, Organization, OrgModel
 
 
 def list_for_org(session: Session, org_id: int) -> list[OrgModel]:
@@ -53,12 +60,40 @@ def allowed_model_ids(session: Session, org_id: int) -> Optional[set[int]]:
     return {r.model_id for r in rows if r.is_active}
 
 
-def filter_models(session: Session, org_id: int, models: Iterable[Model]) -> list[Model]:
-    """Applique l'allowlist de l'org à une liste de modèles du catalogue.
+def _own(session: Session, org: Organization) -> Optional[set[int]]:
+    return allowed_model_ids(session, org.id)
 
-    Sans allowlist, la liste est renvoyée telle quelle (héritage global).
+
+def resolve_allowed_ids(session: Session, org_id: int, *, include_own: bool = True):
+    """Liste blanche résolue sur la chaîne (soi + ancêtres, ou ancêtres seuls).
+
+    Renvoie un `hierarchy.Resolved` : `.value` = ids autorisés (None = aucune
+    liste sur la chaîne, catalogue global), `.sources` = entités contributrices.
     """
-    allowed = allowed_model_ids(session, org_id)
+    from geoeval.web import hierarchy
+
+    org = session.get(Organization, org_id)
+    if org is None:
+        return hierarchy.Resolved(value=None)
+    return hierarchy.resolve_restrictive(
+        session, org, _own, combine=lambda a, b: a & b, include_self=include_own,
+    )
+
+
+def effective_allowed_ids(session: Session, org_id: int, *, include_own: bool = True) -> Optional[set[int]]:
+    return resolve_allowed_ids(session, org_id, include_own=include_own).value
+
+
+def filter_models(
+    session: Session, org_id: int, models: Iterable[Model], *, include_own: bool = True,
+) -> list[Model]:
+    """Applique la liste blanche effective (intersection sur la chaîne d'entités).
+
+    `include_own=False` : seules les listes des ancêtres s'appliquent (cas de
+    l'org_admin, qui gère la liste de sa propre entité). Sans liste sur la
+    chaîne, la liste est renvoyée telle quelle (héritage global).
+    """
+    allowed = effective_allowed_ids(session, org_id, include_own=include_own)
     if allowed is None:
         return list(models)
     return [m for m in models if m.model_id in allowed]

@@ -10,7 +10,7 @@ pytestmark = pytest.mark.integration
 
 
 def test_base_de_test_a_la_tete(db_schema):
-    assert m.current_revision(db_schema) == m.head_revision() == "0001"
+    assert m.current_revision(db_schema) == m.head_revision()
 
 
 def test_aucune_derive_orm_base(db_schema):
@@ -20,7 +20,7 @@ def test_aucune_derive_orm_base(db_schema):
 
 def test_upgrade_rejoue_sans_effet(db_schema):
     m.upgrade()
-    assert m.current_revision(db_schema) == "0001"
+    assert m.current_revision(db_schema) == m.head_revision()
 
 
 def test_script_check_retourne_0(db_schema):
@@ -57,7 +57,7 @@ def test_convergence_base_vierge_vs_base_existante(db_schema):
     try:
         m.upgrade(scratch_url)
         fresh = create_engine(scratch_url)
-        assert m.current_revision(fresh) == "0001"
+        assert m.current_revision(fresh) == m.head_revision()
         assert m.schema_drift(fresh) == []
         a, b = _describe(fresh), _describe(db_schema)
         fresh.dispose()

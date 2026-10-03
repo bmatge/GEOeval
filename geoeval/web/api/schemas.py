@@ -30,6 +30,38 @@ class OrgOut(_Orm):
     name: str
     slug: str
     created_at: datetime
+    parent_id: Optional[int] = None
+    kind: str = "autre"
+    depth: int = 0
+    path: str = ""
+    siret: Optional[str] = None
+
+
+class OrgRefOut(_Orm):
+    id: int
+    name: str
+    slug: str
+    kind: str
+
+
+class OrgDetailOut(OrgOut):
+    lineage: list[OrgRefOut] = Field(default_factory=list, description="Ancêtres, de la racine au parent")
+
+
+class OrgCreateIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    slug: str = Field(min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9\-]*$")
+    kind: Literal["ministere", "direction", "service", "autre"] = "autre"
+    parent_slug: Optional[str] = None
+    siret: Optional[str] = Field(None, description="14 chiffres")
+
+
+class OrgPatch(BaseModel):
+    """Champs optionnels. `parent_slug: null` explicite = devenir une racine."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    kind: Optional[Literal["ministere", "direction", "service", "autre"]] = None
+    parent_slug: Optional[str] = None
+    siret: Optional[str] = None
 
 
 class OrgRoleOut(BaseModel):

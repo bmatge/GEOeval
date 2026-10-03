@@ -35,7 +35,7 @@ Voir `docs/adr/ADR-088-stack-conservee-refacto-incremental-nubo.md` et `docs/arc
 Voir `docs/adr/ADR-089-modele-cible-echelle-ministerielle.md`. Arbitrages actés : parent_id + chemin
 matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par référence + visibilité.
 - [x] PR #42 — habilitations dans l'app, promotion par groupe OIDC transitoire
-- [ ] E1 — hiérarchie `organizations` (parent_id, path, kind, siret) + résolveur `effective_setting`
+- [x] E1 — hiérarchie `organizations` (révision 0002 : parent_id, kind, path, depth, siret) + résolveur (`hierarchy.resolve_nearest` / `resolve_restrictive`) ; liste blanche héritée par intersection ; UI admin arbre + API `POST/PATCH /orgs`
 - [ ] E2 — rôles hérités vers le bas + délégation
 - [ ] E3 — budget consolidé + alertes 80/100 %
 - [ ] E4 — `question_pools` (référence, visibilité), thèmes, `perimeters.domains`

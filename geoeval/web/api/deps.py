@@ -113,3 +113,19 @@ def require_role(min_role: str):
         return principal
 
     return _dep
+
+
+def require_platform_admin(
+    request: Request,
+    token: Optional[ApiToken] = Depends(current_token),
+) -> CurrentUser:
+    """Administration plateforme : session d'un admin plateforme uniquement.
+    Un jeton d'organisation n'est jamais admin plateforme (403)."""
+    if token is not None:
+        raise HTTPException(status_code=403, detail="Réservé à l'administration plateforme (jeton d'organisation refusé).")
+    user = session_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentification requise (session d'administration plateforme).")
+    if not user.is_platform_admin:
+        raise HTTPException(status_code=403, detail="Réservé à l'administration plateforme.")
+    return user

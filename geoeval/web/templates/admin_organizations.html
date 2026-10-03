@@ -4,7 +4,9 @@
 <h1>Administration plateforme — organisations</h1>
 <p class="fr-hint-text">Réservé aux administrateurs plateforme (groupe <code>lab-team</code>).</p>
 
-<h2 class="fr-mt-4w">Créer une organisation</h2>
+<h2 class="fr-mt-4w">Créer une entité</h2>
+<p class="fr-hint-text">Une entité est un nœud de l'arbre ministère › direction › service (ADR-089). Sans entité parente, elle est créée à la racine.
+Les rôles donnés sur une entité s'appliqueront à ses sous-entités (chantier E2) ; les listes blanches de modèles d'une entité parente bornent déjà ses sous-entités.</p>
 <form method="post" action="/admin/organizations/new" class="fr-mt-2w" style="max-width:40rem;">
   <div class="fr-input-group">
     <label class="fr-label" for="name">Nom</label>
@@ -16,6 +18,25 @@
     </label>
     <input class="fr-input" id="slug" name="slug" pattern="[a-z0-9][a-z0-9\-]{1,63}" required>
   </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="parent_id">Entité parente (optionnel)</label>
+    <select class="fr-select" id="parent_id" name="parent_id">
+      <option value="">— aucune (racine) —</option>
+      {% for o in orgs %}{% if o.depth < max_depth %}<option value="{{ o.id }}">{{ "  " * o.depth }}{% if o.depth %}└ {% endif %}{{ o.name }}</option>{% endif %}{% endfor %}
+    </select>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="kind">Type</label>
+    <select class="fr-select" id="kind" name="kind">
+      {% for k in kinds %}<option value="{{ k }}" {% if k == 'autre' %}selected{% endif %}>{{ kind_labels[k] }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="siret">SIRET (optionnel)
+      <span class="fr-hint-text">14 chiffres. Servira à proposer le rattachement des agents ProConnect (chantier E6).</span>
+    </label>
+    <input class="fr-input" id="siret" name="siret" inputmode="numeric">
+  </div>
   <div class="fr-input-group">
     <label class="fr-label" for="first_admin_email">Premier admin (optionnel)
       <span class="fr-hint-text">Email d'un utilisateur — sera provisionné et posé en <code>org_admin</code>.</span>
@@ -25,19 +46,22 @@
   <button type="submit" class="fr-btn fr-mt-2w">Créer</button>
 </form>
 
-<h2 class="fr-mt-6w">Organisations existantes</h2>
+<h2 class="fr-mt-6w">Arbre des entités</h2>
 <div class="fr-table fr-table--bordered">
   <table>
-    <thead><tr><th>Nom</th><th>Slug</th><th>Créée le</th><th></th></tr></thead>
+    <thead><tr><th>Entité</th><th>Type</th><th>Slug</th><th>SIRET</th><th>Créée le</th><th></th></tr></thead>
     <tbody>
       {% for o in orgs %}
       <tr>
-        <td>{{ o.name }}</td>
+        <td style="padding-left: {{ 0.75 + o.depth * 1.5 }}rem">{% if o.depth %}<span aria-hidden="true">└ </span>{% endif %}{{ o.name }}</td>
+        <td>{% if o.kind == 'autre' %}<p class="fr-badge fr-badge--sm">{{ kind_labels[o.kind] }}</p>{% else %}<p class="fr-badge fr-badge--sm fr-badge--blue-ecume">{{ kind_labels[o.kind] }}</p>{% endif %}</td>
         <td><code>{{ o.slug }}</code></td>
+        <td>{{ o.siret or "—" }}</td>
         <td>{{ o.created_at.strftime("%Y-%m-%d") }}</td>
         <td>
           <a class="fr-link fr-mr-2w" href="/o/{{ o.slug }}/">ouvrir</a>
-          <a class="fr-link" href="/o/{{ o.slug }}/settings">paramètres</a>
+          <a class="fr-link fr-mr-2w" href="/o/{{ o.slug }}/settings">paramètres</a>
+          <a class="fr-link" href="/admin/organizations/{{ o.id }}/edit">qualifier / rattacher</a>
         </td>
       </tr>
       {% endfor %}

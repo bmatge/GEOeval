@@ -2,6 +2,12 @@
 {% block title %}Paramètres — {{ org.name }}{% endblock %}
 {% block content %}
 <h1>Paramètres de l'organisation</h1>
+<p class="fr-text--sm fr-mb-0">
+  <span class="fr-badge fr-badge--sm fr-badge--blue-ecume">{{ kind_label }}</span>
+  {% if lineage %}rattachée à {% for a in lineage %}{{ a.name }}{% if not loop.last %} › {% endif %}{% endfor %}
+  {% else %}entité racine{% endif %}
+  {% if user and user.is_platform_admin %}· <a class="fr-link fr-link--sm" href="/admin/organizations/{{ org.id }}/edit">qualifier / rattacher</a>{% endif %}
+</p>
 
 <div class="fr-grid-row fr-grid-row--gutters fr-mt-3w">
   <div class="fr-col-12 fr-col-md-8">
