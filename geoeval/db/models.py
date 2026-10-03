@@ -845,6 +845,8 @@ class Notification(Base):
               postgresql_where=text("dedup_key IS NOT NULL")),
         Index("ix_notifications_user_created", "user_id", text("created_at DESC")),
         Index("ix_notifications_org", "organization_id"),
+        Index("ix_notifications_digest_pending", "user_id", "created_at",
+              postgresql_where=text("email_status = 'digest_pending'")),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -856,20 +858,23 @@ class Notification(Base):
     link: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     dedup_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
-    # none (email non demandé) | sent | not_configured | failed
+    # none (email non demandé) | sent | not_configured | failed | digest_pending (récapitulatif à venir)
     email_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
     read_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
 
 
 class NotificationPreference(Base):
-    """Choix d'un utilisateur pour un type : email oui / non (l'in-app est toujours actif).
-    Sans ligne, le défaut du type s'applique."""
+    """Choix d'un utilisateur pour un type (l'in-app est toujours actif) : email
+    immédiat, récapitulatif quotidien ou aucun email. Sans ligne, le défaut du type."""
     __tablename__ = "notification_preferences"
+    __table_args__ = (
+        CheckConstraint("mode IN ('immediate', 'digest', 'none')", name="ck_notification_preferences_mode"),
+    )
 
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
     kind: Mapped[str] = mapped_column(Text, primary_key=True)
-    email: Mapped[bool] = mapped_column(Boolean, nullable=False)
+    mode: Mapped[str] = mapped_column(Text, nullable=False)
 
 
 class DetectorSetting(Base):
@@ -881,11 +886,15 @@ class DetectorSetting(Base):
                         name="ck_detector_settings_runs"),
         CheckConstraint("always_wrong_threshold IS NULL OR (always_wrong_threshold >= 0 AND always_wrong_threshold <= 10)",
                         name="ck_detector_settings_threshold"),
+        CheckConstraint("citation_drop_points IS NULL OR (citation_drop_points > 0 AND citation_drop_points <= 100)",
+                        name="ck_detector_settings_citation_drop"),
     )
 
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
     always_wrong_runs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     always_wrong_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
+    # Chute des citations officielles (E7 suite) : écart en points de pourcentage.
+    citation_drop_points: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
     )
@@ -938,3 +947,35 @@ class CampaignParticipant(Base):
     last_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     last_skipped_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     last_skip_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+
+
+# =====================================================================
+# ADR-089 §2.8 (suite E7) — signalements humains.
+# =====================================================================
+class TestReport(Base):
+    """Signalement d'une question par un membre d'une entité qui la voit (propre, pool,
+    campagne, run). Traité par l'entité propriétaire : corrigé ou rejeté, avec réponse."""
+    __tablename__ = "test_reports"
+    __test__ = False  # pas une classe de test pytest
+    __table_args__ = (
+        CheckConstraint("category IN ('expected_answer', 'ambiguous', 'obsolete', 'citation', 'other')",
+                        name="ck_test_reports_category"),
+        CheckConstraint("status IN ('open', 'fixed', 'rejected')", name="ck_test_reports_status"),
+        Index("ix_test_reports_owner_status", "owner_org_id", "status"),
+        Index("ix_test_reports_test", "test_id"),
+        Index("ix_test_reports_reporter_org", "reporter_org_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
+    owner_org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    reporter_org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    reporter_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    run_id: Mapped[Optional[int]] = mapped_column(ForeignKey("runs.run_id"), nullable=True)
+    category: Mapped[str] = mapped_column(Text, nullable=False)
+    comment: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="open")
+    resolution_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    resolved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    resolved_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())

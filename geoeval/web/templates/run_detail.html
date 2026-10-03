@@ -15,7 +15,8 @@
 <div class="fr-card fr-card--no-arrow fr-mt-3w">
   <div class="fr-card__body">
     <div class="fr-card__content">
-      <h3 class="fr-card__title">Question #{{ res.test_id }}</h3>
+      <h3 class="fr-card__title">Question #{{ res.test_id }}
+        {% if role %}<a class="fr-link fr-link--sm fr-ml-2w fr-icon-flag-line fr-link--icon-left" href="{{ url_prefix }}/tests/{{ res.test_id }}/report?run_id={{ run.run_id }}">Signaler</a>{% endif %}</h3>
       <p class="fr-text--bold fr-mb-1v">Question</p>
       <p>{{ res.prompt }}</p>
 

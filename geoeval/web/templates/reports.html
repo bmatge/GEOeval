@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Signalements{% endblock %}
+{% block content %}
+<h1>Signalements</h1>
+<p>Les signalements portent sur les questions : réponse attendue douteuse, question ambiguë ou obsolète, citation hors
+  sujet. Ceux reçus concernent les questions de {{ org.name }} ; ceux envoyés, les questions d'autres entités.</p>
+<nav class="fr-mb-2w">
+  <a class="fr-btn fr-btn--sm {{ '' if tab == 'received' else 'fr-btn--secondary' }}" href="{{ url_prefix }}/reports">Reçus ({{ open_count }} ouvert(s))</a>
+  <a class="fr-btn fr-btn--sm {{ '' if tab == 'sent' else 'fr-btn--secondary' }}" href="{{ url_prefix }}/reports?tab=sent">Envoyés</a>
+  {% if tab == 'received' %}
+  <a class="fr-link fr-ml-2w" href="{{ url_prefix }}/reports?status={{ '' if status == 'open' else 'open' }}">{{ 'Tous' if status == 'open' else 'Ouverts seulement' }}</a>
+  {% endif %}
+</nav>
+{% if items %}
+<div class="fr-table"><table>
+  <thead><tr><th>#</th><th>Question</th><th>Motif</th><th>{{ 'Signalé par' if tab == 'received' else 'Entité propriétaire' }}</th><th>Date</th><th>État</th></tr></thead>
+  <tbody>
+    {% for r in items %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/reports/{{ r.id }}">{{ r.id }}</a></td>
+      <td>#{{ r.test_id }} {{ (tests[r.test_id].prompt if r.test_id in tests else '')|truncate(70) }}</td>
+      <td>{{ categories[r.category] }}{% if r.comment %}<br><span class="fr-hint-text">{{ r.comment|truncate(90) }}</span>{% endif %}</td>
+      <td>{{ orgs[r.reporter_org_id].name if tab == 'received' else orgs[r.owner_org_id].name }}</td>
+      <td>{{ r.created_at.strftime("%d/%m/%Y") }}</td>
+      <td><p class="fr-badge fr-badge--sm {{ 'fr-badge--info' if r.status == 'open' else ('fr-badge--success' if r.status == 'fixed' else '') }}">{{ status_labels[r.status] }}</p></td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucun signalement.</p>
+{% endif %}
+{% endblock %}

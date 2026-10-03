@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Signalement #{{ report.id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/reports{{ '' if owned else '?tab=sent' }}">Retour aux signalements</a>
+{% set t = tests.get(report.test_id) %}
+<h1 class="fr-mt-2w">Signalement #{{ report.id }} — {{ categories[report.category] }}</h1>
+<p class="fr-hint-text">
+  <span class="fr-badge fr-badge--sm {{ 'fr-badge--info' if report.status == 'open' else ('fr-badge--success' if report.status == 'fixed' else '') }}">{{ status_labels[report.status] }}</span>
+  · signalé par {{ orgs[report.reporter_org_id].name }}{% if report.reporter_user_id and users.get(report.reporter_user_id) %} ({{ users[report.reporter_user_id].email }}){% endif %}
+  le {{ report.created_at.strftime("%d/%m/%Y %H:%M") }}
+  {% if report.run_id %} · depuis le run #{{ report.run_id }}{% endif %}
+</p>
+<div class="fr-callout">
+  <p class="fr-callout__text"><strong>Question #{{ report.test_id }}</strong> ({{ orgs[report.owner_org_id].name }}) : {{ t.prompt if t else '' }}<br>
+    Réponse attendue : {{ (t.expected_answer if t else None) or '—' }}</p>
+  {% if owned %}<a class="fr-link" href="{{ url_prefix }}/tests/{{ report.test_id }}">Ouvrir la question →</a>{% endif %}
+</div>
+<h2 class="fr-mt-3w">Commentaire</h2>
+<p>{{ report.comment or '—' }}</p>
+
+{% if report.status != 'open' %}
+<h2 class="fr-mt-3w">Réponse de l'entité propriétaire</h2>
+<p>{{ report.resolution_comment }}</p>
+<p class="fr-hint-text">{{ status_labels[report.status] }} le {{ report.resolved_at.strftime("%d/%m/%Y %H:%M") }}{% if report.resolved_by and users.get(report.resolved_by) %} par {{ users[report.resolved_by].email }}{% endif %}</p>
+{% elif can_resolve %}
+<h2 class="fr-mt-3w">Traiter le signalement</h2>
+<form method="post" action="{{ url_prefix }}/reports/{{ report.id }}/resolve" style="max-width:44rem;">
+  <fieldset class="fr-fieldset" aria-labelledby="st-legend">
+    <legend class="fr-fieldset__legend" id="st-legend">Issue</legend>
+    <div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-radio-group">
+      <input type="radio" id="st-fixed" name="status" value="fixed" checked><label class="fr-label" for="st-fixed">Corrigé</label>
+    </div></div>
+    <div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-radio-group">
+      <input type="radio" id="st-rejected" name="status" value="rejected"><label class="fr-label" for="st-rejected">Rejeté</label>
+    </div></div>
+  </fieldset>
+  <div class="fr-input-group">
+    <label class="fr-label" for="comment">Réponse à l'auteur</label>
+    <textarea class="fr-input" id="comment" name="comment" rows="3" required maxlength="2000"></textarea>
+  </div>
+  <button type="submit" class="fr-btn">Clore le signalement</button>
+</form>
+{% endif %}
+{% endblock %}
