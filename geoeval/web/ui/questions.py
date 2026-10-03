@@ -93,6 +93,7 @@ def test_create(
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
     theme_ids: list[int] = Form(default=[]),
+    draft: bool = Form(False),
 ):
     org, _ = ctx
     peri = perimeters.get_by_id(db, org.id, perimeter_id)
@@ -107,6 +108,7 @@ def test_create(
         prompt=prompt, expected_answer=expected_answer,
         response_quality_prompt_id=opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
+        status="draft" if draft else "published",
     )
     themes.set_for_test(db, test.test_id, theme_ids)
     return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
@@ -156,12 +158,15 @@ def test_update(
     if test.perimeter_id != perimeter_id:
         test.perimeter_id = perimeter_id
         db.commit()
-    services.update_test(
-        db, org.id, test_id,
-        prompt=prompt, expected_answer=expected_answer,
-        response_quality_prompt_id=opt_int(response_quality_prompt_id),
-        citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
-    )
+    try:
+        services.update_test(
+            db, org.id, test_id,
+            prompt=prompt, expected_answer=expected_answer,
+            response_quality_prompt_id=opt_int(response_quality_prompt_id),
+            citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=409, detail=str(e))
     themes.set_for_test(db, test_id, theme_ids)
     return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
@@ -173,10 +178,24 @@ def test_deactivate(test_id: int, ctx=Depends(require_role("editor")), db: Sessi
     return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
 
 
+@router.post("/o/{org_slug}/tests/{test_id}/publish")
+def test_publish(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
+    """Brouillon → publiée (E8)."""
+    org, _ = ctx
+    try:
+        services.publish_test(db, org.id, test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
+
+
 @router.post("/o/{org_slug}/tests/{test_id}/reactivate")
 def test_reactivate(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
     org, _ = ctx
-    services.reactivate_test(db, org.id, test_id)
+    try:
+        services.reactivate_test(db, org.id, test_id)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
 
 

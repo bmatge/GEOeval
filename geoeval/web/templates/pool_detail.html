@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}{{ pool.name }}{% endblock %}
 {% block content %}
+{% from "_test_status.html" import test_status %}
 <a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/pools">Retour aux pools</a>
 <h1 class="fr-mt-2w">{{ pool.name }}</h1>
 <p class="fr-hint-text">
@@ -23,9 +24,7 @@
       <tr>
         <td>{% if owned %}<a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a>{% else %}{{ t.test_id }}{% endif %}</td>
         <td>{{ t.prompt|truncate(90) }}</td>
-        <td>{% if t.validity_end_at is not none %}<p class="fr-badge fr-badge--sm">inactive</p>
-          {% elif t.expected_answer is none %}<p class="fr-badge fr-badge--warning fr-badge--sm">non notable</p>
-          {% else %}<p class="fr-badge fr-badge--success fr-badge--sm">active</p>{% endif %}</td>
+        <td>{{ test_status(t) }}</td>
         {% if can_edit %}
         <td><form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/tests/{{ t.test_id }}/remove" style="display:inline">
           <button type="submit" class="fr-link">Retirer</button></form></td>

@@ -207,6 +207,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Questions effectives d'un périmètre (propres + pools abonnés visibles) | ADR-089 §2.5 | `launching.tests_for_run` → `pools.effective_tests` (E4), pour la validation, le devis, le planificateur et le worker | Idem |
 | Visibilité des pools, inclusions sans cycle, composition sans élargissement | ADR-089 §2.5 | `geoeval/web/pools.py` (E4) | Idem |
 | Catalogue de thèmes réservé à l'admin plateforme | ADR-089 §2.5 | `geoeval/web/themes.py` + `deps.require_platform_admin` (E4) | Idem |
+| Cycle de vie des questions (brouillon / publiée / retirée) | ADR-089 §2.9 | `services.publish_test` / `deactivate_test` ; filtre « publiée » dans `load_tests` et `pools.effective_tests` (E8) | Validation métier |
+| Campagnes : protocole figé, participants du sous-arbre, grilles verrouillées | ADR-089 §2.9 | `geoeval/web/campaigns.py` (E8), exécutées par le planificateur via `launching.estimate_and_check_budget(campaign_id=…)` | Rejugement versionné |
 | Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
 | Cascade des clés : contrat d'entité (hérité) → modèle → plateforme ; contrat expiré ou épuisé = blocage | ADR-078, ADR-089 §2.6 | `contracts.resolve` appelé par `llm_clients._contract_override` (E5) ; imputation `usage.contract_id` | Secret plateforme fourni par Nubo |

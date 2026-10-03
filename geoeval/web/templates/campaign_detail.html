@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}{{ campaign.name }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/campaigns">Retour aux campagnes</a>
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters fr-mt-2w">
+  <div class="fr-col">
+    <h1>{{ campaign.name }}</h1>
+    <p class="fr-hint-text">
+      <span class="fr-badge fr-badge--sm {{ 'fr-badge--success' if campaign.status == 'active' else ('fr-badge--new' if campaign.status == 'draft' else '') }}">{{ status_labels[campaign.status] }}</span>
+      · entité propriétaire : {{ owner.name }}
+      {% if campaign.next_run_at %} · prochaine exécution : {{ campaign.next_run_at.strftime("%d/%m/%Y %H:%M") }}{% endif %}
+      {% if campaign.last_run_at %} · dernière : {{ campaign.last_run_at.strftime("%d/%m/%Y %H:%M") }}{% endif %}
+    </p>
+    {% if campaign.description %}<p>{{ campaign.description }}</p>{% endif %}
+  </div>
+  {% if can_edit %}
+  <div class="fr-col-auto">
+    {% if campaign.status != 'closed' %}<a class="fr-btn fr-btn--secondary fr-btn--sm" href="{{ url_prefix }}/campaigns/{{ campaign.id }}/edit">Modifier</a>{% endif %}
+    {% if campaign.status == 'draft' %}
+    <form method="post" action="{{ url_prefix }}/campaigns/{{ campaign.id }}/activate" style="display:inline"
+          onsubmit="return confirm('Activer la campagne ? Le protocole sera figé.')"><button class="fr-btn fr-btn--sm">Activer</button></form>
+    <form method="post" action="{{ url_prefix }}/campaigns/{{ campaign.id }}/delete" style="display:inline"
+          onsubmit="return confirm('Supprimer ce brouillon ?')"><button class="fr-btn fr-btn--tertiary fr-btn--sm">Supprimer</button></form>
+    {% elif campaign.status == 'active' %}
+    <form method="post" action="{{ url_prefix }}/campaigns/{{ campaign.id }}/run-now" style="display:inline"><button class="fr-btn fr-btn--sm">Exécuter maintenant</button></form>
+    <form method="post" action="{{ url_prefix }}/campaigns/{{ campaign.id }}/close" style="display:inline"
+          onsubmit="return confirm('Clore la campagne ? Plus aucune exécution ; les résultats restent.')"><button class="fr-btn fr-btn--tertiary fr-btn--sm">Clore</button></form>
+    {% endif %}
+  </div>
+  {% endif %}
+</div>
+
+<h2 class="fr-mt-4w">Protocole{% if campaign.status == 'draft' %} (brouillon){% else %} figé{% endif %}</h2>
+{% if campaign.protocol %}
+<ul>
+  <li>Questions : {{ campaign.protocol.test_ids|length }} (pool « {{ campaign.protocol.source_pool.name or '—' }} », figées le {{ campaign.protocol.frozen_at[:10] }})</li>
+  <li>IA évaluées : {% for v in campaign.protocol.tested_models %}<code>{{ v }}</code> {% endfor %}</li>
+  <li>Notateurs : {% for j in campaign.protocol.judges %}<code>{{ j.model }}</code> ×{{ j.repeats }} {% endfor %}</li>
+  <li>Grilles de notation : celles des questions au moment de l'activation, verrouillées tant que la campagne est active.</li>
+</ul>
+{% else %}
+<ul>
+  <li>Pool source : {{ pool.name if pool else 'à choisir' }}{% if pool %} — {{ draft_tests|length }} question(s) publiée(s) et notable(s) aujourd'hui{% endif %}</li>
+  <li>IA évaluées : {% for v in campaign.tested_models %}<code>{{ v }}</code> {% else %}à choisir{% endfor %}</li>
+  <li>Notateurs : {% for j in campaign.judges %}<code>{{ j.model }}</code> ×{{ j.repeats }} {% else %}à choisir{% endfor %}</li>
+</ul>
+{% endif %}
+
+<h2 class="fr-mt-4w">Participants ({{ participants|length }})</h2>
+<div class="fr-table fr-table--sm"><table>
+  <thead><tr><th>Entité</th><th>Dernière mise en file</th><th>Dernier saut</th></tr></thead>
+  <tbody>
+    {% for p, o in participants %}
+    {% if owned or o.id == org.id %}
+    <tr>
+      <td>{{ o.name }}</td>
+      <td>{{ p.last_run_at.strftime("%d/%m/%Y %H:%M") if p.last_run_at else '—' }}</td>
+      <td>{% if p.last_skip_reason %}<p class="fr-badge fr-badge--warning fr-badge--sm">sauté</p> {{ p.last_skip_reason }}{% else %}—{% endif %}</td>
+    </tr>
+    {% endif %}
+    {% endfor %}
+  </tbody>
+</table></div>
+
+<h2 class="fr-mt-4w">Résultats{% if not owned %} de {{ org.name }}{% endif %}</h2>
+{% if not owned %}<p class="fr-hint-text">Seule l'entité propriétaire voit la comparaison entre participants.</p>{% endif %}
+{% if results %}
+<div class="fr-table"><table>
+  <thead><tr><th>Participant</th><th>IA évaluée</th><th>Exécutions</th><th>Réponse (dernière)</th><th>Écart</th><th>Citations (dernière)</th><th>Écart</th><th>Détail</th></tr></thead>
+  <tbody>
+    {% for r in results %}
+    <tr>
+      <td>{{ r.org.name }}</td>
+      <td><code>{{ r.model_version }}</code></td>
+      <td>{{ r.n_runs }}</td>
+      <td>{{ '%.2f'|format(r.last_response) if r.last_response is not none else '—' }}</td>
+      <td>{% if r.delta_response is not none %}{{ '%+.2f'|format(r.delta_response) }}{% else %}—{% endif %}</td>
+      <td>{{ '%.2f'|format(r.last_citation) if r.last_citation is not none else '—' }}</td>
+      <td>{% if r.delta_citation is not none %}{{ '%+.2f'|format(r.delta_citation) }}{% else %}—{% endif %}</td>
+      <td>{% if r.org.id == org.id %}<a class="fr-link" href="{{ url_prefix }}/runs/{{ r.last_run_id }}">run #{{ r.last_run_id }}</a>{% else %}run #{{ r.last_run_id }}{% endif %}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucun résultat pour l'instant.</p>
+{% endif %}
+{% endblock %}

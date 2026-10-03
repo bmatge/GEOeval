@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Questions{% endblock %}
 {% block content %}
+{% from "_test_status.html" import test_status %}
 <div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
   <div class="fr-col"><h1>Questions</h1></div>
   {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
@@ -60,22 +61,22 @@
         </td>
         <td>{{ (t.expected_answer or "—")|truncate(40) }}</td>
         <td>
-          {% if t.validity_end_at is none %}
-            <p class="fr-badge fr-badge--success fr-badge--sm">active</p>
-          {% else %}
-            <p class="fr-badge fr-badge--sm">inactive</p>
-          {% endif %}
+          {{ test_status(t) }}
         </td>
         <td>
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
           <a class="fr-link fr-mr-2w" href="{{ url_prefix }}/tests/{{ t.test_id }}/edit">Éditer</a>
-          {% if t.validity_end_at is none %}
+          {% if t.status == 'draft' %}
+          <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/publish" style="display:inline">
+            <button type="submit" class="fr-link">Publier</button>
+          </form>
+          {% elif t.status == 'published' %}
           <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/deactivate" style="display:inline">
-            <button type="submit" class="fr-link">Désactiver</button>
+            <button type="submit" class="fr-link">Retirer</button>
           </form>
           {% else %}
           <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/reactivate" style="display:inline">
-            <button type="submit" class="fr-link">Réactiver</button>
+            <button type="submit" class="fr-link">Republier</button>
           </form>
           {% endif %}
           {% endif %}

@@ -1,0 +1,44 @@
+{# Récurrence (programmations, campagnes). Optionnel : rec_kind, rec_config pour préremplir. #}
+  <fieldset class="fr-fieldset fr-mt-2w" aria-labelledby="sched-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="sched-legend">Récurrence</legend>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-once" name="schedule_kind" value="once" {% if (rec_kind or 'once') == 'once' %}checked{% endif %}>
+        <label class="fr-label" for="kind-once">Une fois, le
+          <input class="fr-input fr-ml-1w" type="datetime-local" name="once_at" value="{{ (rec_config or {}).get('at', '') if rec_kind == 'once' else '' }}" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-daily" name="schedule_kind" value="daily" {% if rec_kind == 'daily' %}checked{% endif %}>
+        <label class="fr-label" for="kind-daily">Chaque jour à
+          <input class="fr-input fr-ml-1w" type="time" name="daily_time" value="{{ (rec_config or {}).get('time', '') if rec_kind == 'daily' else '' }}" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-weekly" name="schedule_kind" value="weekly" {% if rec_kind == 'weekly' %}checked{% endif %}>
+        <label class="fr-label" for="kind-weekly">Chaque
+          <select class="fr-select fr-ml-1w" name="weekly_weekday" style="display:inline-block;width:auto">
+            {% for d in weekdays %}<option value="{{ loop.index0 }}" {% if rec_kind == 'weekly' and (rec_config or {}).get('weekday') == loop.index0 %}selected{% endif %}>{{ d }}</option>{% endfor %}
+          </select>
+          à <input class="fr-input fr-ml-1w" type="time" name="weekly_time" value="{{ (rec_config or {}).get('time', '') if rec_kind == 'weekly' else '' }}" style="display:inline-block;width:auto">
+        </label>
+      </div>
+    </div>
+
+    <div class="fr-fieldset__element">
+      <div class="fr-radio-group">
+        <input type="radio" id="kind-hours" name="schedule_kind" value="every_n_hours" {% if rec_kind == 'every_n_hours' %}checked{% endif %}>
+        <label class="fr-label" for="kind-hours">Toutes les
+          <input class="fr-input fr-ml-1w" type="number" name="every_hours" value="{{ (rec_config or {}).get('hours', 24) if rec_kind == 'every_n_hours' else 24 }}" min="1" max="720" style="display:inline-block;width:5rem">
+          heures (première exécution : dans N heures)
+        </label>
+      </div>
+    </div>
+  </fieldset>

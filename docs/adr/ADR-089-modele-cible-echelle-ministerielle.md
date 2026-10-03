@@ -480,6 +480,45 @@ hérité** ; périmètre **socle** ; emails **immédiats**, avec un défaut par 
 - **Reportés** : chute de la part de citations officielles, signalements humains,
   webhooks (Tchap…), récapitulatifs quotidiens, abonnements partagés.
 
+## 4nonies. Mise en œuvre de E8 (amendement 2026-10-03)
+
+Arbitrages validés : cycle de vie **brouillon → publiée → retirée** ; campagnes à
+**participants désignés et planification automatique** ; protocole **figé à
+l'activation** ; résultats en **comparaison participants × IA**.
+
+- **Cycle de vie** (révision `0007`, `tests.status`) : une question active devient
+  « publiée », une question désactivée « retirée » (`validity_end_at` inchangé, invariant
+  retirée ⇔ fin de validité posée). Un brouillon n'entre ni dans les runs (`load_tests`,
+  questions effectives d'un périmètre), ni dans les pools (refusé), ni dans les campagnes.
+  Publier un brouillon, retirer, republier : UI (liste des questions, création en
+  brouillon) et API (`status` à la création, `POST /questions/{id}/publish`). La
+  validation par un propriétaire métier attend la version complète.
+- **Campagnes** (`geoeval/web/campaigns.py`, tables `campaigns`, `campaign_participants`,
+  `runs.campaign_id`) : une entité définit un brouillon (pool source visible, IA évaluées,
+  notateurs et répétitions, fréquence) et désigne des participants dans son sous-arbre
+  (elle comprise). Gestion réservée aux org_admin du propriétaire, puisque la campagne
+  consomme le budget des participants.
+- **Activation** : fige dans `protocol` les questions publiées et notables du pool
+  (inclusions visibles du propriétaire comprises), les versions des IA, les notateurs et
+  leurs répétitions, les grilles. Modifier le pool ensuite ne change pas la campagne ;
+  tant qu'elle est active, la grille d'une de ses questions ne peut plus changer
+  (`services.update_test` refuse, 409). Une campagne active ne change que de nom,
+  description et participants ; changer le protocole impose une nouvelle campagne. Clore
+  arrête les exécutions ; les runs restent.
+- **Exécution** : le planificateur (sous le même verrou que les programmations) exécute
+  les campagnes échues pour chaque participant : mêmes contrôles qu'un lancement
+  (routage, contrats, budget consolidé du participant). Un participant refusé est sauté
+  et tracé (`skip_budget`, `skip_contract`, `skip_routing`). Le job porte `campaign_id` ;
+  le worker exécute les questions du protocole encore publiées, et rien si l'entité n'est
+  pas participante. « Exécuter maintenant » fait de même à la demande.
+- **Résultats** : par participant × IA évaluée, dernière note moyenne (réponse,
+  citations), écart avec l'exécution précédente, nombre d'exécutions. Le propriétaire voit
+  toutes les lignes ; un participant ne voit que les siennes. UI *Configurer ›
+  Campagnes*, API `/orgs/{slug}/campaigns` (CRUD du brouillon, `activate`, `run-now`,
+  `close`, `results`).
+- **Reportés** : cycle complet avec approbation métier, versions de juges rejugeant
+  l'historique, jeux de calibration, campagnes à inscription volontaire.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

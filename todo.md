@@ -45,7 +45,8 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [ ] E6 (branchement) — rattachement proposé par `siret` + validation org_admin, relecture du `siret` à chaque connexion, `userinfo` JWT ProConnect, inscription du client
 - [x] E7 (socle) — notifications in-app + email selon préférences (révision 0006), budget 80/100 % raccordé, évaluation en échec, contrat expirant (J-30, J-7) / expiré, détecteur « question toujours fausse » (N et seuil hérités), UI + API v1
 - [ ] E7 (suite) — chute des citations officielles, signalements humains, webhooks (Tchap), récapitulatifs, abonnements partagés
-- [ ] E8 — campagnes, cycle de vie des questions (minimal au pilote)
+- [x] E8 (minimal) — cycle de vie brouillon / publiée / retirée ; campagnes à participants désignés, protocole figé à l'activation, exécution planifiée par participant (sautée et tracée si refusée), grilles verrouillées, comparaison participants × IA (révision 0007), UI + API v1
+- [ ] E8 (complet) — validation métier des questions, rejugement versionné, calibration des juges
 
 ## À faire
 - Rendre `main.py` paramétrable en ligne de commande (argparse) plutôt que des listes en dur.

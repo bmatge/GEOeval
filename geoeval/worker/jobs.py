@@ -219,12 +219,14 @@ class JobInterrupted(RuntimeError):
 
 def select_tests(
     session: Session, *, organization_id: int, perimeter_id: Optional[int], test_ids: Optional[list[int]],
+    campaign_id: Optional[int] = None,
 ) -> list[Any]:
     """Questions d'un job, résolues à l'exécution. E4 : avec un périmètre, questions
     propres + pools abonnés encore visibles (règle unique de `launching.tests_for_run`)."""
     from geoeval.web import launching  # import local : launching importe ce module
 
-    return launching.tests_for_run(session, organization_id, perimeter_id=perimeter_id, test_ids=test_ids)
+    return launching.tests_for_run(session, organization_id, perimeter_id=perimeter_id, test_ids=test_ids,
+                                   campaign_id=campaign_id)
 
 
 def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> None:
@@ -263,6 +265,9 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
         perimeter_id = params.get("perimeter_id")
         if perimeter_id is not None:
             perimeter_id = int(perimeter_id)
+        campaign_id = params.get("campaign_id")
+        if campaign_id is not None:
+            campaign_id = int(campaign_id)
 
         logger.info("Job %s démarré (%d modèle(s) testé(s))", job_id, len(tested_models))
 
@@ -277,6 +282,7 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
             with SessionLocal() as session:
                 tests = select_tests(
                     session, organization_id=organization_id, perimeter_id=perimeter_id, test_ids=test_ids,
+                    campaign_id=campaign_id,
                 )
                 if not tests:
                     raise ValueError("Aucune question active et prête (dans le périmètre / la sélection).")
@@ -288,6 +294,7 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
                     session, tested_model=tm, tests=tests, organization_id=organization_id,
                     perimeter_id=perimeter_id, run_meta={"note": note} if note else None,
                     progress_cb=run_cb,
+                    campaign_id=campaign_id,
                 )
                 session.commit()
                 run_ids.append(run_id)

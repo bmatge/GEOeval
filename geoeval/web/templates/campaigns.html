@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}Campagnes{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
+  <div class="fr-col"><h1>Campagnes</h1></div>
+  {% if role == 'org_admin' %}
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/campaigns/new">Nouvelle campagne</a></div>
+  {% endif %}
+</div>
+<p class="fr-text--lead">Une campagne fige un protocole commun (questions d'un pool, IA évaluées, notateurs, grilles)
+  et le fait exécuter, à la même fréquence, par les entités désignées. Les résultats sont ainsi comparables.</p>
+
+<h2 class="fr-mt-4w">Campagnes de {{ org.name }} ({{ owned|length }})</h2>
+{% if owned %}
+<div class="fr-table"><table>
+  <thead><tr><th>Campagne</th><th>État</th><th>Participants</th><th>Prochaine exécution</th></tr></thead>
+  <tbody>
+    {% for c in owned %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/campaigns/{{ c.id }}">{{ c.name }}</a></td>
+      <td><p class="fr-badge fr-badge--sm {{ 'fr-badge--success' if c.status == 'active' else ('fr-badge--new' if c.status == 'draft' else '') }}">{{ status_labels[c.status] }}</p></td>
+      <td>{{ n_participants[c.id] }}</td>
+      <td>{{ c.next_run_at.strftime("%d/%m/%Y %H:%M") if c.next_run_at else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucune campagne.</p>
+{% endif %}
+
+<h2 class="fr-mt-4w">Campagnes auxquelles {{ org.name }} participe ({{ joined|length }})</h2>
+{% if joined %}
+<div class="fr-table"><table>
+  <thead><tr><th>Campagne</th><th>Entité propriétaire</th><th>État</th><th>Prochaine exécution</th></tr></thead>
+  <tbody>
+    {% for c, owner in joined %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/campaigns/{{ c.id }}">{{ c.name }}</a></td>
+      <td>{{ owner.name }}</td>
+      <td><p class="fr-badge fr-badge--sm {{ 'fr-badge--success' if c.status == 'active' else '' }}">{{ status_labels[c.status] }}</p></td>
+      <td>{{ c.next_run_at.strftime("%d/%m/%Y %H:%M") if c.next_run_at else '—' }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucune campagne d'une autre entité.</p>
+{% endif %}
+{% endblock %}

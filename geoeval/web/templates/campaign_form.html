@@ -1,0 +1,75 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Modifier la campagne' if campaign else 'Nouvelle campagne' }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/campaigns{% if campaign %}/{{ campaign.id }}{% endif %}">Retour</a>
+<h1 class="fr-mt-2w">{{ 'Campagne « ' ~ campaign.name ~ ' »' if campaign else 'Nouvelle campagne' }}</h1>
+{% set frozen = campaign and campaign.status != 'draft' %}
+{% if frozen %}
+<div class="fr-callout fr-mb-3w"><p class="fr-callout__text">Protocole figé depuis l'activation : seuls le nom, la description
+  et les participants se modifient. Pour changer les questions, les IA ou la fréquence, crée une nouvelle campagne.</p></div>
+{% endif %}
+<form method="post" action="{{ (url_prefix ~ '/campaigns/' ~ campaign.id ~ '/edit') if campaign else (url_prefix ~ '/campaigns/new') }}" style="max-width:52rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="name">Nom</label>
+    <input class="fr-input" id="name" name="name" required maxlength="200" value="{{ campaign.name if campaign else '' }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="description">Description <span class="fr-hint-text">(optionnel)</span></label>
+    <textarea class="fr-input" id="description" name="description" rows="2">{{ campaign.description or '' if campaign else '' }}</textarea>
+  </div>
+
+  {% if not frozen %}
+  <div class="fr-select-group">
+    <label class="fr-label" for="source_pool_id">Questions : pool source
+      <span class="fr-hint-text">À l'activation, les questions publiées et notables du pool (inclusions visibles comprises) sont figées.</span></label>
+    <select class="fr-select" id="source_pool_id" name="source_pool_id">
+      <option value="0">— choisir un pool —</option>
+      {% for p, o in visible_pools %}
+      <option value="{{ p.id }}" {% if campaign and campaign.source_pool_id == p.id %}selected{% endif %}>{{ p.name }} ({{ o.name }})</option>
+      {% endfor %}
+    </select>
+  </div>
+
+  <fieldset class="fr-fieldset" aria-labelledby="tested-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="tested-legend">IA évaluées</legend>
+    {% for m in testable_models %}
+    <div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="tm-{{ m.model_id }}" name="tested_models" value="{{ m.model_version }}"
+             {% if campaign and m.model_version in campaign.tested_models %}checked{% endif %}>
+      <label class="fr-label" for="tm-{{ m.model_id }}">{{ m.model_version }}</label>
+    </div></div>
+    {% endfor %}
+  </fieldset>
+  <fieldset class="fr-fieldset" aria-labelledby="judge-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Notateurs</legend>
+    {% set judge_versions = (campaign.judges if campaign else [])|map(attribute='model')|list %}
+    {% for m in judge_models %}
+    <div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="jm-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}"
+             {% if m.model_version in judge_versions %}checked{% endif %}>
+      <label class="fr-label" for="jm-{{ m.model_id }}">{{ m.model_version }}{% if m.is_sovereign %} · souverain{% endif %}</label>
+    </div></div>
+    {% endfor %}
+  </fieldset>
+  <div class="fr-input-group" style="max-width:14rem;">
+    <label class="fr-label" for="repeats">Répétitions par notateur</label>
+    <input class="fr-input" id="repeats" name="repeats" type="number" min="1" max="10"
+           value="{{ (campaign.judges[0].repeats if campaign and campaign.judges else 1) }}">
+  </div>
+  {% include "_recurrence_fieldset.html" %}
+  {% endif %}
+
+  <fieldset class="fr-fieldset fr-mt-2w" aria-labelledby="part-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="part-legend">Participants
+      <span class="fr-hint-text">Chaque participant exécute la campagne à ses frais et sous ses contrats ; s'il est bloqué
+        (budget, contrat, politique de routage), son exécution est sautée et tracée.</span></legend>
+    {% for o in candidates %}
+    <div class="fr-fieldset__element"><div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="part-{{ o.id }}" name="participant_ids" value="{{ o.id }}" {% if o.id in selected_participants %}checked{% endif %}>
+      <label class="fr-label" for="part-{{ o.id }}">{{ '— ' * (o.depth - candidates[0].depth) }}{{ o.name }}</label>
+    </div></div>
+    {% endfor %}
+  </fieldset>
+  <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if campaign else 'Créer le brouillon' }}</button>
+</form>
+{% endblock %}

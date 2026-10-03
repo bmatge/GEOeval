@@ -27,7 +27,8 @@ def load_tests(
     if test_ids:
         stmt = stmt.where(Test.test_id.in_(list(test_ids)))
     if active_only:
-        stmt = stmt.where(Test.validity_end_at.is_(None))
+        # E8 : seules les questions publiées entrent dans un run (ni brouillon, ni retirée).
+        stmt = stmt.where(Test.validity_end_at.is_(None), Test.status == "published")
     if ready_only:
         stmt = stmt.where(Test.expected_answer.is_not(None))
     if limit is not None:
