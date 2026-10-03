@@ -352,3 +352,10 @@ def test_api_contrats_et_politique(client, db_session, monde):
 
     assert client.delete(f"{base_m}/contracts/{body['id']}", headers=h_admin_m).status_code == 204
     assert db_session.execute(select(UsageRecord).where(UsageRecord.contract_id == body["id"])).first() is None
+
+
+def test_seed_notateurs_albert_souverains_et_heberges_ue(db_session):
+    """Base neuve : la révision 0005 passe avant la seed, qui doit donc poser elle-même
+    souveraineté et hébergement des notateurs Albert (régression CI de la PR #56)."""
+    rows = db_session.execute(select(Model).where(Model.model_name == "albert")).scalars().all()
+    assert rows and all(m.is_sovereign and m.hosting == "eu" for m in rows)
