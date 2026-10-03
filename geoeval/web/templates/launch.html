@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% block title %}Lancer une évaluation{% endblock %}
 {% block content %}
+{% include "_budget_alerts.html" %}
 <h1>Lancer une évaluation</h1>
 <p class="fr-hint-text">Chaque IA évaluée est interrogée sur les questions du périmètre sélectionné, puis notée par les notateurs.
 Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_prefix }}/schedules">Programmations</a>.</p>
@@ -57,10 +58,10 @@ Pour un lancement différé ou récurrent, voir <a class="fr-link" href="{{ url_
 </form>
 
 <p class="fr-hint-text fr-mt-3w">
-  <strong>Budget</strong> :
+  <strong>Budget</strong> (consolidé avec les sous-entités) :
   consommé ce mois-ci {{ "%.4f"|format(month_spent) }} €{% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} €{% else %} (pas de plafond posé){% endif %} ·
   dépensé aujourd'hui {{ "%.4f"|format(day_spent) }} €{% if budget and budget.daily_cap_eur is not none %} / plafond jour {{ "%.2f"|format(budget.daily_cap_eur) }} €{% else %} (pas de plafond journalier){% endif %}.
-  Une évaluation dont le devis dépasse l'un des plafonds (jour ou mois) sera <em>refusée</em> (soft-stop, ADR-078 §5).
+  Une évaluation dont le devis dépasse un plafond (jour ou mois) de l'entité ou d'une entité parente sera <em>refusée</em> (soft-stop, ADR-089 §2.3).
 </p>
 {% endif %}
 {% endblock %}

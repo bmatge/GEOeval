@@ -198,7 +198,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | RBAC trois rôles + admin plateforme, hérités vers le bas | ADR-077, ADR-089 §2.4 | `tenancy.resolve_role` (E2) appelé par `geoeval/web/deps.py` et `geoeval/web/api/deps.py` ; jetons hérités | Idem |
 | Délégation de la structure de l'arbre | ADR-089 §2.4 | `tenancy.can_create_under` / `can_qualify` / `can_restructure` (E2) | Idem |
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
-| Plafond budget mois et jour | ADR-080 | `geoeval/web/launching.py` (lot 1.3a ; aussi appliqué à « exécuter maintenant ») | Idem, exposé par l'API v1 (lot 1.3b) |
+| Plafond budget mois et jour, consolidé dans l'arbre | ADR-080, ADR-089 §2.3 | `geoeval/web/budget.py` appelé par `launching` (lancement, « exécuter maintenant ») et par le planificateur à l'échéance (E3) | Idem |
+| Alertes 80 / 100 % (app + email) | ADR-089 §2.8 | `geoeval/web/budget_alerts.py` + `mailer.py` (E3), en fin de job et après un saut | Notifications générales (E7) |
 | Liste blanche des modèles par org | EPIC-001, ADR-089 | `geoeval/web/launching.py` + `org_models` : intersection sur la chaîne d'entités via `hierarchy.resolve_restrictive` (E1) | Idem |
 | Paramètres hérités dans l'arbre d'entités | ADR-089 §2.2 | `geoeval/web/hierarchy.py` (E1) : `resolve_nearest`, `resolve_restrictive` | Budget (E3), contrats (E5), notifications (E7) |
 | Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
@@ -211,9 +212,9 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Sérialisation des runs (quotas API) | — | Thread unique | Concurrence bornée par fournisseur dans le worker |
 
 Lot 1.3a : le contrôle budget et la liste blanche ont quitté les contrôleurs HTML pour le
-service `launching`, que l'UI et l'API v1 appelleront à l'identique. Reste à traiter : le
-tick du planificateur ne revérifie pas le budget au moment de l'exécution (chantier E7,
-notifications : sauter et prévenir plutôt que lancer).
+service `launching`, que l'UI et l'API v1 appelleront à l'identique. Depuis E3, le planificateur revérifie le budget consolidé à l'échéance : une exécution qui
+dépasserait un plafond est sautée, tracée sur la planification et dans l'audit, et une
+alerte est émise.
 
 ## 5. Routes vers les fournisseurs LLM
 

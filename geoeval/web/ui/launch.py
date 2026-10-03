@@ -75,12 +75,13 @@ def launch_form(
         role=role, is_platform_admin=user.is_platform_admin,
     )
     b = budget.get_budget(db, org.id)
-    spent = budget.current_period_spent(db, org.id, "month")
-    day_spent = budget.current_period_spent(db, org.id, "day")
+    spent = budget.subtree_period_spent(db, org, "month")
+    day_spent = budget.subtree_period_spent(db, org, "day")
+    alerts = budget.chain_alerts(db, org)
     return render(request, "launch.html", active="launch", org=org, role=role,
                   active_tests_count=len(fctx["tests"]),
                   selected_perimeter=peri,
-                  budget=b, month_spent=spent, day_spent=day_spent, **fctx)
+                  budget=b, month_spent=spent, day_spent=day_spent, budget_alerts=alerts, **fctx)
 
 
 @router.post("/o/{org_slug}/launch")

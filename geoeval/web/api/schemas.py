@@ -243,6 +243,8 @@ class ScheduleOut(_Orm):
     next_run_at: Optional[datetime] = None
     last_run_at: Optional[datetime] = None
     last_job_id: Optional[str] = None
+    last_skipped_at: Optional[datetime] = None
+    last_skip_reason: Optional[str] = None
     created_at: datetime
     description: str = ""
 
@@ -345,3 +347,36 @@ class ScheduleIn(BaseModel):
 class SchedulePatch(BaseModel):
     enabled: Optional[bool] = None
     name: Optional[str] = Field(None, min_length=1, max_length=200)
+
+
+# ---- Budget consolidé (E3) ------------------------------------------
+class BudgetConstraintOut(BaseModel):
+    owner_slug: str
+    owner_name: str
+    inherited: bool
+    period: Literal["month", "day"]
+    cap_eur: float
+    spent_eur: float = Field(description="Dépense consolidée du sous-arbre de l'entité qui porte le plafond")
+    ratio: Optional[float] = None
+    level: Literal["ok", "warning", "exceeded"]
+
+
+class BudgetAlertOut(_Orm):
+    organization_id: int
+    period: str
+    period_key: str
+    threshold: int
+    spent_eur: float
+    cap_eur: float
+    created_at: datetime
+    email_status: str
+
+
+class BudgetOut(BaseModel):
+    monthly_cap_eur: Optional[float] = None
+    daily_cap_eur: Optional[float] = None
+    month_spent_eur: float = Field(description="Dépense consolidée du mois (entité + sous-entités)")
+    day_spent_eur: float
+    own_month_spent_eur: float = Field(description="Dépense du mois de l'entité seule")
+    constraints: list[BudgetConstraintOut]
+    alerts: list[BudgetAlertOut]

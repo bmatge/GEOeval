@@ -12,6 +12,7 @@ from sqlalchemy.orm import Session
 
 from geoeval.core.load import load_tests
 from geoeval.web import (
+    budget,
     services,
 )
 from geoeval.web.deps import (
@@ -49,6 +50,8 @@ def dashboard(request: Request, ctx=Depends(public_org), db: Session = Depends(g
         role=role,
         leaderboard=services.leaderboard(db, org.id),
         runs=services.list_runs(db, org.id)[:5],
+        # E3 : bandeaux budgétaires pour les membres (jamais pour un visiteur anonyme).
+        budget_alerts=budget.chain_alerts(db, org) if role is not None else [],
     )
 
 @router.get("/o/{org_slug}/api/stats/summary")

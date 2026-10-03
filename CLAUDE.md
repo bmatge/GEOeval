@@ -46,8 +46,8 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 .
 ├── geoeval/               → package applicatif (ADR-088 §2.5), racine unique des imports
 │   ├── core/              → run.py / evaluate.py (phases RUN et ÉVALUATION), load.py, llm_clients.py (cascade clés, retry)
-│   ├── db/                → session.py, models.py (25 tables, index déclarés), migrate.py + alembic/ (révisions ; 0001 = base convergente, schema_base.sql ; 0002 = hiérarchie d'entités), migrations.sql (GELÉ), seed.sql
-│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), hierarchy.py (arbre d'entités, résolveur de paramètres hérités), tenancy.py (rôles hérités `resolve_role`, délégation `can_*`), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/ + static/vendor/ (DSFR, Chart.js… vendorisés, MANIFEST.json)
+│   ├── db/                → session.py, models.py (25 tables, index déclarés), migrate.py + alembic/ (révisions ; 0001 = base convergente, schema_base.sql ; 0002 = hiérarchie d'entités ; 0003 = alertes budgétaires), migrations.sql (GELÉ), seed.sql
+│   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), hierarchy.py (arbre d'entités, résolveur de paramètres hérités), budget.py + budget_alerts.py + mailer.py (budget consolidé, alertes 80/100 %, SMTP), tenancy.py (rôles hérités `resolve_role`, délégation `can_*`), api_tokens.py, services.py (DAO), auth*, tenancy… + templates/ + static/vendor/ (DSFR, Chart.js… vendorisés, MANIFEST.json)
 │   ├── observability/     → logs.py (JSON/texte, request_id, job_id), middleware.py (X-Request-ID, journal d'accès, métriques HTTP), metrics.py (Prometheus), health.py
 │   └── worker/            → main.py (processus worker, SIGTERM gracieux), health.py (:9100 /healthz /readyz /metrics), jobs.py (file `jobs`, SKIP LOCKED), scheduler.py (verrou advisory)
 ├── scripts/               → migrate, vendor_assets (--verify / --refresh), set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
@@ -85,7 +85,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 - `git push --force` sans demander
 - Installer une lib non listée dans `requirements.txt` sans en parler
 - Toucher aux secrets : `.env` local, `/opt/apps/geoeval/.env` sur le VPS (diagnostic par
-  noms de variables uniquement, jamais afficher les valeurs)
+  noms de variables uniquement, jamais afficher les valeurs) — y compris `GEOEVAL_SMTP_PASSWORD`
 - Relancer `spawn up geoeval --auth …` avec un autre mode : `AUTH=link` est voulu depuis
   le 2026-07-30 (gate magic-link + auth applicative derrière — double login assumé).
   ⚠️ Le SSO applicatif dépend de l'application Authentik `geoeval-sso` (provider

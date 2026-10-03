@@ -69,6 +69,44 @@ class JobsQueueCollector:
         return []
 
 
+class BudgetCollector:
+    """Jauges budgétaires par entité et période, lues en base au scrape (E3) :
+    `geoeval_budget_spent_eur`, `geoeval_budget_cap_eur`, `geoeval_budget_ratio`
+    (dépense consolidée / plafond) — base de l'alerting d'exploitation."""
+
+    def collect(self) -> Iterable[GaugeMetricFamily]:
+        spent = GaugeMetricFamily("geoeval_budget_spent_eur", "Dépense consolidée sur la période (€)", labels=["org", "period"])
+        cap = GaugeMetricFamily("geoeval_budget_cap_eur", "Plafond de la période (€)", labels=["org", "period"])
+        ratio = GaugeMetricFamily("geoeval_budget_ratio", "Dépense consolidée / plafond", labels=["org", "period"])
+        try:
+            from sqlalchemy import select
+
+            from geoeval.db.models import Budget, Organization
+            from geoeval.db.session import SessionLocal
+            from geoeval.web import budget
+
+            with SessionLocal() as session:
+                owners = session.execute(
+                    select(Organization).join(Budget, Budget.organization_id == Organization.id)
+                ).scalars().all()
+                rows = [c for o in owners for c in budget.constraints_for_owner(session, o)]
+        except Exception:  # noqa: BLE001 — un scrape ne doit jamais casser
+            logger.debug("lecture des budgets impossible pour /metrics", exc_info=True)
+            return
+        for c in rows:
+            labels = [c.owner.slug, c.period]
+            spent.add_metric(labels, float(c.spent_eur))
+            cap.add_metric(labels, float(c.cap_eur))
+            if c.ratio is not None:
+                ratio.add_metric(labels, float(c.ratio))
+        yield spent
+        yield cap
+        yield ratio
+
+    def describe(self):
+        return []
+
+
 _registered = False
 
 
@@ -77,6 +115,7 @@ def register_collectors() -> None:
     if _registered:
         return
     REGISTRY.register(JobsQueueCollector())
+    REGISTRY.register(BudgetCollector())
     _registered = True
 
 

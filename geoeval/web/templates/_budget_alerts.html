@@ -1,0 +1,12 @@
+{# Bandeaux d'alerte budgétaire (E3) — `budget_alerts` : liste de budget.Constraint
+   au-dessus de 80 %, les plus graves d'abord. #}
+{% for c in budget_alerts or [] %}
+<div class="fr-alert fr-alert--sm {{ 'fr-alert--error' if c.level == 'exceeded' else 'fr-alert--warning' }} fr-mb-2w">
+  <p>
+    <strong>Budget {{ c.period_label }}{% if c.inherited %} de « {{ c.owner.name }} »{% endif %}
+    {{ 'atteint' if c.level == 'exceeded' else 'à ' ~ c.pct ~ ' %' }}</strong> :
+    {{ "%.2f"|format(c.spent_eur) }} € dépensés (consolidé) sur un plafond de {{ "%.2f"|format(c.cap_eur) }} €.
+    {% if c.level == 'exceeded' %}Les nouveaux lancements et les exécutions programmées qui le dépasseraient sont refusés.{% endif %}
+  </p>
+</div>
+{% endfor %}

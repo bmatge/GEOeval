@@ -40,6 +40,10 @@ Heures affichées en heure de Paris.</p>
           {% if s.last_run_at %}{{ s.last_run_at.astimezone(tz).strftime('%d/%m %H:%M') }}
             {% if s.last_job_id %}<a class="fr-link fr-link--sm" href="{{ url_prefix }}/jobs/{{ s.last_job_id }}">suivi</a>{% endif %}
           {% else %}—{% endif %}
+          {% if s.last_skip_reason %}
+          <p class="fr-badge fr-badge--sm fr-badge--warning fr-mt-1v" title="{{ s.last_skip_reason }}">sautée le {{ s.last_skipped_at.astimezone(tz).strftime('%d/%m %H:%M') }} : plafond</p>
+          <p class="fr-text--xs fr-mb-0">{{ s.last_skip_reason }}</p>
+          {% endif %}
         </td>
         <td>{% if s.enabled %}<span class="fr-badge fr-badge--success fr-badge--sm">actif</span>{% else %}<span class="fr-badge fr-badge--sm">inactif</span>{% endif %}</td>
         <td>

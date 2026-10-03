@@ -368,6 +368,9 @@ class ScheduledRun(Base):
     next_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     last_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
     last_job_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # E3 : dernière échéance sautée par le planificateur (plafond budgétaire), avec motif.
+    last_skipped_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_skip_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
@@ -641,3 +644,30 @@ class ApiToken(Base):
     expires_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     last_used_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
     revoked_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True))
+
+
+# =====================================================================
+# Alertes budgétaires (ADR-089 §2.3 / §2.8, chantier E3) — une ligne par
+# franchissement de seuil (80 / 100 %) d'un plafond, par période calendaire.
+# L'unicité empêche de renvoyer la même alerte à chaque job.
+# =====================================================================
+class BudgetAlert(Base):
+    __tablename__ = "budget_alerts"
+    __table_args__ = (
+        CheckConstraint("period IN ('day', 'month')", name="ck_budget_alerts_period"),
+        CheckConstraint("threshold IN (80, 100)", name="ck_budget_alerts_threshold"),
+        Index("uq_budget_alerts_org_period_threshold", "organization_id", "period", "period_key", "threshold", unique=True),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    period: Mapped[str] = mapped_column(Text, nullable=False)
+    period_key: Mapped[str] = mapped_column(Text, nullable=False)        # « 2026-10 » ou « 2026-10-03 »
+    threshold: Mapped[int] = mapped_column(Integer, nullable=False)       # 80 | 100
+    spent_eur: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False)
+    cap_eur: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    email_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
+    emailed_to: Mapped[Optional[list[Any]]] = mapped_column(JSONB, nullable=True)

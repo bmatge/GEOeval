@@ -307,6 +307,36 @@ d'API hérite vers le bas** comme un utilisateur.
 - Les membres hérités sont affichés en lecture seule dans les paramètres de chaque entité,
   avec l'entité d'origine du rôle.
 
+## 4quater. Mise en œuvre de E3 (amendement 2026-10-03)
+
+Arbitrages validés : alertes **dans l'application et par email** ; une exécution
+programmée qui dépasserait un plafond est **sautée et tracée**.
+
+- **Budget consolidé** (`geoeval/web/budget.py`) : un plafond s'applique à la dépense de
+  l'entité et de tout son sous-arbre (jointure sur `path`). `check_budget` parcourt la
+  chaîne (l'entité puis ses ancêtres) et refuse si UN plafond, journalier ou mensuel,
+  serait dépassé ; le motif nomme l'entité porteuse quand ce n'est pas l'entité
+  elle-même. Plafonds des sous-entités optionnels ; le plus contraignant s'applique.
+- **Alertes** (`geoeval/web/budget_alerts.py`, table `budget_alerts`, révision `0003`) :
+  seuils 80 % et 100 % par plafond et par période calendaire (clé calculée par la base,
+  même horloge que la dépense). L'unicité en base garantit une seule alerte par seuil et
+  par période. Évaluées en fin de chaque job et après un saut du planificateur.
+  Destinataires : org_admin directs de l'entité porteuse, à défaut ceux de l'ancêtre le
+  plus proche qui en a. Statut d'envoi tracé (`sent`, `not_configured`, `no_recipient`,
+  `failed`).
+- **Email** (`geoeval/web/mailer.py`) : SMTP de la bibliothèque standard, sans
+  dépendance ; inactif tant que `GEOEVAL_SMTP_HOST` est vide, les alertes restant
+  visibles dans l'application. Un échec d'envoi ne casse jamais un job.
+- **Application** : bandeaux 80 % / 100 % sur le tableau de bord (membres seulement), la
+  page de lancement et la page budget ; la page budget montre plafonds propres et hérités,
+  dépense consolidée et propre, alertes envoyées. API `GET /orgs/{slug}/budget` (editor+).
+  Jauges `geoeval_budget_spent_eur`, `geoeval_budget_cap_eur`, `geoeval_budget_ratio`.
+- **Planificateur** : le budget est revérifié à l'échéance ; si l'exécution dépasserait
+  un plafond, elle n'est pas mise en file, `last_skipped_at` / `last_skip_reason` sont
+  posés sur la planification, une ligne d'audit `skip_budget` est écrite, la prochaine
+  échéance est recalculée (un one-shot sauté est clos). Une exécution réussie efface le
+  motif. Comble le trou relevé au lot 1.3a.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec
