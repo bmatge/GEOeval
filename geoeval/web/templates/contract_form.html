@@ -1,0 +1,92 @@
+{% extends "base.html" %}
+{% block title %}{{ 'Éditer le contrat' if contract else 'Nouveau contrat' }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/contracts">Retour aux contrats</a>
+<h1 class="fr-mt-2w">{{ 'Contrat « ' ~ contract.label ~ ' »' if contract else 'Nouveau contrat LLM' }}</h1>
+{% if contract %}<p class="fr-hint-text">{{ family_labels.get(contract.family, contract.family) }} · consommé : {{ '%.2f'|format(used) }} €
+  {% if contract.cap_eur is not none %} sur un plafond de {{ contract.cap_eur }} €{% endif %}</p>{% endif %}
+
+<form method="post" action="{{ (url_prefix ~ '/contracts/' ~ contract.id ~ '/edit') if contract else (url_prefix ~ '/contracts/new') }}"
+      class="fr-mt-2w" style="max-width:44rem;">
+  {% if not contract %}
+  <div class="fr-select-group">
+    <label class="fr-label" for="family">Fournisseur</label>
+    <select class="fr-select" id="family" name="family" required>
+      {% for f in families %}<option value="{{ f }}">{{ family_labels[f] }}</option>{% endfor %}
+    </select>
+  </div>
+  {% endif %}
+  <div class="fr-input-group">
+    <label class="fr-label" for="label">Libellé <span class="fr-hint-text">Ex. « Marché Mistral 2026 — DINUM ».</span></label>
+    <input class="fr-input" id="label" name="label" required maxlength="200" value="{{ contract.label if contract else '' }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="reference">Référence <span class="fr-hint-text">(optionnel — n° de marché, bon de commande)</span></label>
+    <input class="fr-input" id="reference" name="reference" value="{{ contract.reference or '' if contract else '' }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="base_url">URL de base <span class="fr-hint-text">(vide = endpoint par défaut du fournisseur ; obligatoire pour un endpoint compatible OpenAI)</span></label>
+    <input class="fr-input" id="base_url" name="base_url" type="url" value="{{ contract.base_url or '' if contract else '' }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="api_key">Clé d'API
+      <span class="fr-hint-text">Chiffrée au repos, jamais réaffichée.{% if contract %} {{ 'Une clé est enregistrée : laisser vide pour la conserver.' if contract.api_key_encrypted else 'Aucune clé enregistrée.' }}{% endif %}</span></label>
+    <input class="fr-input" id="api_key" name="api_key" type="password" autocomplete="off">
+  </div>
+  {% if contract and contract.api_key_encrypted %}
+  <div class="fr-checkbox-group fr-mb-2w">
+    <input type="checkbox" id="clear_api_key" name="clear_api_key" value="true">
+    <label class="fr-label" for="clear_api_key">Effacer la clé enregistrée</label>
+  </div>
+  {% endif %}
+  <div class="fr-input-group">
+    <label class="fr-label" for="extra_headers">En-têtes HTTP <span class="fr-hint-text">(optionnel — objet JSON)</span></label>
+    <textarea class="fr-input" id="extra_headers" name="extra_headers" rows="2">{{ contract.extra_headers|tojson if contract and contract.extra_headers else '' }}</textarea>
+  </div>
+
+  <fieldset class="fr-fieldset" aria-labelledby="models-legend">
+    <legend class="fr-fieldset__legend fr-text--regular" id="models-legend">Restreindre à certains modèles
+      <span class="fr-hint-text">Aucune case cochée = toute la famille. Seuls les modèles de la famille du contrat sont acceptés.</span></legend>
+    {% for f in families %}{% for m in models_by_family[f] if not contract or contract.family == f %}
+    <div class="fr-fieldset__element">
+      <div class="fr-checkbox-group fr-checkbox-group--sm">
+        <input type="checkbox" id="model-{{ m.model_id }}" name="model_ids" value="{{ m.model_id }}"
+               {% if contract and m.model_id in (contract.model_ids or []) %}checked{% endif %}>
+        <label class="fr-label" for="model-{{ m.model_id }}">{{ family_labels[f] }} · {{ m.model_version }}</label>
+      </div>
+    </div>
+    {% endfor %}{% endfor %}
+  </fieldset>
+
+  <div class="fr-grid-row fr-grid-row--gutters">
+    <div class="fr-col-6"><div class="fr-input-group">
+      <label class="fr-label" for="valid_from">Début de validité</label>
+      <input class="fr-input" id="valid_from" name="valid_from" type="date" value="{{ contract.valid_from.isoformat() if contract and contract.valid_from else '' }}">
+    </div></div>
+    <div class="fr-col-6"><div class="fr-input-group">
+      <label class="fr-label" for="valid_to">Fin de validité</label>
+      <input class="fr-input" id="valid_to" name="valid_to" type="date" value="{{ contract.valid_to.isoformat() if contract and contract.valid_to else '' }}">
+    </div></div>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="cap_eur">Plafond (€, sur toute la durée du contrat) <span class="fr-hint-text">(optionnel)</span></label>
+    <input class="fr-input" id="cap_eur" name="cap_eur" inputmode="decimal" value="{{ contract.cap_eur if contract and contract.cap_eur is not none else '' }}">
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="hosting">Hébergement de l'endpoint <span class="fr-hint-text">(vide = celui déclaré sur le modèle)</span></label>
+    <select class="fr-select" id="hosting" name="hosting">
+      <option value="">—</option>
+      {% for h in hostings %}<option value="{{ h }}" {% if contract and contract.hosting == h %}selected{% endif %}>{{ hosting_labels[h] }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fr-checkbox-group">
+    <input type="checkbox" id="sovereign" name="sovereign" value="true" {% if contract and contract.sovereign %}checked{% endif %}>
+    <label class="fr-label" for="sovereign">Endpoint souverain (infrastructure publique)</label>
+  </div>
+  <div class="fr-checkbox-group fr-mt-1w">
+    <input type="checkbox" id="is_active" name="is_active" value="true" {% if not contract or contract.is_active %}checked{% endif %}>
+    <label class="fr-label" for="is_active">Actif <span class="fr-hint-text">Désactivé = ignoré : la cascade passe à l'ancêtre ou à la plateforme.</span></label>
+  </div>
+  <button type="submit" class="fr-btn fr-mt-3w">{{ 'Enregistrer' if contract else 'Créer le contrat' }}</button>
+</form>
+{% endblock %}

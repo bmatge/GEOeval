@@ -93,6 +93,9 @@ def tick_detailed(session: Session) -> tuple[int, set[int]]:
     dépasserait un plafond de la chaîne, elle est SAUTÉE (pas de mise en file), le
     motif est enregistré sur la planification et dans le journal d'audit, et la
     prochaine échéance est recalculée normalement (un one-shot sauté est clos).
+    E5 : même traitement si la politique de routage refuse la sélection ou si le
+    contrat le plus proche d'un modèle est expiré ou épuisé (audit `skip_routing`,
+    `skip_contract`).
     Ne commite pas : l'appelant tient la transaction (et le verrou).
     Renvoie (nombre mis en file, entités dont une échéance a été sautée).
     """
@@ -118,13 +121,15 @@ def tick_detailed(session: Session) -> tuple[int, set[int]]:
             test_ids=list(sr.test_ids) if sr.test_ids else None,
         )
         skip_reason: Optional[str] = None
+        skip_kind = "budget"
         try:
             launching.estimate_and_check_budget(
                 session, sr.organization_id, params, perimeter_id=sr.perimeter_id,
             )
         except launching.LaunchError as exc:
-            if exc.kind == "budget":
-                skip_reason = exc.detail
+            # E3 : budget ; E5 : politique de routage ou contrat inutilisable.
+            if exc.kind in launching.SKIPPABLE_KINDS:
+                skip_reason, skip_kind = exc.detail, exc.kind
             else:
                 raise
         except Exception:  # noqa: BLE001 — un devis en échec ne bloque pas le suivi longitudinal
@@ -135,10 +140,11 @@ def tick_detailed(session: Session) -> tuple[int, set[int]]:
             sr.last_skipped_at = now
             sr.last_skip_reason = skip_reason
             session.add(AuditLog(
-                user_id=None, org_id=sr.organization_id, action="skip_budget", entity_type="scheduled_run",
+                user_id=None, org_id=sr.organization_id, action=f"skip_{skip_kind}", entity_type="scheduled_run",
                 entity_id=sr.schedule_id, meta_json={"name": sr.name, "reason": skip_reason},
             ))
-            skipped_orgs.add(sr.organization_id)
+            if skip_kind == "budget":
+                skipped_orgs.add(sr.organization_id)
         else:
             job = jobs.submit(
                 session,

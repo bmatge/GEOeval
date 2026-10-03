@@ -319,6 +319,8 @@ def create_model(
     api_key: Optional[str],
     extra_headers: Optional[dict[str, Any]],
     search_config: Optional[dict[str, Any]] = None,
+    hosting: Optional[str] = None,
+    is_sovereign: bool = False,
 ) -> Model:
     model = Model(
         model_name=model_name,
@@ -327,6 +329,8 @@ def create_model(
         api_key=api_key or None,
         extra_headers=extra_headers or None,
         search_config=search_config or None,
+        hosting=hosting or None,
+        is_sovereign=bool(is_sovereign),
         is_active=True,
     )
     session.add(model)
@@ -345,6 +349,8 @@ def update_model(
     clear_api_key: bool,
     extra_headers: Optional[dict[str, Any]],
     search_config: Optional[dict[str, Any]] = None,
+    hosting: Optional[str] = None,
+    is_sovereign: Optional[bool] = None,   # None = inchangé
 ) -> Model:
     model = session.get(Model, model_id)
     if model is None:
@@ -354,6 +360,9 @@ def update_model(
     model.base_url = base_url or None
     model.extra_headers = extra_headers or None
     model.search_config = search_config or None
+    model.hosting = hosting or None
+    if is_sovereign is not None:
+        model.is_sovereign = bool(is_sovereign)
     if clear_api_key:
         model.api_key = None
     elif api_key:  # champ laissé vide = clé existante conservée

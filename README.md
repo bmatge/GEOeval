@@ -233,6 +233,19 @@ Les **thèmes** sont un catalogue commun (*Administrer › Thèmes*, admin plate
 d'un périmètre (ex. `service-public.fr`, sous-domaines inclus) donnent, dans le détail d'un run, la part des
 citations qui pointent vers une source officielle.
 
+## Contrats LLM et politique de routage (ADR-089, chantier E5)
+
+Une entité peut poser ses propres **contrats** auprès des fournisseurs (*Paramètres › Contrats LLM*, réservé aux
+org_admin) : un marché Mistral, Albert ou OpenRouter, avec sa clé, une période de validité et un plafond. Un
+contrat vaut pour toute la famille de modèles, ou seulement certains, et ses sous-entités en héritent. Un contrat
+expiré ou au plafond bloque les appels : rien ne part en silence sur la clé de la plateforme. Pour y revenir, on
+désactive le contrat. La consommation est imputée au contrat (`usage.contract_id`).
+
+La **politique de routage** de l'entité restreint les fournisseurs autorisés et peut imposer des notateurs
+souverains ou hébergés dans l'UE. Une sous-entité ne peut que la durcir. Elle est vérifiée au lancement comme à
+chaque échéance programmée, et les formulaires ne proposent que les modèles conformes. Les anciennes clés BYOK ont
+été converties en contrats.
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

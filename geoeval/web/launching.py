@@ -11,20 +11,25 @@ les traduit (HTTPException pour l'UI, problem+json pour l'API).
 """
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import Any, Optional
 
 from sqlalchemy.orm import Session
 
 from geoeval.core.load import load_tests
 from geoeval.db.models import Job, Model, Organization, Perimeter, ScheduledRun, Test
-from geoeval.web import budget, org_models, perimeters, pools, pricing, services
+from geoeval.web import budget, contracts, org_models, perimeters, pools, pricing, routing, services
 from geoeval.worker import jobs as jobqueue
 
 # Providers utilisables comme modèle TESTÉ (dispatch de run.py, avec recherche web).
 TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemini", "google", "openrouter"}
 
 # Statut HTTP suggéré par type d'erreur (l'UI et l'API s'y conforment).
-KIND_STATUS = {"validation": 400, "forbidden_models": 403, "budget": 402, "not_found": 404}
+KIND_STATUS = {"validation": 400, "forbidden_models": 403, "routing": 403, "budget": 402, "contract": 409,
+               "not_found": 404}
+
+# Refus qui font sauter (et tracer) une échéance programmée au lieu de l'exécuter.
+SKIPPABLE_KINDS = ("budget", "routing", "contract")
 
 
 class LaunchError(Exception):
@@ -164,12 +169,63 @@ def validate_selection(
 # ---------------------------------------------------------------------
 # Devis + plafond budgétaire
 # ---------------------------------------------------------------------
+def _models_by_version(session: Session, versions: list[str]) -> list[Model]:
+    by_version = {m.model_version: m for m in services.list_models(session, active_only=False)}
+    return [by_version[v] for v in versions if v in by_version]
+
+
+def check_compliance(session: Session, org_id: int, params: dict[str, Any]) -> None:
+    """Politique de routage et contrats (E5), avant tout devis :
+    - fournisseurs autorisés (IA évaluées et notateurs), souveraineté / hébergement UE (notateurs) ;
+    - contrat le plus proche de chaque modèle en vigueur et sous son plafond (sinon blocage)."""
+    org = session.get(Organization, org_id)
+    if org is None:
+        raise LaunchError("not_found", "Organisation introuvable.")
+    tested = _models_by_version(session, list(params["tested_models"]))
+    judges = _models_by_version(session, [j["model"] for j in params["judges"]])
+    problems = routing.violations(session, org, tested=tested, judges=judges)
+    if problems:
+        raise LaunchError("routing", " ".join(problems), problems=problems)
+    seen: set[int] = set()
+    for m in tested + judges:
+        if m.model_id in seen:
+            continue
+        seen.add(m.model_id)
+        res = contracts.resolve(session, org, m)
+        if not res.usable:
+            raise LaunchError("contract", res.blocked, contract_id=res.contract.id)
+
+
+def _check_contract_caps(session: Session, estimate: dict[str, Any]) -> None:
+    """Le devis imputé à chaque contrat plafonné doit tenir sous son plafond restant."""
+    share: dict[int, Decimal] = {}
+    for line in estimate.get("by_model", []):
+        cid = line.get("contract_id")
+        if cid is not None:
+            share[cid] = share.get(cid, Decimal("0")) + Decimal(line["cost_eur"])
+    for cid, amount in share.items():
+        c = contracts.get(session, cid)
+        if c is None or c.cap_eur is None:
+            continue
+        used = contracts.spent(session, cid)
+        if used + amount > c.cap_eur:
+            raise LaunchError(
+                "contract",
+                f"Le contrat « {c.label} » dépasserait son plafond : {used:.2f} € consommés + "
+                f"{amount:.2f} € estimés > {c.cap_eur} €.",
+                contract_id=cid, estimate_eur=str(amount),
+            )
+
+
 def estimate_and_check_budget(
     session: Session, org_id: int, params: dict[str, Any], *, perimeter_id: Optional[int] = None,
 ) -> dict[str, Any]:
-    """Devis prévisionnel puis contrôle des plafonds (mois, jour). Renvoie
-    l'estimation ; lève LaunchError('budget') si un plafond serait dépassé.
+    """Conformité (routage, contrats), devis prévisionnel, plafonds des contrats puis
+    budget consolidé (mois, jour). Renvoie l'estimation ; lève LaunchError('routing' |
+    'contract' | 'budget'). Chemin commun : lancement, « exécuter maintenant »,
+    création de planification et échéance du planificateur.
     `perimeter_id` : le devis porte sur les questions effectives du périmètre (pools inclus)."""
+    check_compliance(session, org_id, params)
     tests_for_estimate = tests_for_run(
         session, org_id, perimeter_id=perimeter_id, test_ids=params["test_ids"],
     )
@@ -177,6 +233,7 @@ def estimate_and_check_budget(
         session, org_id=org_id, tests=tests_for_estimate,
         tested_models=params["tested_models"], judges=params["judges"],
     )
+    _check_contract_caps(session, estimate)
     check = budget.check_budget(session, org_id=org_id, estimate_eur=estimate["total_eur"])
     if not check.ok:
         raise LaunchError("budget", check.reason, estimate_eur=str(estimate["total_eur"]))

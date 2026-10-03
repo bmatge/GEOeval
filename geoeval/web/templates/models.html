@@ -4,14 +4,14 @@
 <h1>Catalogue d'IA</h1>
 
 <div class="fr-tabs">
-  <ul class="fr-tabs__list" role="tablist" aria-label="Catalogue plateforme et clés API de l'organisation">
+  <ul class="fr-tabs__list" role="tablist" aria-label="Catalogue plateforme et contrats de l'organisation">
     <li role="presentation">
       <button id="tab-platform" class="fr-tabs__tab" tabindex="0" role="tab"
               aria-selected="true" aria-controls="panel-platform">Plateforme</button>
     </li>
     <li role="presentation">
       <button id="tab-org" class="fr-tabs__tab" tabindex="-1" role="tab"
-              aria-selected="false" aria-controls="panel-org">Clés API de l'organisation ({{ org.name }})</button>
+              aria-selected="false" aria-controls="panel-org">Contrats de l'organisation ({{ org.name }})</button>
     </li>
   </ul>
 
@@ -32,7 +32,7 @@
         <thead>
           <tr>
             <th>id</th><th>Provider</th><th>Version</th><th>URL base</th><th>Clé API</th>
-            <th>En-têtes</th><th>Notateur</th><th>Historique</th><th>Actions</th>
+            <th>En-têtes</th><th>Hébergement</th><th>Notateur</th><th>Historique</th><th>Actions</th>
           </tr>
         </thead>
         <tbody>
@@ -44,6 +44,7 @@
             <td>{% if m.base_url %}<code>{{ m.base_url }}</code>{% else %}<span class="fr-hint-text">défaut</span>{% endif %}</td>
             <td>{% if m.api_key %}•••• (en base){% else %}<span class="fr-hint-text">env</span>{% endif %}</td>
             <td>{% if m.extra_headers %}{{ m.extra_headers | length }} en-tête(s){% else %}—{% endif %}</td>
+            <td>{{ hosting_labels.get(m.hosting, hosting_labels[None]) }}{% if m.is_sovereign %} <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}</td>
             <td>
               {% if user and user.is_platform_admin %}
               <form method="post" action="{{ url_prefix }}/models/{{ m.model_id }}/toggle-judge" style="display:inline">
@@ -83,62 +84,16 @@
     </div>
   </div>
 
-  {# ---- Onglet Organisation (clés API propres) ---- #}
+  {# ---- Onglet Organisation : contrats LLM (E5) ---- #}
   <div id="panel-org" class="fr-tabs__panel"
        role="tabpanel" aria-labelledby="tab-org" tabindex="0">
-    <p class="fr-hint-text">
-      Clés d'accès propres à l'organisation. Chiffrées au repos (Fernet). Vides = repli sur la
-      clé de la plateforme (onglet précédent) puis sur les variables d'environnement.
-    </p>
-
-    {% if role != 'org_admin' and not (user and user.is_platform_admin) %}
-    <div class="fr-callout fr-callout--brown-caramel">
-      <p class="fr-callout__text">Seul un administrateur d'organisation peut éditer les clés API.</p>
-    </div>
-    {% endif %}
-
-    <div class="fr-table fr-table--bordered">
-      <table>
-        <thead>
-          <tr>
-            <th>IA</th>
-            <th>URL base (org)</th>
-            <th>Clé API (org)</th>
-            <th>En-têtes</th>
-            <th>État</th>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for m in models %}
-          {% set cred = creds_by_model.get(m.model_id) %}
-          <tr>
-            <td>{{ m.model_name }} · <code>{{ m.model_version }}</code></td>
-            <td>{% if cred and cred.base_url %}<code>{{ cred.base_url }}</code>{% else %}<span class="fr-hint-text">—</span>{% endif %}</td>
-            <td>{% if cred and cred.api_key_encrypted %}•••• (chiffrée){% else %}<span class="fr-hint-text">non fournie</span>{% endif %}</td>
-            <td>{% if cred and cred.extra_headers %}{{ cred.extra_headers | length }}{% else %}—{% endif %}</td>
-            <td>
-              {% if cred %}
-                {% if cred.is_active %}<p class="fr-badge fr-badge--success fr-badge--sm">active</p>
-                {% else %}<p class="fr-badge fr-badge--sm">désactivée</p>{% endif %}
-              {% else %}<span class="fr-hint-text">—</span>{% endif %}
-            </td>
-            <td>
-              {% if role == 'org_admin' or (user and user.is_platform_admin) %}
-              <a class="fr-btn fr-btn--sm fr-btn--secondary"
-                 href="{{ url_prefix }}/credentials/{{ m.model_id }}/edit">Configurer</a>
-              {% if cred %}
-              <form method="post" action="{{ url_prefix }}/credentials/{{ m.model_id }}/delete" style="display:inline"
-                    onsubmit="return confirm('Effacer la clé API pour {{ m.model_version }} ?');">
-                <button class="fr-btn fr-btn--sm fr-btn--tertiary">Effacer</button>
-              </form>
-              {% endif %}
-              {% endif %}
-            </td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+    <div class="fr-callout">
+      <p class="fr-callout__text">
+        Les clés propres aux entités sont désormais des <strong>contrats LLM</strong> : un contrat couvre une
+        famille de fournisseurs (ou certains de ses modèles), il est hérité par les sous-entités, et il peut
+        porter une période de validité et un plafond.
+      </p>
+      <a class="fr-btn fr-btn--secondary fr-mt-2w" href="{{ url_prefix }}/contracts">Contrats et politique de routage →</a>
     </div>
   </div>
 </div>

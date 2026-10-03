@@ -312,9 +312,8 @@ def execute_run(
     run_id = run_row.run_id
 
     # 2) Appels LLM + tracking usage (heuristique tokens : len/4)
-    from geoeval.web import credentials, usage  # local — évite le cycle
-    cred = credentials.get_for_model(session, organization_id, tested_model.model_id)
-    billed_to = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+    from geoeval.web import contracts, usage  # local — évite le cycle
+    billing = contracts.billing_for(session, organization_id, tested_model)
 
     total = len(tests)
     for i, t in enumerate(tests, start=1):
@@ -341,7 +340,8 @@ def execute_run(
                 model_id=tested_model.model_id,
                 run_id=run_id,
                 kind="tested",
-                billed_to=billed_to,
+                billed_to=billing.billed_to,
+                contract_id=billing.contract_id,
                 input_tokens=real_usage.input_tokens if real_usage else max(1, len(t.prompt or "") // 4),
                 output_tokens=real_usage.output_tokens if real_usage else max(1, len(answer or "") // 4),
                 cost_usd=real_usage.cost_usd if real_usage else None,
