@@ -41,7 +41,8 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [x] E4 — pools de questions partagés par référence (visibilité privé / sous-arbre / tous, inclusions sans cycle, abonnement à un périmètre), catalogue global de thèmes (admin plateforme), domaines officiels des périmètres + part des citations officielles (révision 0004), UI + API v1
 - [x] E5 — contrats LLM hérités (famille ± modèles, validité, plafond, blocage sans repli), BYOK converties (révision 0005), politique de routage restrictive (fournisseurs ; notateurs souverains / UE), imputation `usage.contract_id`, UI + API v1
 - [ ] Révision ultérieure : supprimer `org_credentials` (gelée depuis E5)
-- [ ] E6 — ProConnect : rattachement proposé par `siret`, relecture à chaque connexion
+- [x] E6 (minimal) — identité OIDC par `(issuer, sub)` : l'email suit les mutations, anti-takeover, migration entre fournisseurs ; profils `OIDC_PROFILE` (generic / proconnect) et correspondance des claims
+- [ ] E6 (branchement) — rattachement proposé par `siret` + validation org_admin, relecture du `siret` à chaque connexion, `userinfo` JWT ProConnect, inscription du client
 - [ ] E7 — notifications + détecteur « question toujours fausse »
 - [ ] E8 — campagnes, cycle de vie des questions (minimal au pilote)
 
