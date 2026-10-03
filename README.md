@@ -206,6 +206,11 @@ matérialisé). Un admin plateforme crée, qualifie et rattache les entités dan
 `/admin/organizations` ou par l'API (`POST /api/v1/orgs`, `PATCH /api/v1/orgs/{slug}`). La liste
 blanche de modèles d'une entité borne toutes ses sous-entités (intersection sur la chaîne).
 
+Les rôles s'héritent vers le bas (E2) : un rôle posé sur un ministère vaut sur toutes ses directions et
+services, jamais au-dessus. Il en va de même pour les jetons d'API. Un org_admin crée, qualifie et déplace
+les sous-entités de son périmètre depuis *Paramètres › sous-entités* ; créer une racine ou sortir une
+entité de son périmètre reste réservé à l'administration plateforme.
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

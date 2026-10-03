@@ -281,6 +281,32 @@ livré avec un **premier consommateur, la liste blanche des modèles**.
   `/admin/organizations`, API `POST /orgs`, `PATCH /orgs/{slug}`). La délégation aux
   org_admin vient avec les rôles hérités (E2).
 
+## 4ter. Mise en œuvre de E2 (amendement 2026-10-03)
+
+Arbitrages validés : un org_admin **crée et déplace dans son sous-arbre** ; un **jeton
+d'API hérite vers le bas** comme un utilisateur.
+
+- **Rôle effectif** (`tenancy.resolve_role`) : maximum des rôles posés sur l'entité et ses
+  ancêtres ; à rôle égal, l'ancre la plus haute. Jamais vers le haut ni vers une branche
+  sœur. Le rôle est un `EffectiveRole` (sous-classe de `str`) qui porte l'entité
+  d'ancrage : tout le code existant qui compare le rôle fonctionne tel quel. L'admin
+  plateforme vaut org_admin implicite ancré à la racine.
+- Appliqué partout : dépendances UI (`require_org`, `public_org`, `require_role`), API
+  (session et jeton), accueil et `GET /orgs` (adhésions + sous-arbres). Un jeton créé sur
+  le ministère agit sur tous ses services ; un jeton créé sur un service n'agit pas sur sa
+  direction (404 sans divulgation).
+- **Délégation de structure** (`tenancy.can_create_under` / `can_qualify` /
+  `can_restructure`) : un org_admin crée sous n'importe quel nœud de son sous-arbre,
+  qualifie les entités STRICTEMENT sous son ancre, déplace une entité d'un nœud de son
+  sous-arbre vers un autre. Jamais de racine, jamais hors périmètre, jamais son entité
+  d'ancrage : cela reste à l'admin plateforme. UI : paramètres › sous-entités ; API :
+  `POST /orgs`, `PATCH /orgs/{slug}` (session ou jeton org_admin).
+- **Liste blanche d'un org_admin hérité** : il ignore les listes posées dans son
+  sous-arbre (ancre comprise), qu'il gère, et reste borné par celles posées au-dessus de
+  son ancre. editor et viewer restent bornés par toute la chaîne.
+- Les membres hérités sont affichés en lecture seule dans les paramètres de chaque entité,
+  avec l'entité d'origine du rôle.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

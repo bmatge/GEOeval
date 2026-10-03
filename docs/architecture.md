@@ -195,7 +195,8 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 
 | Règle | Source | Aujourd'hui | Cible API first |
 |---|---|---|---|
-| RBAC trois rôles + admin plateforme | ADR-077 | `geoeval/web/deps.py` (dépendances FastAPI) | Dépendances partagées API et UI, rôle porté par le jeton ou la session |
+| RBAC trois rôles + admin plateforme, hérités vers le bas | ADR-077, ADR-089 §2.4 | `tenancy.resolve_role` (E2) appelé par `geoeval/web/deps.py` et `geoeval/web/api/deps.py` ; jetons hérités | Idem |
+| Délégation de la structure de l'arbre | ADR-089 §2.4 | `tenancy.can_create_under` / `can_qualify` / `can_restructure` (E2) | Idem |
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
 | Plafond budget mois et jour | ADR-080 | `geoeval/web/launching.py` (lot 1.3a ; aussi appliqué à « exécuter maintenant ») | Idem, exposé par l'API v1 (lot 1.3b) |
 | Liste blanche des modèles par org | EPIC-001, ADR-089 | `geoeval/web/launching.py` + `org_models` : intersection sur la chaîne d'entités via `hierarchy.resolve_restrictive` (E1) | Idem |

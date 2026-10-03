@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}Sous-entités — {{ org.name }}{% endblock %}
+{% block content %}
+<h1>Sous-entités de {{ org.name }}</h1>
+<p class="fr-text--lg">En tant qu'administrateur de cette entité, vous créez, qualifiez et réorganisez ses
+sous-entités (ADR-089). Les rôles posés ici s'appliquent à tout le sous-arbre ; une entité ne peut pas être
+sortie de votre périmètre ni devenir une racine — cela relève de l'administration plateforme.</p>
+
+<h2 class="fr-mt-4w">Arbre</h2>
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Entité</th><th>Type</th><th>Slug</th><th>SIRET</th><th></th></tr></thead>
+    <tbody>
+      {% for o in subtree %}
+      <tr>
+        <td style="padding-left: {{ 0.75 + (o.depth - root_depth) * 1.5 }}rem">{% if o.depth > root_depth %}<span aria-hidden="true">└ </span>{% endif %}{{ o.name }}</td>
+        <td><p class="fr-badge fr-badge--sm{% if o.kind != 'autre' %} fr-badge--blue-ecume{% endif %}">{{ kind_labels[o.kind] }}</p></td>
+        <td><code>{{ o.slug }}</code></td>
+        <td>{{ o.siret or "—" }}</td>
+        <td>
+          <a class="fr-link fr-mr-2w" href="/o/{{ o.slug }}/">ouvrir</a>
+          {% if o.id in editable and o.id != org.id %}<a class="fr-link" href="{{ url_prefix }}/settings/entities/{{ o.id }}/edit">qualifier / déplacer</a>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<h2 class="fr-mt-6w">Créer une sous-entité</h2>
+<form method="post" action="{{ url_prefix }}/settings/entities" class="fr-mt-2w" style="max-width:40rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="name">Nom</label>
+    <input class="fr-input" id="name" name="name" required>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="slug">Slug (dans l'URL) <span class="fr-hint-text">Minuscules, chiffres et tirets. Non modifiable ensuite.</span></label>
+    <input class="fr-input" id="slug" name="slug" pattern="[a-z0-9][a-z0-9\-]{1,63}" required>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="parent_id">Entité parente</label>
+    <select class="fr-select" id="parent_id" name="parent_id">
+      {% for o in parents %}<option value="{{ o.id }}" {% if o.id == org.id %}selected{% endif %}>{{ "  " * (o.depth - root_depth) }}{% if o.depth > root_depth %}└ {% endif %}{{ o.name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="kind">Type</label>
+    <select class="fr-select" id="kind" name="kind">
+      {% for k in kinds %}<option value="{{ k }}" {% if k == 'autre' %}selected{% endif %}>{{ kind_labels[k] }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="siret">SIRET (optionnel) <span class="fr-hint-text">14 chiffres</span></label>
+    <input class="fr-input" id="siret" name="siret" inputmode="numeric">
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Créer</button>
+</form>
+
+<p class="fr-mt-4w"><a class="fr-link" href="{{ url_prefix }}/settings">← Retour aux paramètres</a></p>
+{% endblock %}

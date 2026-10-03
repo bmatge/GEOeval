@@ -64,36 +64,50 @@ def _own(session: Session, org: Organization) -> Optional[set[int]]:
     return allowed_model_ids(session, org.id)
 
 
-def resolve_allowed_ids(session: Session, org_id: int, *, include_own: bool = True):
-    """Liste blanche résolue sur la chaîne (soi + ancêtres, ou ancêtres seuls).
+def resolve_allowed_ids(
+    session: Session, org_id: int, *, include_own: bool = True, ignore_from_depth: Optional[int] = None,
+):
+    """Liste blanche résolue sur la chaîne d'entités (intersection).
 
-    Renvoie un `hierarchy.Resolved` : `.value` = ids autorisés (None = aucune
-    liste sur la chaîne, catalogue global), `.sources` = entités contributrices.
+    - `include_own=False` : la liste de l'entité elle-même est ignorée (page de
+      gestion de cette liste) ;
+    - `ignore_from_depth=d` : les listes posées sur les entités de profondeur ≥ d
+      sont ignorées (org_admin hérité ancré à la profondeur d : il gère les listes
+      de son sous-arbre, il reste borné par celles au-dessus de son ancre).
+
+    Renvoie un `hierarchy.Resolved` : `.value` = ids autorisés (None = aucune liste
+    applicable, catalogue global), `.sources` = entités contributrices.
     """
     from geoeval.web import hierarchy
 
     org = session.get(Organization, org_id)
     if org is None:
         return hierarchy.Resolved(value=None)
-    return hierarchy.resolve_restrictive(
-        session, org, _own, combine=lambda a, b: a & b, include_self=include_own,
-    )
+    threshold = ignore_from_depth
+    if not include_own:
+        threshold = org.depth if threshold is None else min(threshold, org.depth)
+
+    def getter(db: Session, node: Organization) -> Optional[set[int]]:
+        if threshold is not None and node.depth >= threshold:
+            return None
+        return _own(db, node)
+
+    return hierarchy.resolve_restrictive(session, org, getter, combine=lambda a, b: a & b)
 
 
-def effective_allowed_ids(session: Session, org_id: int, *, include_own: bool = True) -> Optional[set[int]]:
-    return resolve_allowed_ids(session, org_id, include_own=include_own).value
+def effective_allowed_ids(
+    session: Session, org_id: int, *, include_own: bool = True, ignore_from_depth: Optional[int] = None,
+) -> Optional[set[int]]:
+    return resolve_allowed_ids(session, org_id, include_own=include_own, ignore_from_depth=ignore_from_depth).value
 
 
 def filter_models(
-    session: Session, org_id: int, models: Iterable[Model], *, include_own: bool = True,
+    session: Session, org_id: int, models: Iterable[Model], *,
+    include_own: bool = True, ignore_from_depth: Optional[int] = None,
 ) -> list[Model]:
     """Applique la liste blanche effective (intersection sur la chaîne d'entités).
-
-    `include_own=False` : seules les listes des ancêtres s'appliquent (cas de
-    l'org_admin, qui gère la liste de sa propre entité). Sans liste sur la
-    chaîne, la liste est renvoyée telle quelle (héritage global).
-    """
-    allowed = effective_allowed_ids(session, org_id, include_own=include_own)
+    Sans liste applicable, la liste est renvoyée telle quelle (héritage global)."""
+    allowed = effective_allowed_ids(session, org_id, include_own=include_own, ignore_from_depth=ignore_from_depth)
     if allowed is None:
         return list(models)
     return [m for m in models if m.model_id in allowed]

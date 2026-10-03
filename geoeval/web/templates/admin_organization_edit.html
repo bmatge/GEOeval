@@ -3,7 +3,7 @@
 {% block content %}
 <nav role="navigation" class="fr-breadcrumb" aria-label="vous êtes ici :">
   <ol class="fr-breadcrumb__list">
-    <li><a class="fr-breadcrumb__link" href="/admin/organizations">Entités</a></li>
+    <li><a class="fr-breadcrumb__link" href="{{ back_url }}">Entités</a></li>
     {% for a in lineage %}<li><span class="fr-breadcrumb__link">{{ a.name }}</span></li>{% endfor %}
     <li><a class="fr-breadcrumb__link" aria-current="page">{{ target.name }}</a></li>
   </ol>
@@ -13,7 +13,7 @@
 <p class="fr-hint-text">Slug : <code>{{ target.slug }}</code> · profondeur {{ target.depth }}
 {% if children %}· {{ children|length }} sous-entité(s) directe(s), déplacée(s) avec elle{% endif %}</p>
 
-<form method="post" action="/admin/organizations/{{ target.id }}/edit" class="fr-mt-2w" style="max-width:40rem;">
+<form method="post" action="{{ form_action }}" class="fr-mt-2w" style="max-width:40rem;">
   <div class="fr-input-group">
     <label class="fr-label" for="name">Nom</label>
     <input class="fr-input" id="name" name="name" required value="{{ target.name }}">
@@ -26,10 +26,10 @@
   </div>
   <div class="fr-select-group">
     <label class="fr-label" for="parent_id">Entité parente
-      <span class="fr-hint-text">Le sous-arbre de l'entité n'est pas proposé (pas de cycle). Tout le sous-arbre suit le déplacement.</span>
+      <span class="fr-hint-text">Le sous-arbre de l'entité n'est pas proposé (pas de cycle). Tout le sous-arbre suit le déplacement.{% if not allow_root %} Seules les entités de votre périmètre sont proposées.{% endif %}</span>
     </label>
     <select class="fr-select" id="parent_id" name="parent_id">
-      <option value="" {% if not target.parent_id %}selected{% endif %}>— aucune (racine) —</option>
+      {% if allow_root %}<option value="" {% if not target.parent_id %}selected{% endif %}>— aucune (racine) —</option>{% endif %}
       {% for o in candidates %}<option value="{{ o.id }}" {% if o.id == target.parent_id %}selected{% endif %}>{{ "  " * o.depth }}{% if o.depth %}└ {% endif %}{{ o.name }}</option>{% endfor %}
     </select>
   </div>
@@ -38,6 +38,6 @@
     <input class="fr-input" id="siret" name="siret" inputmode="numeric" value="{{ target.siret or '' }}">
   </div>
   <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
-  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="/admin/organizations">Annuler</a>
+  <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ back_url }}">Annuler</a>
 </form>
 {% endblock %}

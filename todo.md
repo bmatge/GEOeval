@@ -36,7 +36,7 @@ Voir `docs/adr/ADR-089-modele-cible-echelle-ministerielle.md`. Arbitrages actés
 matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par référence + visibilité.
 - [x] PR #42 — habilitations dans l'app, promotion par groupe OIDC transitoire
 - [x] E1 — hiérarchie `organizations` (révision 0002 : parent_id, kind, path, depth, siret) + résolveur (`hierarchy.resolve_nearest` / `resolve_restrictive`) ; liste blanche héritée par intersection ; UI admin arbre + API `POST/PATCH /orgs`
-- [ ] E2 — rôles hérités vers le bas + délégation
+- [x] E2 — rôles hérités vers le bas (utilisateurs et jetons, `EffectiveRole` ancré), délégation de structure dans le sous-arbre (UI paramètres › sous-entités, API `POST/PATCH /orgs`), liste blanche bornée au-dessus de l'ancre, membres hérités affichés
 - [ ] E3 — budget consolidé + alertes 80/100 %
 - [ ] E4 — `question_pools` (référence, visibilité), thèmes, `perimeters.domains`
 - [ ] E5 — `llm_contracts` (remplace `org_credentials`) + politique de routage

@@ -61,6 +61,8 @@ def _render_settings(request, db, org, role, *, new_token: Optional[str] = None,
         api_tokens=[(t, api_tokens.is_valid(t)) for t in tokens],
         lineage=hierarchy.lineage(db, org),
         kind_label=hierarchy.KIND_LABELS.get(org.kind, org.kind),
+        inherited_members=tenancy.list_inherited_members(db, org),
+        n_children=len(hierarchy.children(db, org.id)),
         new_token=new_token,
         token_error=token_error,
     )
@@ -424,3 +426,127 @@ def org_budget_set(
         meta={"cap_eur": str(cap), "daily_cap_eur": str(daily_cap) if daily_cap is not None else None},
     )
     return RedirectResponse(f"/o/{org.slug}/budget", status_code=303)
+
+
+# ---- Sous-entités : délégation de la structure (ADR-089 §2.4, chantier E2) --
+def _anchors(user: CurrentUser) -> dict[int, str]:
+    return dict(user.memberships)
+
+
+def _subtree_target(db: Session, org, target_id: int):
+    """Entité STRICTEMENT sous `org`, sinon 404 (pas de divulgation hors périmètre)."""
+    target = tenancy.get_org(db, target_id)
+    if target is None or target.id == org.id or not hierarchy.is_ancestor_or_self(org, target):
+        raise HTTPException(status_code=404, detail="Sous-entité introuvable.")
+    return target
+
+
+def _subtree_parent(db: Session, org, raw: str):
+    """Parent choisi dans le sous-arbre de `org` (org comprise), sinon 400."""
+    raw = (raw or "").strip()
+    if not raw:
+        raise HTTPException(status_code=400, detail="Choisissez une entité parente dans votre périmètre.")
+    parent = tenancy.get_org(db, int(raw))
+    if parent is None or not hierarchy.is_ancestor_or_self(org, parent):
+        raise HTTPException(status_code=400, detail="L'entité parente doit appartenir au périmètre de cette organisation.")
+    return parent
+
+
+@router.get("/o/{org_slug}/settings/entities", response_class=HTMLResponse)
+def subentities_page(
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, role = ctx
+    subtree = hierarchy.descendants(db, org, include_self=True)
+    return render(
+        request, "org_entities.html", active="settings", org=org, role=role,
+        subtree=hierarchy.tree(subtree), root_depth=org.depth,
+        parents=[o for o in subtree if o.depth < hierarchy.MAX_DEPTH],
+        editable={o.id for o in subtree if tenancy.can_qualify(_anchors(user), user.is_platform_admin, o)},
+        kinds=hierarchy.ORG_KINDS, kind_labels=hierarchy.KIND_LABELS,
+    )
+
+
+@router.post("/o/{org_slug}/settings/entities")
+def subentity_create(
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+    slug: str = Form(...),
+    parent_id: str = Form(...),
+    kind: str = Form("autre"),
+    siret: str = Form(""),
+):
+    org, _ = ctx
+    parent = _subtree_parent(db, org, parent_id)
+    if not tenancy.can_create_under(_anchors(user), user.is_platform_admin, parent):
+        raise HTTPException(status_code=403, detail="Rôle org_admin requis sur l'entité parente.")
+    try:
+        child = tenancy.create_org(db, name=name, slug=slug, created_by=user.id, parent=parent, kind=kind, siret=siret)
+    except hierarchy.HierarchyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+    except ValueError as exc:
+        db.rollback()
+        raise HTTPException(status_code=400, detail=str(exc))
+    audit.record(db, user_id=user.id, org_id=child.id, action="create", entity_type="organization", entity_id=child.id,
+                 meta={"slug": child.slug, "kind": child.kind, "parent_id": child.parent_id, "delegated_from": org.id})
+    return RedirectResponse(f"/o/{org.slug}/settings/entities", status_code=303)
+
+
+@router.get("/o/{org_slug}/settings/entities/{target_id}/edit", response_class=HTMLResponse)
+def subentity_edit_form(
+    target_id: int,
+    request: Request,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, role = ctx
+    target = _subtree_target(db, org, target_id)
+    if not tenancy.can_qualify(_anchors(user), user.is_platform_admin, target):
+        raise HTTPException(status_code=403, detail="Rôle org_admin requis sur une entité ancêtre de celle-ci.")
+    forbidden = set(hierarchy.descendant_ids(db, target, include_self=True))
+    candidates = [o for o in hierarchy.tree(hierarchy.descendants(db, org, include_self=True)) if o.id not in forbidden]
+    return render(
+        request, "admin_organization_edit.html", active="settings", org=org, role=role,
+        target=target, lineage=hierarchy.lineage(db, target), children=hierarchy.children(db, target.id),
+        candidates=candidates, kinds=hierarchy.ORG_KINDS, kind_labels=hierarchy.KIND_LABELS,
+        form_action=f"/o/{org.slug}/settings/entities/{target.id}/edit",
+        back_url=f"/o/{org.slug}/settings/entities", allow_root=False,
+    )
+
+
+@router.post("/o/{org_slug}/settings/entities/{target_id}/edit")
+def subentity_edit_submit(
+    target_id: int,
+    ctx=Depends(require_role("org_admin")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    name: str = Form(...),
+    kind: str = Form("autre"),
+    siret: str = Form(""),
+    parent_id: str = Form(""),
+):
+    org, _ = ctx
+    target = _subtree_target(db, org, target_id)
+    new_parent = _subtree_parent(db, org, parent_id)
+    anchors = _anchors(user)
+    if not tenancy.can_qualify(anchors, user.is_platform_admin, target):
+        raise HTTPException(status_code=403, detail="Rôle org_admin requis sur une entité ancêtre de celle-ci.")
+    if not tenancy.can_restructure(anchors, user.is_platform_admin, target, new_parent):
+        raise HTTPException(status_code=403, detail="Rattachement hors de votre périmètre.")
+    old_parent = target.parent_id
+    try:
+        hierarchy.update_and_move(db, target, name=name, kind=kind, siret=siret, set_siret=True,
+                                  move_to=new_parent, do_move=True)
+    except hierarchy.HierarchyError as exc:
+        db.rollback()
+        raise HTTPException(status_code=exc.status, detail=exc.detail)
+    audit.record(db, user_id=user.id, org_id=target.id, action="update", entity_type="organization", entity_id=target.id,
+                 meta={"kind": target.kind, "parent_from": old_parent, "parent_to": target.parent_id, "delegated_from": org.id})
+    return RedirectResponse(f"/o/{org.slug}/settings/entities", status_code=303)

@@ -7,6 +7,7 @@
   {% if lineage %}rattachée à {% for a in lineage %}{{ a.name }}{% if not loop.last %} › {% endif %}{% endfor %}
   {% else %}entité racine{% endif %}
   {% if user and user.is_platform_admin %}· <a class="fr-link fr-link--sm" href="/admin/organizations/{{ org.id }}/edit">qualifier / rattacher</a>{% endif %}
+  · <a class="fr-link fr-link--sm" href="{{ url_prefix }}/settings/entities">sous-entités ({{ n_children }})</a>
 </p>
 
 <div class="fr-grid-row fr-grid-row--gutters fr-mt-3w">
@@ -128,6 +129,21 @@
     </tbody>
   </table>
 </div>
+
+{% if inherited_members %}
+<h3 class="fr-mt-4w">Membres hérités des entités parentes</h3>
+<p class="fr-hint-text">Leur rôle, posé sur une entité au-dessus, s'applique aussi ici (ADR-089 §2.4). Il se gère depuis l'entité d'origine.</p>
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Email</th><th>Rôle</th><th>Posé sur</th></tr></thead>
+    <tbody>
+      {% for m in inherited_members %}
+      <tr><td>{{ m.email }}</td><td>{{ m.role }}</td><td>{{ m.source_name }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
 
 <h2 class="fr-mt-6w">Inviter</h2>
 <form method="post" action="{{ url_prefix }}/invitations" class="fr-grid-row fr-grid-row--gutters">
