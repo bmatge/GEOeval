@@ -31,7 +31,7 @@ def index(request: Request, db: Session = Depends(get_db)):
     if user is None or user.is_platform_admin:
         orgs = tenancy.list_all_orgs(db)
     else:
-        orgs = tenancy.list_orgs_for_user(db, user.id)
+        orgs = tenancy.list_accessible_orgs(db, user.id)
 
     # Un seul choix : redirige direct sur son dashboard.
     if user is not None and len(orgs) == 1:

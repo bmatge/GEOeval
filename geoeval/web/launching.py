@@ -16,7 +16,7 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from geoeval.core.load import load_tests
-from geoeval.db.models import Job, Model, ScheduledRun
+from geoeval.db.models import Job, Model, Organization, ScheduledRun
 from geoeval.web import budget, org_models, perimeters, pricing, services
 from geoeval.worker import jobs as jobqueue
 
@@ -45,22 +45,38 @@ class LaunchError(Exception):
 # Liste blanche des modèles (EPIC-001 S4.2)
 # ---------------------------------------------------------------------
 def is_unrestricted(role: Optional[str], is_platform_admin: bool) -> bool:
-    """True si le rôle échappe à la liste blanche de SON entité : org_admin
-    (qui la gère) ou admin plateforme. L'org_admin reste borné par les listes
-    des entités parentes (ADR-089 §2.2)."""
+    """True si le rôle échappe à la liste blanche de son périmètre : org_admin
+    (qui gère les listes de son sous-arbre) ou admin plateforme. L'org_admin reste
+    borné par les listes posées au-dessus de son entité d'ancrage (ADR-089 §2.2)."""
     return is_platform_admin or role == "org_admin"
+
+
+def _ignore_from_depth(session: Session, org_id: int, role: Optional[str]) -> Optional[int]:
+    """Profondeur à partir de laquelle les listes blanches ne s'appliquent plus à cet acteur.
+
+    editor / viewer : aucune (toutes les listes de la chaîne s'appliquent).
+    org_admin : profondeur de son ancre (E2) — il gère les listes de son
+    sous-arbre ; à défaut d'ancre connue, l'entité elle-même (comportement E1).
+    """
+    if not is_unrestricted(role, False):
+        return None
+    depth = getattr(role, "anchor_depth", None)
+    if depth is None:
+        org = session.get(Organization, org_id)
+        depth = org.depth if org is not None else 0
+    return depth
 
 
 def allowed_models(session: Session, org_id: int, *, role: Optional[str], is_platform_admin: bool) -> list[Model]:
     """Catalogue actif restreint par la liste blanche effective (ADR-089 §2.2).
 
-    Admin plateforme : tout. org_admin : listes des ancêtres seulement (il gère
-    celle de son entité). editor / viewer : listes de l'entité et des ancêtres.
+    Admin plateforme : tout. org_admin : listes au-dessus de son ancre seulement.
+    editor / viewer : listes de l'entité et de tous ses ancêtres.
     """
     models = services.list_models(session)
     if is_platform_admin:
         return models
-    return org_models.filter_models(session, org_id, models, include_own=not is_unrestricted(role, False))
+    return org_models.filter_models(session, org_id, models, ignore_from_depth=_ignore_from_depth(session, org_id, role))
 
 
 def allowed_model_versions(
@@ -73,7 +89,9 @@ def allowed_model_versions(
     """
     if is_platform_admin:
         return None
-    allowed_ids = org_models.effective_allowed_ids(session, org_id, include_own=not is_unrestricted(role, False))
+    allowed_ids = org_models.effective_allowed_ids(
+        session, org_id, ignore_from_depth=_ignore_from_depth(session, org_id, role),
+    )
     if allowed_ids is None:
         return None
     return {m.model_version for m in services.list_models(session) if m.model_id in allowed_ids}

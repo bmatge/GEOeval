@@ -146,6 +146,141 @@ def role_at_least(actual: Optional[str], required: str) -> bool:
 
 
 # =====================================================================
+# Rôles hérités vers le bas (ADR-089 §2.4, chantier E2)
+# =====================================================================
+class EffectiveRole(str):
+    """Rôle effectif sur une entité : une chaîne (« viewer », « editor »,
+    « org_admin ») qui connaît l'entité qui le porte.
+
+    Sous-classe de `str` : tout le code existant qui compare ou affiche le rôle
+    fonctionne tel quel. `anchor_id` / `anchor_depth` désignent l'entité ancêtre
+    (ou l'entité elle-même) où le rôle retenu est posé ; ils servent à borner la
+    liste blanche d'un org_admin hérité (il gère les listes de son sous-arbre,
+    pas celles des entités au-dessus de son ancre).
+    """
+
+    anchor_id: Optional[int]
+    anchor_depth: Optional[int]
+
+    def __new__(cls, role: str, anchor_id: Optional[int] = None, anchor_depth: Optional[int] = None):
+        obj = super().__new__(cls, role)
+        obj.anchor_id = anchor_id
+        obj.anchor_depth = anchor_depth
+        return obj
+
+
+def resolve_role(anchors: dict[int, str], org: Organization) -> Optional[EffectiveRole]:
+    """Rôle effectif = maximum des rôles posés sur l'entité et ses ancêtres.
+
+    `anchors` : {org_id: rôle} (adhésions d'un utilisateur, ou {org du jeton: rôle}).
+    À rôle égal, l'ancre la plus haute est retenue (elle couvre le plus large).
+    """
+    from geoeval.web.hierarchy import ids_from_path
+
+    best: Optional[EffectiveRole] = None
+    for depth, node_id in enumerate(ids_from_path(org.path)):
+        role = anchors.get(node_id)
+        if role is None or role not in _ROLE_WEIGHT:
+            continue
+        if best is None or _ROLE_WEIGHT[role] > _ROLE_WEIGHT[str(best)]:
+            best = EffectiveRole(role, anchor_id=node_id, anchor_depth=depth)
+    return best
+
+
+def effective_role_for_user(user, org: Organization) -> Optional[EffectiveRole]:
+    """Rôle effectif d'un CurrentUser ; l'admin plateforme vaut org_admin implicite
+    ancré à la racine de l'arbre."""
+    role = resolve_role(user.memberships, org)
+    if role is None and user.is_platform_admin:
+        from geoeval.web.hierarchy import ids_from_path
+
+        return EffectiveRole("org_admin", anchor_id=ids_from_path(org.path)[0], anchor_depth=0)
+    return role
+
+
+# ---- Délégation de la structure (arbitrage E2) -----------------------
+def _admin_anchor_ids(anchors: dict[int, str]) -> set[int]:
+    return {oid for oid, role in anchors.items() if role == "org_admin"}
+
+
+def can_create_under(anchors: dict[int, str], is_platform_admin: bool, parent: Optional[Organization]) -> bool:
+    """Créer une sous-entité sous `parent` : admin plateforme, ou org_admin effectif
+    sur `parent` (ancre = parent ou un de ses ancêtres). Créer une racine : admin
+    plateforme seulement."""
+    if is_platform_admin:
+        return True
+    if parent is None:
+        return False
+    from geoeval.web.hierarchy import ids_from_path
+
+    return bool(_admin_anchor_ids(anchors) & set(ids_from_path(parent.path)))
+
+
+def can_qualify(anchors: dict[int, str], is_platform_admin: bool, org: Organization) -> bool:
+    """Qualifier (nom, type, SIRET) : admin plateforme, ou org_admin d'un ancêtre
+    STRICT. L'entité de rattachement elle-même n'est requalifiée que par la
+    plateforme (le renommage reste possible depuis ses paramètres)."""
+    if is_platform_admin:
+        return True
+    from geoeval.web.hierarchy import ancestor_ids
+
+    return bool(_admin_anchor_ids(anchors) & set(ancestor_ids(org)))
+
+
+def can_restructure(
+    anchors: dict[int, str], is_platform_admin: bool, org: Organization, new_parent: Optional[Organization]
+) -> bool:
+    """Déplacer `org` sous `new_parent` : admin plateforme ; sinon il faut une
+    ancre org_admin qui soit ancêtre STRICT de `org` ET ancêtre-ou-soi du nouveau
+    parent — on ne sort jamais une entité de son périmètre, on n'en fait jamais
+    une racine, on ne déplace pas son entité de rattachement."""
+    if is_platform_admin:
+        return True
+    if new_parent is None:
+        return False
+    from geoeval.web.hierarchy import ancestor_ids, ids_from_path
+
+    admin = _admin_anchor_ids(anchors)
+    return bool(admin & set(ancestor_ids(org)) & set(ids_from_path(new_parent.path)))
+
+
+def list_accessible_orgs(session: Session, user_id: int) -> list[Organization]:
+    """Entités où l'utilisateur a un rôle effectif : ses adhésions et tout leur
+    sous-arbre (rôles hérités vers le bas)."""
+    from sqlalchemy import or_
+
+    roots = list_orgs_for_user(session, user_id)
+    if not roots:
+        return []
+    rows = session.execute(
+        select(Organization).where(or_(*[Organization.path.like(r.path + "%") for r in roots]))
+    ).scalars().all()
+    from geoeval.web.hierarchy import tree
+
+    return tree(rows)
+
+
+def list_inherited_members(session: Session, org: Organization) -> list[dict[str, Any]]:
+    """Membres posés sur les entités ancêtres (rôle hérité, lecture seule ici)."""
+    from geoeval.web.hierarchy import ancestor_ids
+
+    ids = ancestor_ids(org)
+    if not ids:
+        return []
+    rows = session.execute(
+        select(User.id, User.email, Membership.role, Organization.id, Organization.name, Organization.depth)
+        .join(Membership, Membership.user_id == User.id)
+        .join(Organization, Organization.id == Membership.org_id)
+        .where(Membership.org_id.in_(ids))
+        .order_by(Organization.depth, User.email)
+    ).all()
+    return [
+        dict(user_id=r[0], email=r[1], role=r[2], source_id=r[3], source_name=r[4])
+        for r in rows
+    ]
+
+
+# =====================================================================
 # Invitations (ADR-077 §5)
 # =====================================================================
 def _new_token() -> str:

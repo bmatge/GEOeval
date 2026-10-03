@@ -9,6 +9,10 @@ Erreurs volontairement discrètes :
     * org inconnue    → 404 (non-divulgation d'existence)
     * user pas membre → 404 (idem)
     * rôle insuffisant → 403
+
+Rôles hérités (ADR-089 §2.4, E2) : le rôle effectif sur une entité est le
+maximum des rôles posés sur elle et ses ancêtres (tenancy.resolve_role). Le
+rôle renvoyé est un `EffectiveRole` (chaîne) qui connaît son entité d'ancrage.
 """
 from __future__ import annotations
 
@@ -19,7 +23,7 @@ from sqlalchemy.orm import Session
 
 from geoeval.db.session import SessionLocal
 from geoeval.web.auth import CurrentUser
-from geoeval.web.tenancy import get_org_by_slug, role_at_least
+from geoeval.web.tenancy import effective_role_for_user, get_org_by_slug, role_at_least
 
 
 def get_db():
@@ -56,12 +60,10 @@ def require_org(
     if org is None:
         # 404 plutôt que 403 : ne pas divulguer l'existence de l'org.
         raise HTTPException(status_code=404, detail="Organisation introuvable.")
-    role = user.memberships.get(org.id)
-    if role is None and not user.is_platform_admin:
+    role = effective_role_for_user(user, org)
+    if role is None:
         raise HTTPException(status_code=404, detail="Organisation introuvable.")
-    # Un platform_admin sans membership vaut org_admin implicite.
-    effective_role = role or "org_admin"
-    return org, effective_role
+    return org, role
 
 
 def public_org(
@@ -81,9 +83,7 @@ def public_org(
     user: Optional[CurrentUser] = getattr(request.state, "user", None)
     role = None
     if user is not None:
-        role = user.memberships.get(org.id) or (
-            "org_admin" if user.is_platform_admin else None
-        )
+        role = effective_role_for_user(user, org)
     return org, role
 
 

@@ -83,6 +83,7 @@ def admin_org_edit_form(
         org=nav_org, role=nav_role,
         target=target, lineage=hierarchy.lineage(db, target), children=hierarchy.children(db, target.id),
         candidates=candidates, kinds=hierarchy.ORG_KINDS, kind_labels=hierarchy.KIND_LABELS,
+        form_action=f"/admin/organizations/{target.id}/edit", back_url="/admin/organizations", allow_root=True,
     )
 
 

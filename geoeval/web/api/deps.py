@@ -24,7 +24,7 @@ from geoeval.db.models import ApiToken, Organization
 from geoeval.web import api_tokens
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import get_db
-from geoeval.web.tenancy import get_org_by_slug, role_at_least
+from geoeval.web.tenancy import effective_role_for_user, get_org_by_slug, resolve_role, role_at_least
 
 bearer_scheme = HTTPBearer(auto_error=False, description="Jeton d'organisation (geoeval_…)")
 
@@ -87,13 +87,16 @@ def org_context(
         raise HTTPException(status_code=404, detail="Organisation introuvable.")
 
     if token is not None:
-        if token.organization_id != org.id:
+        # Rôle du jeton hérité vers le bas (arbitrage E2) : valable sur son entité
+        # et tout son sous-arbre, jamais au-dessus ni à côté (404 sans divulgation).
+        role = resolve_role({token.organization_id: token.role}, org)
+        if role is None:
             raise HTTPException(status_code=404, detail="Organisation introuvable.")
-        return Principal(kind="token", org=org, role=token.role, token_id=token.id, user_id=token.created_by)
+        return Principal(kind="token", org=org, role=role, token_id=token.id, user_id=token.created_by)
 
     user = session_user(request)
     if user is not None:
-        role = user.memberships.get(org.id) or ("org_admin" if user.is_platform_admin else None)
+        role = effective_role_for_user(user, org)
         return Principal(kind="session", org=org, role=role, user_id=user.id, email=user.email,
                          is_platform_admin=user.is_platform_admin)
 
@@ -129,3 +132,34 @@ def require_platform_admin(
     if not user.is_platform_admin:
         raise HTTPException(status_code=403, detail="Réservé à l'administration plateforme.")
     return user
+
+
+@dataclass
+class Actor:
+    """Auteur d'une opération de structure (création / rattachement d'entités)."""
+
+    kind: str                              # "token" | "session"
+    anchors: dict[int, str]                # {org_id: rôle} sur lesquels il s'appuie
+    is_platform_admin: bool = False
+    user_id: Optional[int] = None
+    token_id: Optional[int] = None
+
+    def audit_meta(self) -> dict:
+        meta = {"via": "api", "kind": self.kind}
+        if self.token_id is not None:
+            meta["token_id"] = self.token_id
+        return meta
+
+
+def structure_actor(
+    request: Request,
+    token: Optional[ApiToken] = Depends(current_token),
+) -> Actor:
+    """Jeton (rôle hérité de son entité) ou session ; les droits fins sont vérifiés
+    par tenancy.can_create_under / can_qualify / can_restructure. Anonyme → 401."""
+    if token is not None:
+        return Actor(kind="token", anchors={token.organization_id: token.role}, user_id=token.created_by, token_id=token.id)
+    user = session_user(request)
+    if user is None:
+        raise HTTPException(status_code=401, detail="Authentification requise (jeton Bearer ou session).")
+    return Actor(kind="session", anchors=dict(user.memberships), is_platform_admin=user.is_platform_admin, user_id=user.id)

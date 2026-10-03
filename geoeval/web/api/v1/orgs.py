@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from geoeval.db.models import ApiToken, Organization
 from geoeval.web import audit, hierarchy, tenancy
-from geoeval.web.api.deps import Principal, current_token, org_context, require_platform_admin, session_user
+from geoeval.web.api.deps import Actor, Principal, current_token, org_context, session_user, structure_actor
 from geoeval.web.api.schemas import (
     MeOut,
     OrgCreateIn,
@@ -19,7 +19,6 @@ from geoeval.web.api.schemas import (
     OrgRoleOut,
     TokenRefOut,
 )
-from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import get_db
 
 router = APIRouter(tags=["organisations"])
@@ -49,14 +48,15 @@ def me(request: Request, db: Session = Depends(get_db), token: Optional[ApiToken
 
 @router.get("/orgs", response_model=list[OrgOut], summary="Organisations visibles")
 def list_orgs(request: Request, db: Session = Depends(get_db), token: Optional[ApiToken] = Depends(current_token)):
-    """Jeton : son organisation. Session : ses adhésions (toutes pour un admin
-    plateforme). Anonyme : toutes, comme la page d'accueil publique (ADR-087)."""
+    """Jeton : son entité et son sous-arbre. Session : ses adhésions et leurs
+    sous-arbres (toutes pour un admin plateforme). Anonyme : toutes, comme la page
+    d'accueil publique (ADR-087)."""
     if token is not None:
         org = db.get(Organization, token.organization_id)
-        return [org] if org else []
+        return hierarchy.descendants(db, org, include_self=True) if org else []
     user = session_user(request)
     if user is not None and not user.is_platform_admin:
-        return tenancy.list_orgs_for_user(db, user.id)
+        return tenancy.list_accessible_orgs(db, user.id)
     return tenancy.list_all_orgs(db)
 
 
@@ -86,11 +86,15 @@ def _parent_by_slug(db: Session, slug: Optional[str]) -> Optional[Organization]:
 
 
 @router.post("/orgs", response_model=OrgDetailOut, status_code=status.HTTP_201_CREATED,
-             summary="Créer une entité (admin plateforme), à la racine ou sous une entité parente")
-def create_org(body: OrgCreateIn, admin: CurrentUser = Depends(require_platform_admin), db: Session = Depends(get_db)):
+             summary="Créer une entité — racine : admin plateforme ; sous-entité : org_admin effectif du parent")
+def create_org(body: OrgCreateIn, actor: Actor = Depends(structure_actor), db: Session = Depends(get_db)):
     parent = _parent_by_slug(db, body.parent_slug)
+    if not tenancy.can_create_under(actor.anchors, actor.is_platform_admin, parent):
+        raise HTTPException(status_code=403, detail=(
+            "Créer une entité racine est réservé à l'administration plateforme." if parent is None
+            else "Rôle org_admin requis sur l'entité parente ou un de ses ancêtres."))
     try:
-        org = tenancy.create_org(db, name=body.name, slug=body.slug, created_by=admin.id,
+        org = tenancy.create_org(db, name=body.name, slug=body.slug, created_by=actor.user_id,
                                  parent=parent, kind=body.kind, siret=body.siret)
     except hierarchy.HierarchyError as exc:
         db.rollback()
@@ -98,29 +102,36 @@ def create_org(body: OrgCreateIn, admin: CurrentUser = Depends(require_platform_
     except ValueError as exc:
         db.rollback()
         raise HTTPException(status_code=409 if "déjà utilisé" in str(exc) else 400, detail=str(exc))
-    audit.record(db, user_id=admin.id, org_id=org.id, action="create", entity_type="organization", entity_id=org.id,
-                 meta={"slug": org.slug, "kind": org.kind, "parent_id": org.parent_id, "via": "api"})
+    audit.record(db, user_id=actor.user_id, org_id=org.id, action="create", entity_type="organization", entity_id=org.id,
+                 meta={"slug": org.slug, "kind": org.kind, "parent_id": org.parent_id, **actor.audit_meta()})
     return _detail(db, org)
 
 
 @router.patch("/orgs/{org_slug}", response_model=OrgDetailOut,
-              summary="Qualifier ou rattacher une entité (admin plateforme) — `parent_slug: null` = racine")
-def update_org(org_slug: str, body: OrgPatch, admin: CurrentUser = Depends(require_platform_admin), db: Session = Depends(get_db)):
+              summary="Qualifier ou rattacher une entité — admin plateforme, ou org_admin d'un ancêtre strict dans son sous-arbre")
+def update_org(org_slug: str, body: OrgPatch, actor: Actor = Depends(structure_actor), db: Session = Depends(get_db)):
     org = tenancy.get_org_by_slug(db, org_slug)
     if org is None:
         raise HTTPException(status_code=404, detail="Organisation introuvable.")
     fields = body.model_dump(exclude_unset=True)
+    new_parent = _parent_by_slug(db, fields.get("parent_slug"))
+    if not tenancy.can_qualify(actor.anchors, actor.is_platform_admin, org):
+        raise HTTPException(status_code=403, detail="Rôle org_admin requis sur une entité ancêtre de celle-ci.")
+    if "parent_slug" in fields and not tenancy.can_restructure(actor.anchors, actor.is_platform_admin, org, new_parent):
+        raise HTTPException(status_code=403, detail=(
+            "Rattachement hors de votre périmètre : l'entité et son nouveau parent doivent rester dans votre sous-arbre "
+            "(faire une racine est réservé à l'administration plateforme)."))
     old_parent = org.parent_id
     try:
         hierarchy.update_and_move(
             db, org, name=fields.get("name"), kind=fields.get("kind"),
             siret=fields.get("siret"), set_siret="siret" in fields,
-            move_to=_parent_by_slug(db, fields.get("parent_slug")), do_move="parent_slug" in fields,
+            move_to=new_parent, do_move="parent_slug" in fields,
         )
     except hierarchy.HierarchyError as exc:
         db.rollback()
         raise HTTPException(status_code=exc.status, detail=exc.detail)
-    audit.record(db, user_id=admin.id, org_id=org.id, action="update", entity_type="organization", entity_id=org.id,
-                 meta={"fields": sorted(fields), "parent_from": old_parent, "parent_to": org.parent_id, "via": "api"})
+    audit.record(db, user_id=actor.user_id, org_id=org.id, action="update", entity_type="organization", entity_id=org.id,
+                 meta={"fields": sorted(fields), "parent_from": old_parent, "parent_to": org.parent_id, **actor.audit_meta()})
     db.refresh(org)
     return _detail(db, org)
