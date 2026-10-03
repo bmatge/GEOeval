@@ -89,6 +89,7 @@ porte le plafond.
         <td>{% if a.email_status == 'sent' %}<span class="fr-badge fr-badge--sm fr-badge--success">envoyé</span>
             {% elif a.email_status == 'failed' %}<span class="fr-badge fr-badge--sm fr-badge--error">échec</span>
             {% elif a.email_status == 'no_recipient' %}<span class="fr-badge fr-badge--sm">sans destinataire</span>
+            {% elif a.email_status == 'disabled' %}<span class="fr-badge fr-badge--sm">email désactivé (in-app)</span>
             {% else %}<span class="fr-badge fr-badge--sm">non configuré</span>{% endif %}</td>
       </tr>
       {% endfor %}

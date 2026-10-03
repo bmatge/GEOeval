@@ -303,6 +303,10 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
                     progress_cb=eval_cb,
                 )
                 session.commit()
+            # E7 : détecteur « question toujours fausse » (n'écrit que des notifications).
+            from geoeval.web import detectors
+
+            detectors.after_evaluation_safely(run_id)
 
         _set(job_id, status=STATUS_DONE, phase="terminé", finished_at=func.now())
         outcome = "done"
@@ -314,6 +318,9 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
     except Exception as exc:  # noqa: BLE001
         logger.exception("Job %s en échec", job_id)
         _set(job_id, status=STATUS_ERROR, error=str(exc), finished_at=func.now())
+        from geoeval.web import detectors
+
+        detectors.job_failed(alert_org, job_id, str(exc))
     finally:
         hb_stop.set()
         root.removeHandler(handler)

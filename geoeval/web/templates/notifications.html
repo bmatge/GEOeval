@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Notifications{% endblock %}
+{% block content %}
+<div class="fr-grid-row fr-grid-row--middle fr-grid-row--gutters">
+  <div class="fr-col"><h1>Notifications</h1></div>
+  <div class="fr-col-auto">
+    <a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/notifications/preferences">Préférences d'email</a>
+    {% if items %}
+    <form method="post" action="/notifications/read-all" style="display:inline">
+      <button type="submit" class="fr-btn fr-btn--secondary fr-btn--sm">Tout marquer comme lu</button>
+    </form>
+    {% endif %}
+  </div>
+</div>
+<p>
+  {% if unread_only %}<a class="fr-link" href="/notifications">Tout afficher</a>
+  {% else %}<a class="fr-link" href="/notifications?unread=1">Non lues seulement</a>{% endif %}
+</p>
+
+{% if items %}
+<ul class="fr-raw-list">
+  {% for n in items %}
+  <li class="fr-p-2w fr-mb-1w" style="border-left: 4px solid {{ 'var(--border-plain-info)' if n.read_at is none else 'var(--border-default-grey)' }}; background: var(--background-alt-grey);">
+    <p class="fr-text--sm fr-mb-1v">
+      <span class="fr-badge fr-badge--sm {{ 'fr-badge--info' if n.read_at is none else '' }}">{{ kinds[n.kind].label if n.kind in kinds else n.kind }}</span>
+      {% if n.organization_id and orgs.get(n.organization_id) %} · {{ orgs[n.organization_id].name }}{% endif %}
+      · {{ n.created_at.strftime("%d/%m/%Y %H:%M") }}
+      {% if n.read_at is none %} · <strong>non lue</strong>{% endif %}
+    </p>
+    <p class="fr-text--bold fr-mb-1v">{% if n.link %}<a class="fr-link" href="/notifications/{{ n.id }}/open">{{ n.title }}</a>{% else %}{{ n.title }}{% endif %}</p>
+    {% if n.body %}<p class="fr-text--sm fr-mb-1v">{{ n.body }}</p>{% endif %}
+    {% if n.read_at is none %}
+    <form method="post" action="/notifications/{{ n.id }}/read" style="display:inline">
+      <button type="submit" class="fr-link fr-text--sm">Marquer comme lue</button>
+    </form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Aucune notification{% if unread_only %} non lue{% endif %}.</p>
+{% endif %}
+{% endblock %}

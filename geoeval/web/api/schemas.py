@@ -550,3 +550,40 @@ class RoutingPolicyOut(BaseModel):
     effective_allowed_families: Optional[list[str]] = None
     effective_sovereign_only: bool = False
     effective_eu_only: bool = False
+
+
+# ---- Notifications et détecteurs (E7) ------------------------------
+class NotificationOut(_Orm):
+    id: int
+    organization_id: Optional[int] = None
+    kind: str
+    title: str
+    body: str = ""
+    link: Optional[str] = None
+    payload: Optional[dict[str, Any]] = None
+    email_status: str
+    created_at: datetime
+    read_at: Optional[datetime] = None
+
+
+class NotificationListOut(BaseModel):
+    unread: int
+    items: list[NotificationOut]
+
+
+class NotificationPreferencesIO(BaseModel):
+    """Email activé ou non, par type (l'in-app est toujours actif)."""
+    email: dict[str, bool]
+
+
+class DetectorSettingsIn(BaseModel):
+    always_wrong_runs: Optional[int] = Field(None, ge=2, le=20, description="None = hériter")
+    always_wrong_threshold: Optional[Decimal] = Field(None, ge=0, le=10, description="None = hériter")
+
+
+class DetectorSettingsOut(BaseModel):
+    own: DetectorSettingsIn
+    effective_runs: int
+    effective_threshold: Decimal
+    runs_from_org_slug: Optional[str] = None
+    threshold_from_org_slug: Optional[str] = None

@@ -43,7 +43,8 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [ ] Révision ultérieure : supprimer `org_credentials` (gelée depuis E5)
 - [x] E6 (minimal) — identité OIDC par `(issuer, sub)` : l'email suit les mutations, anti-takeover, migration entre fournisseurs ; profils `OIDC_PROFILE` (generic / proconnect) et correspondance des claims
 - [ ] E6 (branchement) — rattachement proposé par `siret` + validation org_admin, relecture du `siret` à chaque connexion, `userinfo` JWT ProConnect, inscription du client
-- [ ] E7 — notifications + détecteur « question toujours fausse »
+- [x] E7 (socle) — notifications in-app + email selon préférences (révision 0006), budget 80/100 % raccordé, évaluation en échec, contrat expirant (J-30, J-7) / expiré, détecteur « question toujours fausse » (N et seuil hérités), UI + API v1
+- [ ] E7 (suite) — chute des citations officielles, signalements humains, webhooks (Tchap), récapitulatifs, abonnements partagés
 - [ ] E8 — campagnes, cycle de vie des questions (minimal au pilote)
 
 ## À faire

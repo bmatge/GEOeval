@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 from geoeval.web.api.v1 import (
-    budget, contracts, jobs, models, orgs, perimeters, pools, questions, runs, schedules, stats, themes, tokens,
+    budget, contracts, jobs, models, notifications, orgs, perimeters, pools, questions, runs, schedules, stats, themes, tokens,
 )
 
 ROUTERS = [
@@ -19,4 +19,5 @@ ROUTERS = [
     pools.router,
     themes.router,
     contracts.router,
+    notifications.router,
 ]

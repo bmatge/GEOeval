@@ -188,4 +188,8 @@ def tick_if_leader(session: Session) -> Optional[int]:
 
         for org_id in skipped_orgs:
             budget_alerts.evaluate_safely(org_id)
+    # E7 : contrats expirants / expirés (au plus une fois par heure, idempotent).
+    from geoeval.web import detectors
+
+    detectors.check_contracts_throttled(session)
     return n

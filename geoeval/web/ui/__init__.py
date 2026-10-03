@@ -16,6 +16,7 @@ from geoeval.web.ui import (
     launch,
     methodology,
     models,
+    notifications,
     perimeters,
     pools,
     prompts,
@@ -39,6 +40,7 @@ ROUTERS = [
     jobs.router,
     settings.router,
     contracts.router,
+    notifications.router,
     admin.router,
     methodology.router,
 ]
