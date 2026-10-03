@@ -15,6 +15,7 @@ from geoeval.web import (
     audit,
     ground_truth,
     perimeters,
+    reports,
     services,
     themes,
 )
@@ -212,9 +213,10 @@ def test_detail(
     if test is None:
         raise HTTPException(status_code=404, detail=f"Test {test_id} introuvable")
     versions = ground_truth.list_versions(db, test_id)
+    open_reports = [r for r in reports.list_received(db, org, status="open") if r.test_id == test_id]
     return render(
         request, "test_detail.html", active="tests", org=org, role=role,
-        test=test, gt_versions=versions,
+        test=test, gt_versions=versions, open_reports=open_reports,
     )
 
 

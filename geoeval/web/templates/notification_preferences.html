@@ -3,22 +3,26 @@
 {% block content %}
 <a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="/notifications">Retour aux notifications</a>
 <h1 class="fr-mt-2w">Préférences de notification</h1>
-<p>Les notifications sont toujours visibles dans l'application. Choisis les types pour lesquels tu veux aussi
-  recevoir un email. Tu ne reçois que celles qui concernent ton rôle dans tes entités.</p>
-<form method="post" action="/notifications/preferences" style="max-width:48rem;">
-  <fieldset class="fr-fieldset" aria-labelledby="prefs-legend">
-    <legend class="fr-fieldset__legend" id="prefs-legend">Recevoir un email pour :</legend>
-    {% for key, k in kinds.items() %}
-    <div class="fr-fieldset__element">
-      <div class="fr-checkbox-group">
-        <input type="checkbox" id="pref-{{ key }}" name="email_kinds" value="{{ key }}" {% if prefs[key] %}checked{% endif %}>
-        <label class="fr-label" for="pref-{{ key }}">{{ k.label }}
-          <span class="fr-hint-text">{{ k.description }} Destinataires : {{ 'administrateurs' if k.roles == ('org_admin',) else 'éditeurs et administrateurs' }} de l'entité.</span>
-        </label>
-      </div>
-    </div>
-    {% endfor %}
-  </fieldset>
+<p>Les notifications sont toujours visibles dans l'application. Pour chaque type, choisis si tu veux aussi un email
+  immédiat, un récapitulatif quotidien (chaque matin, s'il y a du nouveau) ou rien. Tu ne reçois que les notifications
+  qui concernent ton rôle dans tes entités, ou tes propres signalements.</p>
+<form method="post" action="/notifications/preferences" style="max-width:56rem;">
+  <div class="fr-table fr-table--sm"><table>
+    <thead><tr><th>Type</th>{% for m in modes %}<th>{{ mode_labels[m] }}</th>{% endfor %}</tr></thead>
+    <tbody>
+      {% for key, k in kinds.items() %}
+      <tr>
+        <td>{{ k.label }}<br><span class="fr-hint-text">{{ k.description }}</span></td>
+        {% for m in modes %}
+        <td><div class="fr-radio-group fr-radio-group--sm">
+          <input type="radio" id="pref-{{ key }}-{{ m }}" name="mode_{{ key }}" value="{{ m }}" {% if prefs[key] == m %}checked{% endif %}>
+          <label class="fr-label" for="pref-{{ key }}-{{ m }}"><span class="fr-sr-only">{{ k.label }} : </span>{{ mode_labels[m] }}</label>
+        </div></td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table></div>
   <button type="submit" class="fr-btn">Enregistrer</button>
 </form>
 {% endblock %}

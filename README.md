@@ -262,11 +262,19 @@ La page de la campagne compare les notes par participant et par IA, avec l'écar
 
 Le lien *Notifications* de l'en-tête ouvre une boîte de réception personnelle, toutes entités confondues. Les
 notifications partent selon le rôle dans l'entité : budget à 80 % ou atteint, et contrat LLM expirant (J-30, J-7)
-ou expiré pour les administrateurs ; évaluation en échec et « question toujours fausse » pour les éditeurs et
-administrateurs. Chacun choisit les types qu'il reçoit aussi par email (*Préférences d'email*). Le détecteur
-« question toujours fausse » alerte quand une question reste sous un seuil sur plusieurs évaluations d'affilée
-pour une même IA évaluée (défaut : 3 évaluations sous 5/10, réglable par entité dans *Paramètres*, et hérité
-par les sous-entités) ; une seule alerte par série.
+ou expiré pour les administrateurs ; évaluation en échec, « question toujours fausse », chute des citations
+officielles et signalement reçu pour les éditeurs et administrateurs. Pour chaque type, chacun choisit son email
+(*Préférences d'email*) : immédiat, récapitulatif quotidien (07:45, heure de Paris, `GEOEVAL_DIGEST_TIME`) ou
+aucun. Le détecteur « question toujours fausse » alerte quand une question reste sous un seuil sur plusieurs
+évaluations d'affilée pour une même IA évaluée (défaut : 3 évaluations sous 5/10) ; le détecteur « chute des
+citations officielles » alerte quand, pour un périmètre doté de domaines officiels, la part des citations vers
+ces domaines tombe d'au moins 20 points sous la moyenne des 3 runs précédents. Les deux se règlent par entité
+dans *Paramètres › Détecteurs* et sont hérités par les sous-entités.
+
+Tout membre d'une entité peut **signaler** une question qu'il voit (la sienne, celle d'un pool abonné, d'une
+campagne ou d'un run) : réponse attendue douteuse, question ambiguë ou obsolète, citation hors sujet. L'entité
+propriétaire est notifiée et clôt le signalement (corrigé ou rejeté) avec une réponse, notifiée à son auteur
+(*Configurer › Signalements*, API `/orgs/{slug}/reports`).
 
 ## SSO OIDC et préparatifs ProConnect (ADR-089, chantier E6)
 

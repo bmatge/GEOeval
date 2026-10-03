@@ -574,21 +574,58 @@ class NotificationListOut(BaseModel):
 
 
 class NotificationPreferencesIO(BaseModel):
-    """Email activé ou non, par type (l'in-app est toujours actif)."""
-    email: dict[str, bool]
+    """Mode d'email par type (l'in-app est toujours actif) : immediate | digest | none."""
+    modes: dict[str, Literal["immediate", "digest", "none"]]
 
 
 class DetectorSettingsIn(BaseModel):
     always_wrong_runs: Optional[int] = Field(None, ge=2, le=20, description="None = hériter")
     always_wrong_threshold: Optional[Decimal] = Field(None, ge=0, le=10, description="None = hériter")
+    citation_drop_points: Optional[Decimal] = Field(
+        None, gt=0, le=100, description="Écart (points de %) sous la moyenne des 3 runs précédents ; None = hériter")
 
 
 class DetectorSettingsOut(BaseModel):
     own: DetectorSettingsIn
     effective_runs: int
     effective_threshold: Decimal
+    effective_citation_drop_points: Decimal
     runs_from_org_slug: Optional[str] = None
     threshold_from_org_slug: Optional[str] = None
+    citation_drop_from_org_slug: Optional[str] = None
+
+
+# ---- Signalements (suite E7) ----------------------------------------
+class TestReportIn(BaseModel):
+    __test__ = False
+    test_id: int
+    run_id: Optional[int] = None
+    category: Literal["expected_answer", "ambiguous", "obsolete", "citation", "other"]
+    comment: str = Field("", max_length=2000)
+
+
+class TestReportResolveIn(BaseModel):
+    __test__ = False
+    status: Literal["fixed", "rejected"]
+    comment: str = Field(min_length=1, max_length=2000)
+
+
+class TestReportOut(BaseModel):
+    __test__ = False
+    id: int
+    test_id: int
+    test_prompt: Optional[str] = None
+    owner_org_slug: str
+    reporter_org_slug: str
+    reporter_email: Optional[str] = None
+    run_id: Optional[int] = None
+    category: str
+    comment: str = ""
+    status: Literal["open", "fixed", "rejected"]
+    resolution_comment: Optional[str] = None
+    resolved_at: Optional[datetime] = None
+    created_at: datetime
+    owned: bool
 
 
 # ---- Campagnes (E8) ------------------------------------------------

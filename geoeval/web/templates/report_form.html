@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Signaler une question{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="javascript:history.back()">Retour</a>
+<h1 class="fr-mt-2w">Signaler la question #{{ test.test_id }}</h1>
+<div class="fr-callout fr-mb-3w">
+  <p class="fr-callout__text"><strong>{{ test.prompt }}</strong><br>Réponse attendue : {{ test.expected_answer or '—' }}</p>
+</div>
+<p class="fr-hint-text">Le signalement part vers l'entité propriétaire de la question, qui le traitera et te répondra.
+  Il ne modifie ni la question ni les résultats.</p>
+<form method="post" action="{{ url_prefix }}/tests/{{ test.test_id }}/report" style="max-width:44rem;">
+  <input type="hidden" name="run_id" value="{{ run_id or '' }}">
+  <fieldset class="fr-fieldset" aria-labelledby="cat-legend">
+    <legend class="fr-fieldset__legend" id="cat-legend">Motif</legend>
+    {% for key, label in categories.items() %}
+    <div class="fr-fieldset__element"><div class="fr-radio-group">
+      <input type="radio" id="cat-{{ key }}" name="category" value="{{ key }}" required {% if loop.first %}checked{% endif %}>
+      <label class="fr-label" for="cat-{{ key }}">{{ label }}</label>
+    </div></div>
+    {% endfor %}
+  </fieldset>
+  <div class="fr-input-group">
+    <label class="fr-label" for="comment">Commentaire <span class="fr-hint-text">(obligatoire pour « Autre »)</span></label>
+    <textarea class="fr-input" id="comment" name="comment" rows="4" maxlength="2000"></textarea>
+  </div>
+  <button type="submit" class="fr-btn">Envoyer le signalement</button>
+</form>
+{% endblock %}

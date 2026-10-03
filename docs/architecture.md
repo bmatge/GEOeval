@@ -200,8 +200,9 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Lecture publique des tableaux de bord | ADR-087 | `deps.public_org` | Idem, endpoints API en lecture sans jeton |
 | Plafond budget mois et jour, consolidé dans l'arbre | ADR-080, ADR-089 §2.3 | `geoeval/web/budget.py` appelé par `launching` (lancement, « exécuter maintenant ») et par le planificateur à l'échéance (E3) | Idem |
 | Alertes 80 / 100 % (app + email) | ADR-089 §2.8 | `geoeval/web/budget_alerts.py` (E3) → `notifications.notify` (E7), en fin de job et après un saut | Idem |
-| Notifications par rôle, préférences d'email, idempotence | ADR-089 §2.8 | `geoeval/web/notifications.py` (E7) | Webhooks, récapitulatifs |
-| Détecteurs : évaluation en échec, contrats expirants, question toujours fausse | ADR-089 §2.8 | `geoeval/web/detectors.py` (E7), appelés par le worker (`jobs.execute`) et le planificateur | Chute des citations officielles |
+| Notifications par rôle, email immédiat / récapitulatif quotidien / aucun, idempotence | ADR-089 §2.8 | `geoeval/web/notifications.py` (E7), récapitulatif envoyé par le planificateur | Webhooks, abonnements partagés |
+| Détecteurs : évaluation en échec, contrats expirants, question toujours fausse, chute des citations officielles | ADR-089 §2.8 | `geoeval/web/detectors.py` (E7), appelés par le worker (`jobs.execute`) et le planificateur | — |
+| Signalements : tout membre qui voit la question signale, le propriétaire traite | ADR-089 §2.8 | `geoeval/web/reports.py` (suite E7) | Validation métier des questions (E8) |
 | Liste blanche des modèles par org | EPIC-001, ADR-089 | `geoeval/web/launching.py` + `org_models` : intersection sur la chaîne d'entités via `hierarchy.resolve_restrictive` (E1) | Idem |
 | Paramètres hérités dans l'arbre d'entités | ADR-089 §2.2 | `geoeval/web/hierarchy.py` (E1) : `resolve_nearest`, `resolve_restrictive` | Budget (E3), contrats (E5), notifications (E7) |
 | Questions effectives d'un périmètre (propres + pools abonnés visibles) | ADR-089 §2.5 | `launching.tests_for_run` → `pools.effective_tests` (E4), pour la validation, le devis, le planificateur et le worker | Idem |

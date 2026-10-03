@@ -196,4 +196,8 @@ def tick_if_leader(session: Session) -> Optional[int]:
     from geoeval.web import detectors
 
     detectors.check_contracts_throttled(session)
+    # Suite E7 : récapitulatifs quotidiens (idempotent, requête sur index partiel).
+    from geoeval.web import notifications
+
+    notifications.send_digests_safely(session)
     return n

@@ -56,16 +56,18 @@ def open_one(notification_id: int, user: CurrentUser = Depends(require_user), db
 def preferences_form(request: Request, user: CurrentUser = Depends(require_user), db: Session = Depends(get_db)):
     nav_org, nav_role = nav_fallback(db, user)
     return render(request, "notification_preferences.html", active="notifications", org=nav_org, role=nav_role,
-                  kinds=notifications.KINDS, prefs=notifications.preferences(db, user.id))
+                  kinds=notifications.KINDS, prefs=notifications.preferences(db, user.id),
+                  modes=notifications.MODES, mode_labels=notifications.MODE_LABELS)
 
 
 @router.post("/notifications/preferences")
-def preferences_submit(user: CurrentUser = Depends(require_user), db: Session = Depends(get_db),
-                       email_kinds: list[str] = Form(default=[])):
-    unknown = set(email_kinds) - set(notifications.KINDS)
-    if unknown:
-        raise HTTPException(status_code=400, detail=f"Types inconnus : {sorted(unknown)}")
-    notifications.set_preferences(db, user.id, {k: k in email_kinds for k in notifications.KINDS})
+async def preferences_submit(request: Request, user: CurrentUser = Depends(require_user), db: Session = Depends(get_db)):
+    form = await request.form()
+    chosen = {k: form.get(f"mode_{k}") for k in notifications.KINDS if form.get(f"mode_{k}")}
+    try:
+        notifications.set_preferences(db, user.id, chosen)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse("/notifications/preferences", status_code=303)
 
 
@@ -75,20 +77,24 @@ def detectors_form(request: Request, ctx=Depends(require_role("org_admin")), db:
     defaults = detectors.platform_defaults()
     return render(request, "detector_settings.html", active="settings", org=org, role=role,
                   own=detectors.own_settings(db, org.id), effective=detectors.effective_settings(db, org),
-                  default_runs=defaults[0], default_threshold=defaults[1])
+                  default_runs=defaults[0], default_threshold=defaults[1],
+                  default_citation_drop=detectors.citation_drop_default())
 
 
 @router.post("/o/{org_slug}/settings/detectors")
 def detectors_submit(ctx=Depends(require_role("org_admin")), db: Session = Depends(get_db),
                      user: CurrentUser = Depends(require_user),
-                     always_wrong_runs: str = Form(""), always_wrong_threshold: str = Form("")):
+                     always_wrong_runs: str = Form(""), always_wrong_threshold: str = Form(""),
+                     citation_drop_points: str = Form("")):
     org, _ = ctx
     try:
         runs = int(always_wrong_runs) if always_wrong_runs.strip() else None
-        detectors.set_settings(db, org, runs=runs, threshold=always_wrong_threshold or None, updated_by=user.id)
+        detectors.set_settings(db, org, runs=runs, threshold=always_wrong_threshold or None,
+                               citation_drop_points=citation_drop_points or None, updated_by=user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     audit.record(db, user_id=user.id, org_id=org.id, action="update", entity_type="detector_settings",
                  entity_id=org.id, meta={"always_wrong_runs": always_wrong_runs or None,
-                                         "always_wrong_threshold": always_wrong_threshold or None})
+                                         "always_wrong_threshold": always_wrong_threshold or None,
+                                         "citation_drop_points": citation_drop_points or None})
     return RedirectResponse(f"/o/{org.slug}/settings/detectors", status_code=303)
