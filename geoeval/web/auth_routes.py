@@ -254,47 +254,15 @@ async def oidc_callback(request: Request, db: Session = Depends(get_db)):
         return _render(request, "login.html", next="/", error=f"Connexion SSO refusée ({e.error}).")
 
     claims = dict(token.get("userinfo") or {})
-    sub = claims.get("sub")
-    email = (claims.get("email") or "").strip().lower()
-    email_verified = bool(claims.get("email_verified"))
-    if not sub:
-        return _render(request, "login.html", next="/", error="Réponse SSO sans identifiant (claim sub).")
-
-    from sqlalchemy import select
-    from geoeval.db.models import User
-
-    issuer = oidc.issuer()
-    user = db.execute(
-        select(User).where(User.oidc_issuer == issuer, User.oidc_external_id == sub)
-    ).scalar_one_or_none()
-
-    if user is None:
-        # Réconciliation par email — uniquement si l'IdP atteste l'adresse
-        # (anti-takeover, ADR-061 §2). Sinon refus explicite.
-        if not email or not email_verified:
-            audit.record(
-                db, user_id=None, org_id=None, action="oidc_rejected",
-                entity_type="auth", meta={"sub": sub, "email": email or None,
-                                          "reason": "email absent ou non vérifié"},
-            )
-            return _render(
-                request, "login.html", next="/",
-                error="Connexion SSO refusée : email absent ou non vérifié par le fournisseur d'identité.",
-            )
-        user = accounts.get_user_by_email(db, email)
-        if user is None:
-            from datetime import datetime, timezone
-
-            now = datetime.now(timezone.utc)
-            user = User(
-                email=email, first_seen_at=now, last_seen_at=now,
-                auth_provider="oidc", oidc_issuer=issuer, oidc_external_id=sub,
-            )
-            db.add(user)
-        else:
-            user.oidc_issuer = issuer
-            user.oidc_external_id = sub
-        db.commit()
+    ident = oidc.identity_from_claims(claims)
+    result = oidc.resolve_user(db, ident)
+    for action, meta in result.events:
+        audit.record(db, user_id=result.user.id if result.user else None, org_id=None, action=action,
+                     entity_type="auth", meta=meta)
+    if result.user is None:
+        return _render(request, "login.html", next="/", error=result.error)
+    user = result.user
+    issuer = ident.issuer
 
     if oidc.claims_admin(claims) and not user.is_platform_admin:
         # Promotion uniquement (jamais de rétrogradation automatique).

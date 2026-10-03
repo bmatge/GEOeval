@@ -246,6 +246,15 @@ souverains ou hébergés dans l'UE. Une sous-entité ne peut que la durcir. Elle
 chaque échéance programmée, et les formulaires ne proposent que les modèles conformes. Les anciennes clés BYOK ont
 été converties en contrats.
 
+## SSO OIDC et préparatifs ProConnect (ADR-089, chantier E6)
+
+Le SSO est optionnel et se configure par variables d'environnement (`.env.example`). Un compte est retrouvé par
+son identité chez le fournisseur (`issuer` + `sub`) et non par son email : quand l'email change (mutation), le
+compte suit et l'adresse est mise à jour si elle est libre. Un compte existant n'est rattaché par email que si le
+fournisseur atteste l'adresse, et jamais s'il est déjà lié à une autre identité chez ce fournisseur.
+`OIDC_PROFILE=proconnect` pose les défauts de ProConnect (libellé, scopes, `usual_name`, `siret`, email de
+confiance) ; le branchement réel (rattachement par SIRET, `userinfo` en JWT) reste à faire.
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

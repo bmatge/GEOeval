@@ -418,6 +418,32 @@ expiré ou au plafond **bloque** (jamais de repli silencieux) ; les clés BYOK s
   seule), `/orgs/{slug}/contracts/resolution`, `/orgs/{slug}/routing-policy` (GET editor+,
   PUT org_admin).
 
+## 4septies. Préparatifs de E6 (amendement 2026-10-03)
+
+ProConnect n'est pas encore branché : E6 est découpé, seule la **version minimale** est
+livrée. Elle consolide l'identité utile à tout fournisseur OIDC. Arbitrages validés : un
+email modifié chez le fournisseur **met à jour** le compte s'il est libre ; un fournisseur
+peut être déclaré **de confiance** pour l'email (opt-in, activé par le profil ProConnect).
+
+- **Clé stable `(issuer, sub)`** (`oidc.resolve_user`, déjà en base depuis ADR-086) :
+  1. Identité connue : connexion, sans exiger l'email. Un nouvel email attesté et libre
+     remplace l'ancien (`oidc_email_updated`) ; s'il est pris, l'ancien est gardé et le
+     conflit tracé (`oidc_email_conflict`).
+  2. Identité inconnue : rattachement par email **attesté** seulement. Refus si le compte
+     est déjà lié à un autre `sub` du même fournisseur (anti-takeover, le lien n'est jamais
+     écrasé). Un compte lié à un autre fournisseur est re-rattaché (migration Authentik →
+     ProConnect, `oidc_linked`).
+  3. Aucun compte : création (`oidc_created`).
+- **Profils et correspondance des claims** : `OIDC_PROFILE` (`generic` | `proconnect`)
+  fixe libellé, scopes, confiance dans l'email et noms des claims (`usual_name`, `siret`,
+  `idp_id` pour ProConnect) ; chaque `OIDC_*` reste prioritaire, une variable vide vaut
+  « non posée ». Le `siret` et l'`idp_id` sont lus mais pas encore exploités.
+- **Restent pour le branchement réel** : rattachement proposé par `siret` et file de
+  validation par les org_admin, relecture du `siret` à chaque connexion et signalement des
+  divergences, inscription du client ProConnect (URL de retour, logout fédéré). ProConnect
+  renvoie son endpoint `userinfo` en JWT signé : le callback devra l'appeler et le
+  vérifier si l'`id_token` ne porte pas les claims, ce qui n'est pas fait ici.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec
