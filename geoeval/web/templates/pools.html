@@ -1,0 +1,76 @@
+{% extends "base.html" %}
+{% block title %}Pools de questions{% endblock %}
+{% block content %}
+<h1>Pools de questions</h1>
+<p class="fr-text--lead">Un pool regroupe des questions de l'entité pour les partager par référence :
+  avec ses sous-entités ou avec toutes les entités. Pour l'exécuter, on l'<strong>abonne à un périmètre</strong>
+  (page du périmètre) : ses questions rejoignent alors les évaluations de ce périmètre.</p>
+
+{% set can_edit = role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+
+<h2 class="fr-mt-4w">Pools de {{ org.name }} ({{ own_pools|length }})</h2>
+{% if own_pools %}
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Pool</th><th>Visibilité</th><th>Questions</th><th>Abonnements</th><th>Inclus par</th></tr></thead>
+    <tbody>
+      {% for p, o in own_pools %}
+      <tr>
+        <td><a class="fr-link" href="{{ url_prefix }}/pools/{{ p.id }}">{{ p.name }}</a>
+          {% if p.description %}<br><span class="fr-hint-text">{{ p.description|truncate(90) }}</span>{% endif %}</td>
+        <td>{{ visibility_labels.get(p.visibility, p.visibility) }}</td>
+        <td>{{ counts.get(p.id, 0) }}</td>
+        <td>{{ usage[p.id].subscriptions }}</td>
+        <td>{{ usage[p.id].included_by }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucun pool pour cette entité.</p>
+{% endif %}
+
+{% if can_edit %}
+<h3 class="fr-mt-3w">Nouveau pool</h3>
+<form method="post" action="{{ url_prefix }}/pools/new" style="max-width:40rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="pool-name">Nom</label>
+    <input class="fr-input" id="pool-name" name="name" required maxlength="200">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="pool-description">Description <span class="fr-hint-text">(optionnel)</span></label>
+    <textarea class="fr-input" id="pool-description" name="description" rows="2"></textarea>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="pool-visibility">Visibilité</label>
+    <select class="fr-select" id="pool-visibility" name="visibility">
+      {% for k, label in visibility_labels.items() %}<option value="{{ k }}">{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="fr-btn">Créer le pool</button>
+</form>
+{% endif %}
+
+<h2 class="fr-mt-4w">Pools partagés avec {{ org.name }} ({{ shared_pools|length }})</h2>
+{% if shared_pools %}
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Pool</th><th>Entité propriétaire</th><th>Visibilité</th><th>Questions</th></tr></thead>
+    <tbody>
+      {% for p, o in shared_pools %}
+      <tr>
+        <td><a class="fr-link" href="{{ url_prefix }}/pools/{{ p.id }}">{{ p.name }}</a>
+          {% if p.description %}<br><span class="fr-hint-text">{{ p.description|truncate(90) }}</span>{% endif %}</td>
+        <td>{{ o.name }}</td>
+        <td>{{ visibility_labels.get(p.visibility, p.visibility) }}</td>
+        <td>{{ counts.get(p.id, 0) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucun pool partagé par une autre entité.</p>
+{% endif %}
+{% endblock %}

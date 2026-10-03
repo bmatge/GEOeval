@@ -13,7 +13,9 @@ from sqlalchemy.orm import Session
 from geoeval.web import (
     audit,
     perimeters,
+    pools,
     services,
+    themes,
 )
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import (
@@ -45,7 +47,7 @@ def perimeter_new_form(
     org, role = ctx
     return render(
         request, "perimeter_form.html", active="perimeters", org=org, role=role,
-        perimeter=None,
+        perimeter=None, all_themes=themes.list_all(db), selected_theme_ids=set(),
     )
 
 
@@ -59,15 +61,19 @@ def perimeter_create(
     kind: str = Form(""),
     home_url: str = Form(""),
     description: str = Form(""),
+    domains: str = Form(""),
+    theme_ids: list[int] = Form(default=[]),
 ):
     org, _ = ctx
     try:
+        theme_ids = themes.validate_ids(db, theme_ids)
         p = perimeters.create(
             db, org_id=org.id,
             name=name, slug=slug, kind=kind or None,
             home_url=home_url or None, description=description or None,
-            created_by=user.id,
+            created_by=user.id, domains=domains,
         )
+        themes.set_for_perimeter(db, p.id, theme_ids)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     audit.record(
@@ -89,13 +95,75 @@ def perimeter_detail(
         raise HTTPException(status_code=404, detail="Périmètre introuvable.")
     # Questions des AUTRES périmètres, proposables au rattachement.
     attachable = [t for t in services.list_tests(db, org.id) if t.perimeter_id != p.id]
+    # E4 : questions apportées par les pools abonnés (lecture seule ici).
+    resolution = pools.effective_resolution(db, p)
+    pooled = [
+        t for t in pools.effective_tests(db, p, active_only=False, ready_only=False)
+        if t.perimeter_id != p.id
+    ]
+    subs = pools.subscriptions(db, p)
+    subscribed_ids = {s.pool.id for s in subs}
+    subscribable = [(pl, ow) for pl, ow in pools.list_visible(db, org) if pl.id not in subscribed_ids]
+    own_tests = services.list_tests(db, org.id, perimeter_id=p.id)
     return render(
         request, "perimeter_detail.html", active="perimeters", org=org, role=role,
         perimeter=p,
-        tests=services.list_tests(db, org.id, perimeter_id=p.id),
+        tests=own_tests,
         all_perimeters=perimeters.list_for_org(db, org.id),
         attachable_tests=attachable,
+        perimeter_themes=themes.for_perimeter(db, p.id),
+        test_themes=themes.for_tests(db, [t.test_id for t in own_tests + pooled]),
+        subscriptions=subs,
+        subscribable_pools=subscribable,
+        pooled_tests=pooled,
+        pooled_origins=resolution.origins,
     )
+
+
+@router.post("/o/{org_slug}/perimeters/{perimeter_id}/pools")
+def perimeter_subscribe_pool(
+    perimeter_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+    pool_id: int = Form(...),
+):
+    """Abonne un pool visible à ce périmètre (E4) : ses questions rejoignent les runs."""
+    org, _ = ctx
+    p = perimeters.get_by_id(db, org.id, perimeter_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    try:
+        pool = pools.subscribe(db, p, pool_id, created_by=user.id)
+    except pools.PoolError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="subscribe_pool", entity_type="perimeter", entity_id=p.id,
+        meta={"pool_id": pool.id, "pool": pool.name},
+    )
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
+
+
+@router.post("/o/{org_slug}/perimeters/{perimeter_id}/pools/{pool_id}/unsubscribe")
+def perimeter_unsubscribe_pool(
+    perimeter_id: int,
+    pool_id: int,
+    ctx=Depends(require_role("editor")),
+    db: Session = Depends(get_db),
+    user: CurrentUser = Depends(require_user),
+):
+    org, _ = ctx
+    p = perimeters.get_by_id(db, org.id, perimeter_id)
+    if p is None:
+        raise HTTPException(status_code=404, detail="Périmètre introuvable.")
+    pools.unsubscribe(db, p, pool_id)
+    audit.record(
+        db, user_id=user.id, org_id=org.id,
+        action="unsubscribe_pool", entity_type="perimeter", entity_id=p.id,
+        meta={"pool_id": pool_id},
+    )
+    return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 
 @router.post("/o/{org_slug}/perimeters/{perimeter_id}/attach-test")
@@ -135,7 +203,8 @@ def perimeter_edit_form(
         raise HTTPException(status_code=404, detail="Périmètre introuvable.")
     return render(
         request, "perimeter_form.html", active="perimeters", org=org, role=role,
-        perimeter=p,
+        perimeter=p, all_themes=themes.list_all(db),
+        selected_theme_ids={t.id for t in themes.for_perimeter(db, p.id)},
     )
 
 
@@ -149,14 +218,19 @@ def perimeter_edit_submit(
     kind: str = Form(""),
     home_url: str = Form(""),
     description: str = Form(""),
+    domains: str = Form(""),
+    theme_ids: list[int] = Form(default=[]),
 ):
     org, _ = ctx
     try:
+        theme_ids = themes.validate_ids(db, theme_ids)
         perimeters.update(
             db, org_id=org.id, perimeter_id=perimeter_id,
             name=name, kind=kind or None,
             home_url=home_url or None, description=description or None,
+            domains=domains, set_domains=True,
         )
+        themes.set_for_perimeter(db, perimeter_id, theme_ids)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     audit.record(

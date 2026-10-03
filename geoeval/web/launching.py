@@ -16,8 +16,8 @@ from typing import Any, Optional
 from sqlalchemy.orm import Session
 
 from geoeval.core.load import load_tests
-from geoeval.db.models import Job, Model, Organization, ScheduledRun
-from geoeval.web import budget, org_models, perimeters, pricing, services
+from geoeval.db.models import Job, Model, Organization, Perimeter, ScheduledRun, Test
+from geoeval.web import budget, org_models, perimeters, pools, pricing, services
 from geoeval.worker import jobs as jobqueue
 
 # Providers utilisables comme modèle TESTÉ (dispatch de run.py, avec recherche web).
@@ -98,6 +98,25 @@ def allowed_model_versions(
 
 
 # ---------------------------------------------------------------------
+# Questions d'un run
+# ---------------------------------------------------------------------
+def tests_for_run(
+    session: Session, org_id: int, *, perimeter_id: Optional[int], test_ids: Optional[list[int]] = None,
+) -> list[Test]:
+    """Questions actives et prêtes qu'un run exécuterait. Avec un périmètre (E4) :
+    ses questions propres + celles des pools abonnés (visibles), éventuellement
+    restreintes à `test_ids`. Sans périmètre (runs historiques) : questions de l'org."""
+    if perimeter_id is not None:
+        peri = session.get(Perimeter, int(perimeter_id))
+        if peri is None or peri.organization_id != org_id:
+            return []
+        return pools.effective_tests(session, peri, test_ids=test_ids or None)
+    return list(load_tests(
+        session, test_ids=test_ids or None, active_only=True, ready_only=True, organization_id=org_id,
+    ))
+
+
+# ---------------------------------------------------------------------
 # Validation de la sélection
 # ---------------------------------------------------------------------
 def validate_selection(
@@ -128,7 +147,7 @@ def validate_selection(
     peri = perimeters.get_by_id(session, org_id, perimeter_id)
     if peri is None:
         raise LaunchError("validation", "Périmètre invalide.")
-    peri_tests = [t for t in load_tests(session, organization_id=org_id) if t.perimeter_id == perimeter_id]
+    peri_tests = tests_for_run(session, org_id, perimeter_id=perimeter_id)
     all_active_ids = [t.test_id for t in peri_tests]
     if not all_active_ids:
         raise LaunchError("validation", "Aucune question active et prête dans ce périmètre.")
@@ -145,11 +164,14 @@ def validate_selection(
 # ---------------------------------------------------------------------
 # Devis + plafond budgétaire
 # ---------------------------------------------------------------------
-def estimate_and_check_budget(session: Session, org_id: int, params: dict[str, Any]) -> dict[str, Any]:
+def estimate_and_check_budget(
+    session: Session, org_id: int, params: dict[str, Any], *, perimeter_id: Optional[int] = None,
+) -> dict[str, Any]:
     """Devis prévisionnel puis contrôle des plafonds (mois, jour). Renvoie
-    l'estimation ; lève LaunchError('budget') si un plafond serait dépassé."""
-    tests_for_estimate = load_tests(
-        session, test_ids=params["test_ids"], active_only=True, ready_only=True, organization_id=org_id,
+    l'estimation ; lève LaunchError('budget') si un plafond serait dépassé.
+    `perimeter_id` : le devis porte sur les questions effectives du périmètre (pools inclus)."""
+    tests_for_estimate = tests_for_run(
+        session, org_id, perimeter_id=perimeter_id, test_ids=params["test_ids"],
     )
     estimate = pricing.estimate_scan_cost(
         session, org_id=org_id, tests=tests_for_estimate,
@@ -180,7 +202,7 @@ def prepare_run(
         judge_models=judge_models, repeats=repeats, test_ids=test_ids,
         role=role, is_platform_admin=is_platform_admin,
     )
-    params["estimate"] = estimate_and_check_budget(session, org_id, params)
+    params["estimate"] = estimate_and_check_budget(session, org_id, params, perimeter_id=perimeter_id)
     return params
 
 
@@ -220,7 +242,7 @@ def run_schedule_now(session: Session, org_id: int, schedule: ScheduledRun) -> J
         judges=list(schedule.judges),
         test_ids=list(schedule.test_ids) if schedule.test_ids else None,
     )
-    estimate_and_check_budget(session, org_id, params)
+    estimate_and_check_budget(session, org_id, params, perimeter_id=schedule.perimeter_id)
     return jobqueue.submit(session, dict(
         **params,
         organization_id=org_id,

@@ -119,7 +119,9 @@ def tick_detailed(session: Session) -> tuple[int, set[int]]:
         )
         skip_reason: Optional[str] = None
         try:
-            launching.estimate_and_check_budget(session, sr.organization_id, params)
+            launching.estimate_and_check_budget(
+                session, sr.organization_id, params, perimeter_id=sr.perimeter_id,
+            )
         except launching.LaunchError as exc:
             if exc.kind == "budget":
                 skip_reason = exc.detail

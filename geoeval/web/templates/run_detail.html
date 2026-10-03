@@ -7,6 +7,8 @@
   <li><p class="fr-badge fr-badge--blue-ecume">{{ run.model_name }} · {{ run.model_version }}</p></li>
   {% if run.started_at %}<li><p class="fr-badge">{{ run.started_at.strftime("%Y-%m-%d %H:%M") }}</p></li>{% endif %}
   {% if run.run_meta and run.run_meta.note %}<li><p class="fr-badge fr-badge--green-emeraude">{{ run.run_meta.note }}</p></li>{% endif %}
+  {% if run.official_share is not none %}<li><p class="fr-badge fr-badge--purple-glycine"
+      title="Domaines officiels du périmètre : {{ run.official_domains|join(', ') }}">Sources officielles : {{ (run.official_share * 100)|round|int }} %</p></li>{% endif %}
 </ul>
 
 {% for res in run.results %}
@@ -26,8 +28,10 @@
       <div class="fr-px-2w fr-py-1w" style="white-space:pre-wrap; background:var(--background-alt-grey); border-radius:.25rem;">{{ res.raw_answer }}</div>
 
       {% if res.raw_citations %}
-      <p class="fr-text--bold fr-mt-2w fr-mb-1v">Sources citées</p>
-      <ul>{% for c in res.raw_citations %}<li><a class="fr-link" href="{{ c }}" target="_blank" rel="noopener">{{ c }}</a></li>{% endfor %}</ul>
+      <p class="fr-text--bold fr-mt-2w fr-mb-1v">Sources citées
+        {% if res.official_share is not none %}<span class="fr-text--regular fr-text--sm">· {{ (res.official_share * 100)|round|int }} % officielles</span>{% endif %}</p>
+      <ul>{% for c in res.raw_citations %}{% set u = c.url if c is mapping else c %}<li><a class="fr-link" href="{{ u }}" target="_blank" rel="noopener">{{ u }}</a>
+        {% if u in res.official_citations %}<span class="fr-badge fr-badge--success fr-badge--sm fr-ml-1v">officielle</span>{% endif %}</li>{% endfor %}</ul>
       {% endif %}
 
       {% if res.evals %}

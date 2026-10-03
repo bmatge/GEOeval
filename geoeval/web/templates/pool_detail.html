@@ -1,0 +1,133 @@
+{% extends "base.html" %}
+{% block title %}{{ pool.name }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/pools">Retour aux pools</a>
+<h1 class="fr-mt-2w">{{ pool.name }}</h1>
+<p class="fr-hint-text">
+  Entité propriétaire : <strong>{{ owner.name }}</strong> · visibilité : {{ visibility_labels.get(pool.visibility, pool.visibility) }}
+  {% if usage %} · {{ usage.subscriptions }} abonnement(s), inclus par {{ usage.included_by }} pool(s){% endif %}
+</p>
+{% if pool.description %}<p>{{ pool.description }}</p>{% endif %}
+{% if not owned %}
+<div class="fr-callout fr-mb-3w"><p class="fr-callout__text">Pool partagé par {{ owner.name }} : lecture seule.
+  Pour l'exécuter, abonne-le à un périmètre depuis la page du périmètre.</p></div>
+{% endif %}
+
+<h2 class="fr-mt-4w">Questions du pool ({{ direct_tests|length }})</h2>
+{% if direct_tests %}
+<div class="fr-table">
+  <table>
+    <thead><tr><th>#</th><th>Question</th><th>État</th>{% if can_edit %}<th>Actions</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for t in direct_tests %}
+      <tr>
+        <td>{% if owned %}<a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a>{% else %}{{ t.test_id }}{% endif %}</td>
+        <td>{{ t.prompt|truncate(90) }}</td>
+        <td>{% if t.validity_end_at is not none %}<p class="fr-badge fr-badge--sm">inactive</p>
+          {% elif t.expected_answer is none %}<p class="fr-badge fr-badge--warning fr-badge--sm">non notable</p>
+          {% else %}<p class="fr-badge fr-badge--success fr-badge--sm">active</p>{% endif %}</td>
+        {% if can_edit %}
+        <td><form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/tests/{{ t.test_id }}/remove" style="display:inline">
+          <button type="submit" class="fr-link">Retirer</button></form></td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucune question directement dans ce pool.</p>
+{% endif %}
+
+{% if can_edit and addable_tests %}
+<details class="fr-mb-3w">
+  <summary>Ajouter des questions de {{ org.name }}</summary>
+  <form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/tests" class="fr-mt-2w">
+    <fieldset class="fr-fieldset">
+      {% for t in addable_tests %}
+      <div class="fr-fieldset__element">
+        <div class="fr-checkbox-group fr-checkbox-group--sm">
+          <input type="checkbox" id="add-{{ t.test_id }}" name="test_ids" value="{{ t.test_id }}">
+          <label class="fr-label" for="add-{{ t.test_id }}">#{{ t.test_id }} — {{ t.prompt|truncate(90) }}</label>
+        </div>
+      </div>
+      {% endfor %}
+    </fieldset>
+    <button type="submit" class="fr-btn fr-btn--secondary">Ajouter la sélection</button>
+  </form>
+</details>
+{% endif %}
+
+<h2 class="fr-mt-4w">Pools inclus ({{ included|length }})</h2>
+<p class="fr-hint-text">Les questions des pools inclus sont ajoutées, à condition que chaque pool inclus
+  soit lui-même visible de l'entité qui exécute : l'inclusion n'élargit jamais le partage.</p>
+{% if included %}
+<ul>
+  {% for c, co, vis in included %}
+  <li>{% if vis %}<a class="fr-link" href="{{ url_prefix }}/pools/{{ c.id }}">{{ c.name }}</a>{% else %}{{ c.name }}{% endif %}
+    ({{ co.name }}){% if not vis %} <span class="fr-badge fr-badge--warning fr-badge--sm">non visible ici</span>{% endif %}
+    {% if can_edit %}
+    <form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/includes/{{ c.id }}/remove" style="display:inline">
+      <button type="submit" class="fr-link fr-ml-1w">Retirer</button></form>
+    {% endif %}
+  </li>
+  {% endfor %}
+</ul>
+{% else %}
+<p>Aucun pool inclus.</p>
+{% endif %}
+{% if can_edit and includable_pools %}
+<form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/includes"
+      class="fr-grid-row fr-grid-row--bottom fr-grid-row--gutters" style="max-width: 50rem">
+  <div class="fr-col">
+    <div class="fr-select-group">
+      <label class="fr-label" for="include-pool">Inclure un pool</label>
+      <select class="fr-select" id="include-pool" name="child_pool_id" required>
+        {% for p, o in includable_pools %}<option value="{{ p.id }}">{{ p.name }} ({{ o.name }})</option>{% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="fr-col-auto"><button type="submit" class="fr-btn fr-btn--secondary">Inclure</button></div>
+</form>
+{% endif %}
+
+{% if inherited_tests %}
+<h3 class="fr-mt-3w">Questions apportées par les inclusions ({{ inherited_tests|length }})</h3>
+<div class="fr-table">
+  <table>
+    <thead><tr><th>#</th><th>Question</th><th>Pool(s)</th></tr></thead>
+    <tbody>
+      {% for t in inherited_tests %}
+      <tr><td>{{ t.test_id }}</td><td>{{ t.prompt|truncate(90) }}</td><td>{{ (origins.get(t.test_id) or [])|join(', ') }}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if can_edit %}
+<h2 class="fr-mt-4w">Paramètres du pool</h2>
+<form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/edit" style="max-width:40rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="pool-name">Nom</label>
+    <input class="fr-input" id="pool-name" name="name" required maxlength="200" value="{{ pool.name }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="pool-description">Description</label>
+    <textarea class="fr-input" id="pool-description" name="description" rows="2">{{ pool.description or '' }}</textarea>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="pool-visibility">Visibilité
+      <span class="fr-hint-text">Réduire la visibilité désactive les abonnements des entités qui ne la voient plus.</span></label>
+    <select class="fr-select" id="pool-visibility" name="visibility">
+      {% for k, label in visibility_labels.items() %}<option value="{{ k }}" {% if k == pool.visibility %}selected{% endif %}>{{ label }}</option>{% endfor %}
+    </select>
+  </div>
+  <button type="submit" class="fr-btn">Enregistrer</button>
+</form>
+<form method="post" action="{{ url_prefix }}/pools/{{ pool.id }}/delete" class="fr-mt-3w"
+      onsubmit="return confirm('Supprimer ce pool ? Les abonnements et inclusions qui le référencent disparaissent ; les runs passés sont conservés.');">
+  <button type="submit" class="fr-btn fr-btn--tertiary">Supprimer le pool</button>
+</form>
+{% endif %}
+{% endblock %}

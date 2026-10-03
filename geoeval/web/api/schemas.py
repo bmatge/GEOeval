@@ -95,6 +95,14 @@ class PerimeterOut(_Orm):
     description: Optional[str] = None
     created_at: datetime
     n_questions: int = 0
+    n_pooled_questions: int = 0          # E4 : questions apportées par les pools abonnés
+    domains: list[str] = Field(default_factory=list)
+    theme_ids: list[int] = Field(default_factory=list)
+
+    @field_validator("domains", mode="before")
+    @classmethod
+    def _domains_none_as_empty(cls, v):
+        return v or []
 
 
 class GroundTruthOut(_Orm):
@@ -121,6 +129,14 @@ class QuestionOut(_Orm):
     validity_start_at: datetime
     validity_end_at: Optional[datetime] = None
     is_active: bool = True
+    theme_ids: list[int] = Field(default_factory=list)
+
+
+class EffectiveQuestionOut(QuestionOut):
+    """Question effective d'un périmètre (E4) : propre ou issue d'un pool abonné."""
+    organization_id: int
+    own: bool = True
+    pools: list[str] = Field(default_factory=list)
 
 
 class QuestionDetailOut(QuestionOut):
@@ -167,6 +183,7 @@ class RunResultOut(BaseModel):
     expected_answer: Optional[str] = None
     raw_answer: str
     raw_citations: list[Any] = Field(default_factory=list)
+    official_share: Optional[float] = Field(None, description="Part des citations sur les domaines officiels du périmètre (E4)")
     evals: list[RunEvaluationOut] = Field(default_factory=list)
 
 
@@ -178,6 +195,8 @@ class RunDetailOut(BaseModel):
     model_name: str
     model_version: str
     results: list[RunResultOut]
+    official_domains: list[str] = Field(default_factory=list)
+    official_share: Optional[float] = Field(None, description="None si le périmètre ne déclare aucun domaine ou sans citation")
 
 
 class LaunchIn(BaseModel):
@@ -295,6 +314,8 @@ class PerimeterIn(BaseModel):
     kind: Optional[str] = Field(None, max_length=50)
     home_url: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = Field(None, max_length=2000)
+    domains: list[str] = Field(default_factory=list, description="Domaines officiels (sous-domaines inclus)")
+    theme_ids: list[int] = Field(default_factory=list)
 
 
 class PerimeterPatch(BaseModel):
@@ -302,6 +323,8 @@ class PerimeterPatch(BaseModel):
     kind: Optional[str] = Field(None, max_length=50)
     home_url: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = Field(None, max_length=2000)
+    domains: Optional[list[str]] = None
+    theme_ids: Optional[list[int]] = None
 
 
 class QuestionIn(BaseModel):
@@ -310,6 +333,7 @@ class QuestionIn(BaseModel):
     expected_answer: Optional[str] = None
     response_quality_prompt_id: Optional[int] = None
     citation_quality_prompt_id: Optional[int] = None
+    theme_ids: list[int] = Field(default_factory=list)
 
 
 class QuestionPatch(BaseModel):
@@ -318,6 +342,67 @@ class QuestionPatch(BaseModel):
     expected_answer: Optional[str] = None
     response_quality_prompt_id: Optional[int] = None
     citation_quality_prompt_id: Optional[int] = None
+    theme_ids: Optional[list[int]] = None
+
+
+# ---- Pools et thèmes (E4) ------------------------------------------
+class ThemeOut(_Orm):
+    id: int
+    slug: str
+    label: str
+
+
+class ThemeIn(BaseModel):
+    label: str = Field(min_length=1, max_length=200)
+    slug: Optional[str] = Field(None, min_length=2, max_length=64, pattern=r"^[a-z0-9][a-z0-9\-]*$")
+
+
+class ThemePatch(BaseModel):
+    label: str = Field(min_length=1, max_length=200)
+
+
+PoolVisibility = Literal["private", "descendants", "all"]
+
+
+class PoolOut(BaseModel):
+    id: int
+    name: str
+    description: Optional[str] = None
+    visibility: PoolVisibility
+    owner_org_id: int
+    owner_org_slug: str
+    created_at: datetime
+    test_ids: list[int] = Field(default_factory=list, description="Questions directement dans le pool")
+    included_pool_ids: list[int] = Field(default_factory=list)
+    n_questions: int = Field(0, description="Questions effectives pour l'entité appelante (inclusions visibles comprises)")
+
+
+class PoolIn(BaseModel):
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    visibility: PoolVisibility = "private"
+
+
+class PoolPatch(BaseModel):
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    visibility: Optional[PoolVisibility] = None
+
+
+class PoolTestsIn(BaseModel):
+    test_ids: list[int] = Field(min_length=1)
+
+
+class PoolRefIn(BaseModel):
+    pool_id: int
+
+
+class SubscriptionOut(BaseModel):
+    pool_id: int
+    pool_name: str
+    owner_org_slug: str
+    visible: bool = Field(description="False si le pool n'est plus partagé avec l'entité : il ne fournit plus de questions")
+    n_questions: int = 0
 
 
 class GroundTruthIn(BaseModel):

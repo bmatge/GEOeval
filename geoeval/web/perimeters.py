@@ -7,7 +7,8 @@ programmations sont rattachées à lui. La slug est unique dans l'organisation.
 from __future__ import annotations
 
 import re
-from typing import Optional
+from typing import Iterable, Optional, Union
+from urllib.parse import urlsplit
 
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
@@ -16,6 +17,61 @@ from geoeval.db.models import Perimeter, Test
 
 
 _SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9\-]{0,63}$")
+_HOST_RE = re.compile(r"^(?=.{1,253}$)([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,63}$")
+MAX_DOMAINS = 50
+
+
+# ---------------------------------------------------------------------
+# Domaines officiels d'un site (E4)
+# ---------------------------------------------------------------------
+def host_of(value: str) -> str:
+    """Hôte normalisé d'une URL ou d'un domaine : minuscules, sans schéma, chemin,
+    port ni « www. » initial. Chaîne vide si rien d'exploitable."""
+    value = (value or "").strip().lower()
+    if not value:
+        return ""
+    if "://" not in value:
+        value = "//" + value
+    host = (urlsplit(value).hostname or "").rstrip(".")
+    return host[4:] if host.startswith("www.") else host
+
+
+def normalize_domains(raw: Union[str, Iterable[str], None]) -> list[str]:
+    """Liste de domaines depuis une saisie libre (virgules, espaces, retours ligne)
+    ou une liste. Dédoublonnée, triée. Lève ValueError si un domaine est invalide."""
+    if raw is None:
+        return []
+    items = re.split(r"[\s,;]+", raw) if isinstance(raw, str) else list(raw)
+    out: list[str] = []
+    for item in items:
+        if not (item or "").strip():
+            continue
+        host = host_of(item)
+        if not _HOST_RE.fullmatch(host):
+            raise ValueError(f"Domaine invalide : {item!r}.")
+        if host not in out:
+            out.append(host)
+    if len(out) > MAX_DOMAINS:
+        raise ValueError(f"{MAX_DOMAINS} domaines au plus par site.")
+    return sorted(out)
+
+
+def is_official(url: str, domains: Iterable[str]) -> bool:
+    """Vrai si l'URL pointe sur un des domaines (ou un de leurs sous-domaines)."""
+    host = host_of(url)
+    if not host:
+        return False
+    return any(host == d or host.endswith("." + d) for d in domains)
+
+
+def official_share(urls: Iterable[str], domains: Iterable[str]) -> Optional[float]:
+    """Part des citations qui pointent vers les domaines officiels (None si aucun
+    domaine déclaré ou aucune citation)."""
+    domains = list(domains)
+    urls = [u for u in urls if u]
+    if not domains or not urls:
+        return None
+    return sum(1 for u in urls if is_official(u, domains)) / len(urls)
 
 
 def _normalize_slug(slug: str) -> str:
@@ -70,8 +126,10 @@ def create(
     home_url: Optional[str] = None,
     description: Optional[str] = None,
     created_by: Optional[int] = None,
+    domains: Union[str, Iterable[str], None] = None,
 ) -> Perimeter:
     slug = _normalize_slug(slug)
+    clean_domains = normalize_domains(domains)
     if get_by_slug(session, org_id, slug) is not None:
         raise ValueError(f"un périmètre avec le slug {slug!r} existe déjà pour cette organisation.")
     p = Perimeter(
@@ -82,6 +140,7 @@ def create(
         home_url=(home_url or None),
         description=(description or None),
         created_by=created_by,
+        domains=clean_domains,
     )
     session.add(p)
     session.commit()
@@ -97,10 +156,15 @@ def update(
     kind: Optional[str] = None,
     home_url: Optional[str] = None,
     description: Optional[str] = None,
+    domains: Union[str, Iterable[str], None] = None,
+    set_domains: bool = False,
 ) -> Perimeter:
     p = get_by_id(session, org_id, perimeter_id)
     if p is None:
         raise ValueError(f"périmètre {perimeter_id} introuvable")
+    clean_domains = normalize_domains(domains) if set_domains else None
+    if set_domains:
+        p.domains = clean_domains
     p.name = name.strip()
     p.kind = (kind or None)
     p.home_url = (home_url or None)

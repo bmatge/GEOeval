@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% block title %}Thèmes{% endblock %}
+{% block content %}
+<h1>Thèmes</h1>
+<p class="fr-text--lead">Catalogue commun à toutes les entités : les éditeurs étiquettent leurs questions et
+  périmètres avec ces thèmes, ce qui rend les résultats comparables d'une entité à l'autre.</p>
+
+{% if themes %}
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Libellé</th><th>Slug</th><th>Questions</th><th>Périmètres</th><th>Actions</th></tr></thead>
+    <tbody>
+      {% for th in themes %}
+      <tr>
+        <td>
+          <form method="post" action="/admin/themes/{{ th.id }}/rename" class="fr-grid-row fr-grid-row--middle">
+            <label class="fr-sr-only" for="label-{{ th.id }}">Libellé de {{ th.slug }}</label>
+            <input class="fr-input fr-col" id="label-{{ th.id }}" name="label" value="{{ th.label }}" required>
+            <button type="submit" class="fr-btn fr-btn--sm fr-btn--tertiary fr-ml-1w">Renommer</button>
+          </form>
+        </td>
+        <td><code>{{ th.slug }}</code></td>
+        <td>{{ usage[th.id].questions }}</td>
+        <td>{{ usage[th.id].perimeters }}</td>
+        <td>
+          <form method="post" action="/admin/themes/{{ th.id }}/delete" style="display:inline"
+                onsubmit="return confirm('Supprimer le thème « {{ th.label }} » ? Les étiquettes posées sont retirées ; aucun résultat n\'est supprimé.')">
+            <button type="submit" class="fr-link">Supprimer</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucun thème pour l'instant.</p>
+{% endif %}
+
+<h2 class="fr-mt-4w">Nouveau thème</h2>
+<form method="post" action="/admin/themes/new" style="max-width:40rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="theme-label">Libellé</label>
+    <input class="fr-input" id="theme-label" name="label" required maxlength="200">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="theme-slug">Slug <span class="fr-hint-text">(optionnel — déduit du libellé)</span></label>
+    <input class="fr-input" id="theme-slug" name="slug" pattern="[a-z0-9][a-z0-9\-]{1,63}">
+  </div>
+  <button type="submit" class="fr-btn">Créer</button>
+</form>
+{% endblock %}

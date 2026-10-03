@@ -12,7 +12,6 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from geoeval.core.load import load_tests
 from geoeval.web import agreement, budget, launching, perimeters
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import get_db, require_role, require_user
@@ -47,8 +46,7 @@ def run_form_context(
         ag = agreement.compute_agreement_vs_gold(db, j.model_id)
         judge_kappa[j.model_id] = ag.get("response_kappa")
     all_peri = perimeters.list_for_org(db, org_id)
-    all_tests = load_tests(db, organization_id=org_id)
-    tests_for_form = all_tests if perimeter_id is None else [t for t in all_tests if t.perimeter_id == perimeter_id]
+    tests_for_form = launching.tests_for_run(db, org_id, perimeter_id=perimeter_id)
     return dict(
         models=models,
         testable_models=[m for m in models if (m.model_name or "").lower() in launching.TESTABLE_PROVIDERS],

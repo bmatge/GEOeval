@@ -25,6 +25,7 @@ from geoeval.web import (
     pricing,
     services,
     tenancy,
+    themes,
 )
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import (
@@ -271,6 +272,71 @@ def admin_pricing_view(
         request, "admin_pricing.html", active="admin",
         org=nav_org, role=nav_role, entries=entries,
     )
+
+
+# ---- Thèmes (E4 : catalogue global géré par la plateforme) ----------
+@router.get("/admin/themes", response_class=HTMLResponse)
+def admin_themes(
+    request: Request,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    tlist = themes.list_all(db)
+    nav_org, nav_role = nav_fallback(db, user)
+    return render(
+        request, "admin_themes.html", active="admin", org=nav_org, role=nav_role,
+        themes=tlist, usage={t.id: themes.usage(db, t.id) for t in tlist},
+    )
+
+
+@router.post("/admin/themes/new")
+def admin_theme_create(
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    label: str = Form(...),
+    slug: str = Form(""),
+):
+    try:
+        th = themes.create(db, label=label, slug=slug or None)
+    except themes.ThemeError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    audit.record(db, user_id=user.id, org_id=None, action="create", entity_type="theme",
+                 entity_id=th.id, meta={"slug": th.slug, "label": th.label})
+    return RedirectResponse("/admin/themes", status_code=303)
+
+
+@router.post("/admin/themes/{theme_id}/rename")
+def admin_theme_rename(
+    theme_id: int,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+    label: str = Form(...),
+):
+    th = themes.get(db, theme_id)
+    if th is None:
+        raise HTTPException(status_code=404, detail="Thème introuvable.")
+    try:
+        themes.rename(db, th, label)
+    except themes.ThemeError as e:
+        raise HTTPException(status_code=e.status, detail=e.detail)
+    audit.record(db, user_id=user.id, org_id=None, action="update", entity_type="theme",
+                 entity_id=th.id, meta={"label": th.label})
+    return RedirectResponse("/admin/themes", status_code=303)
+
+
+@router.post("/admin/themes/{theme_id}/delete")
+def admin_theme_delete(
+    theme_id: int,
+    user: CurrentUser = Depends(require_platform_admin),
+    db: Session = Depends(get_db),
+):
+    th = themes.get(db, theme_id)
+    if th is None:
+        raise HTTPException(status_code=404, detail="Thème introuvable.")
+    meta = {"slug": th.slug, **themes.delete(db, th)}
+    audit.record(db, user_id=user.id, org_id=None, action="delete", entity_type="theme",
+                 entity_id=theme_id, meta=meta)
+    return RedirectResponse("/admin/themes", status_code=303)
 
 
 @router.post("/admin/pricing/{model_id}")

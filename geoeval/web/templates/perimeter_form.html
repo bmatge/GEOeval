@@ -45,6 +45,16 @@
     <textarea class="fr-input" id="description" name="description" rows="3">{{ perimeter.description if perimeter and perimeter.description else '' }}</textarea>
   </div>
 
+  <div class="fr-input-group">
+    <label class="fr-label" for="domains">Domaines officiels <span class="fr-hint-text">(optionnel — un par ligne
+      ou séparés par des virgules ; les sous-domaines sont inclus). Sert à mesurer la part des citations
+      pointant vers les sources officielles.</span></label>
+    <textarea class="fr-input" id="domains" name="domains" rows="3"
+              placeholder="service-public.fr&#10;impots.gouv.fr">{{ (perimeter.domains or [])|join('\n') if perimeter else '' }}</textarea>
+  </div>
+
+  {% include "_theme_checkboxes.html" %}
+
   <button type="submit" class="fr-btn fr-mt-2w">{{ 'Enregistrer' if perimeter else 'Créer' }}</button>
   <a class="fr-btn fr-btn--secondary fr-mt-2w fr-ml-2w" href="{{ url_prefix }}/perimeters">Annuler</a>
 </form>

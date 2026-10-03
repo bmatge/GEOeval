@@ -28,7 +28,6 @@ from sqlalchemy import func, or_, select, text, update
 from sqlalchemy.orm import Session
 
 from geoeval.core.evaluate import evaluate_run
-from geoeval.core.load import load_tests
 from geoeval.core.run import execute_run
 from geoeval.db.models import Job, JobLog
 from geoeval.db.session import SessionLocal
@@ -218,6 +217,16 @@ class JobInterrupted(RuntimeError):
     """Arrêt du worker demandé entre deux modèles : le job s'arrête proprement."""
 
 
+def select_tests(
+    session: Session, *, organization_id: int, perimeter_id: Optional[int], test_ids: Optional[list[int]],
+) -> list[Any]:
+    """Questions d'un job, résolues à l'exécution. E4 : avec un périmètre, questions
+    propres + pools abonnés encore visibles (règle unique de `launching.tests_for_run`)."""
+    from geoeval.web import launching  # import local : launching importe ce module
+
+    return launching.tests_for_run(session, organization_id, perimeter_id=perimeter_id, test_ids=test_ids)
+
+
 def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> None:
     """Exécute un job déjà réclamé (status=running) : RUN puis ÉVALUATION par
     modèle testé. Progression, logs et battement de cœur écrits en base."""
@@ -266,13 +275,8 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
 
             # PHASE RUN
             with SessionLocal() as session:
-                all_tests = load_tests(
-                    session, test_ids=test_ids, active_only=True, ready_only=True,
-                    organization_id=organization_id,
-                )
-                tests = (
-                    [t for t in all_tests if t.perimeter_id == perimeter_id]
-                    if perimeter_id is not None else all_tests
+                tests = select_tests(
+                    session, organization_id=organization_id, perimeter_id=perimeter_id, test_ids=test_ids,
                 )
                 if not tests:
                     raise ValueError("Aucune question active et prête (dans le périmètre / la sélection).")

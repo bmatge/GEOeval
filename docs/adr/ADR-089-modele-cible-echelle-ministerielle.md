@@ -337,6 +337,45 @@ programmée qui dépasserait un plafond est **sautée et tracée**.
   échéance est recalculée (un one-shot sauté est clos). Une exécution réussie efface le
   motif. Comble le trou relevé au lot 1.3a.
 
+## 4quinquies. Mise en œuvre de E4 (amendement 2026-10-03)
+
+Arbitrages validés : une entité exécute un pool en l'**abonnant à un de ses périmètres** ;
+les thèmes forment un **catalogue global géré par l'administration plateforme**.
+
+- **Schéma** (révision `0004`) : `question_pools` (propriétaire, nom unique par entité,
+  `visibility` ∈ {`private`, `descendants`, `all`}), `pool_tests`, `pool_includes`
+  (inclusion sans cycle, profondeur bornée à 10), `perimeter_pools` (abonnements),
+  `themes`, `test_themes`, `perimeter_themes`, et `perimeters.domains` (JSONB).
+- **Pools** (`geoeval/web/pools.py`) : un pool ne contient que des questions de son
+  entité propriétaire. `descendants` = l'entité et tout son sous-arbre ; le partage ne
+  remonte jamais. Gestion : éditeur+ de l'entité propriétaire ; abonnement : éditeur+ de
+  l'entité du périmètre, sur un pool qui lui est visible.
+- **La composition n'élargit jamais la visibilité** : à la résolution, un pool atteint par
+  inclusion n'est suivi que s'il est lui-même visible de l'entité qui exécute. Réduire la
+  visibilité d'un pool coupe ses questions aux abonnés qui ne le voient plus ; l'abonnement
+  reste, marqué « plus partagé ».
+- **Questions effectives** d'un périmètre = ses questions propres + celles des pools
+  abonnés (dédoublonnées, actives et notables). Règle unique `launching.tests_for_run`,
+  utilisée par la validation du lancement, le devis et le contrôle budgétaire (lancement,
+  planification, échéance du planificateur) et le worker (résolution à l'exécution : un
+  pool modifié entre la programmation et l'échéance est pris tel qu'il est à l'échéance).
+- **Historique** : les runs portent l'entité exécutante et référencent les questions, pas
+  le pool. Supprimer un pool supprime ses abonnements et inclusions, jamais un run. Les
+  statistiques par question d'une entité filtrent sur ses runs, plus sur le propriétaire
+  de la question (sinon les questions de pool disparaîtraient de ses tableaux de bord).
+- **Thèmes** (`geoeval/web/themes.py`) : catalogue global (slug unique), création,
+  renommage et suppression réservés à l'administration plateforme (UI `/admin/themes`,
+  API `POST/PATCH/DELETE /themes`) ; lecture pour tout principal authentifié. Les éditeurs
+  étiquettent questions et périmètres ; filtre par thème sur la liste des questions et
+  `GET /questions?theme_id=`.
+- **Domaines officiels** : liste normalisée (hôte en minuscules, sans `www.`, 50 au plus)
+  saisie sur le périmètre. Le détail d'un run affiche la part des citations pointant vers
+  ces domaines ou leurs sous-domaines (calcul à la lecture, avec les domaines courants du
+  périmètre ; aucune donnée de run n'est réécrite). Même valeur dans l'API (`official_share`).
+- **API v1** : `/orgs/{slug}/pools` (CRUD, `questions`, `includes`),
+  `/orgs/{slug}/perimeters/{id}/pools` (abonnements), `/orgs/{slug}/perimeters/{id}/effective-questions`,
+  `/themes` ; `domains` et `theme_ids` sur périmètres et questions.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec
