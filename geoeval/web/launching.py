@@ -107,10 +107,16 @@ def allowed_model_versions(
 # ---------------------------------------------------------------------
 def tests_for_run(
     session: Session, org_id: int, *, perimeter_id: Optional[int], test_ids: Optional[list[int]] = None,
+    campaign_id: Optional[int] = None,
 ) -> list[Test]:
-    """Questions actives et prêtes qu'un run exécuterait. Avec un périmètre (E4) :
+    """Questions actives et prêtes qu'un run exécuterait. Campagne (E8) : questions du
+    protocole figé, encore publiées, si l'entité y participe. Avec un périmètre (E4) :
     ses questions propres + celles des pools abonnés (visibles), éventuellement
     restreintes à `test_ids`. Sans périmètre (runs historiques) : questions de l'org."""
+    if campaign_id is not None:
+        from geoeval.web import campaigns
+
+        return campaigns.campaign_tests(session, int(campaign_id), org_id, test_ids)
     if perimeter_id is not None:
         peri = session.get(Perimeter, int(perimeter_id))
         if peri is None or peri.organization_id != org_id:
@@ -219,6 +225,7 @@ def _check_contract_caps(session: Session, estimate: dict[str, Any]) -> None:
 
 def estimate_and_check_budget(
     session: Session, org_id: int, params: dict[str, Any], *, perimeter_id: Optional[int] = None,
+    campaign_id: Optional[int] = None,
 ) -> dict[str, Any]:
     """Conformité (routage, contrats), devis prévisionnel, plafonds des contrats puis
     budget consolidé (mois, jour). Renvoie l'estimation ; lève LaunchError('routing' |
@@ -227,7 +234,7 @@ def estimate_and_check_budget(
     `perimeter_id` : le devis porte sur les questions effectives du périmètre (pools inclus)."""
     check_compliance(session, org_id, params)
     tests_for_estimate = tests_for_run(
-        session, org_id, perimeter_id=perimeter_id, test_ids=params["test_ids"],
+        session, org_id, perimeter_id=perimeter_id, test_ids=params["test_ids"], campaign_id=campaign_id,
     )
     estimate = pricing.estimate_scan_cost(
         session, org_id=org_id, tests=tests_for_estimate,

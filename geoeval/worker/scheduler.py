@@ -162,7 +162,11 @@ def tick_detailed(session: Session) -> tuple[int, set[int]]:
             sr.next_run_at = None
         else:
             sr.next_run_at = compute_next_run(sr.schedule_kind, sr.schedule_config, after=now)
-    return queued, skipped_orgs
+    # E8 : campagnes échues, une exécution par participant (sautée et tracée si refusée).
+    from geoeval.web import campaigns
+
+    c_queued, c_budget_orgs = campaigns.tick(session, now)
+    return queued + c_queued, skipped_orgs | c_budget_orgs
 
 
 def tick(session: Session) -> int:

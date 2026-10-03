@@ -272,9 +272,11 @@ def execute_run(
     perimeter_id: Optional[int] = None,
     run_meta: Optional[dict[str, Any]] = None,
     progress_cb: Optional[Callable[[int, int, str], None]] = None,
+    campaign_id: Optional[int] = None,
 ) -> int:
     """
     Exécute un run et écrit runs + run_results.
+    campaign_id     : campagne exécutée (E8), le cas échéant.
 
     tested_model    : model_id (int) OU model_version (str, ex. 'gpt-5.2').
     organization_id : organisation propriétaire du run (ADR-077).
@@ -306,6 +308,7 @@ def execute_run(
         organization_id=organization_id,
         perimeter_id=perimeter_id,
         run_meta=run_meta,
+        campaign_id=campaign_id,
     )
     session.add(run_row)
     session.flush()

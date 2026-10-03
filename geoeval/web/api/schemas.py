@@ -130,6 +130,7 @@ class QuestionOut(_Orm):
     validity_start_at: datetime
     validity_end_at: Optional[datetime] = None
     is_active: bool = True
+    status: str = "published"           # draft | published | retired (E8)
     theme_ids: list[int] = Field(default_factory=list)
 
 
@@ -336,6 +337,7 @@ class QuestionIn(BaseModel):
     response_quality_prompt_id: Optional[int] = None
     citation_quality_prompt_id: Optional[int] = None
     theme_ids: list[int] = Field(default_factory=list)
+    status: Literal["draft", "published"] = Field("published", description="Brouillon : hors runs, pools et campagnes")
 
 
 class QuestionPatch(BaseModel):
@@ -587,3 +589,77 @@ class DetectorSettingsOut(BaseModel):
     effective_threshold: Decimal
     runs_from_org_slug: Optional[str] = None
     threshold_from_org_slug: Optional[str] = None
+
+
+# ---- Campagnes (E8) ------------------------------------------------
+class CampaignIn(BaseModel):
+    """Création d'une campagne en brouillon (mêmes champs de fréquence qu'une planification)."""
+    name: str = Field(min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    source_pool_id: Optional[int] = None
+    tested_models: list[str] = Field(default_factory=list)
+    judge_models: list[str] = Field(default_factory=list)
+    repeats: int = Field(1, ge=1, le=10)
+    participant_ids: list[int] = Field(default_factory=list)
+    schedule_kind: Literal["once", "daily", "weekly", "every_n_hours"]
+    at: Optional[str] = None
+    time: Optional[str] = None
+    weekday: Optional[int] = Field(None, ge=0, le=6)
+    hours: Optional[int] = Field(None, ge=1)
+
+
+class CampaignPatch(BaseModel):
+    """Brouillon : tout ; active : nom, description, participants (protocole figé)."""
+    name: Optional[str] = Field(None, min_length=1, max_length=200)
+    description: Optional[str] = Field(None, max_length=2000)
+    source_pool_id: Optional[int] = None
+    tested_models: Optional[list[str]] = None
+    judge_models: Optional[list[str]] = None
+    repeats: Optional[int] = Field(None, ge=1, le=10)
+    participant_ids: Optional[list[int]] = None
+
+
+class CampaignParticipantOut(BaseModel):
+    org_slug: str
+    org_name: str
+    last_job_id: Optional[str] = None
+    last_run_at: Optional[datetime] = None
+    last_skip_reason: Optional[str] = None
+
+
+class CampaignOut(BaseModel):
+    id: int
+    owner_org_slug: str
+    owned: bool
+    name: str
+    description: Optional[str] = None
+    status: Literal["draft", "active", "closed"]
+    source_pool_id: Optional[int] = None
+    tested_models: list[str] = Field(default_factory=list)
+    judges: list[dict[str, Any]] = Field(default_factory=list)
+    protocol: Optional[dict[str, Any]] = None
+    schedule_kind: str
+    schedule_config: dict[str, Any]
+    next_run_at: Optional[datetime] = None
+    last_run_at: Optional[datetime] = None
+    activated_at: Optional[datetime] = None
+    closed_at: Optional[datetime] = None
+    participants: list[CampaignParticipantOut] = Field(default_factory=list)
+
+
+class CampaignResultOut(BaseModel):
+    model_config = ConfigDict(protected_namespaces=())
+    org_slug: str
+    model_version: str
+    n_runs: int
+    last_run_id: int
+    last_at: Optional[datetime] = None
+    last_response: Optional[float] = None
+    last_citation: Optional[float] = None
+    delta_response: Optional[float] = None
+    delta_citation: Optional[float] = None
+
+
+class CampaignExecutionOut(BaseModel):
+    queued: list[dict[str, Any]]
+    skipped: list[dict[str, Any]]

@@ -93,7 +93,7 @@
 
           {# --- Configurer (dropdown, editor+) --- #}
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
-          {% set conf_active = active in ('perimeters', 'tests', 'pools', 'prompts', 'schedules') %}
+          {% set conf_active = active in ('perimeters', 'tests', 'pools', 'campaigns', 'prompts', 'schedules') %}
           <li class="fr-nav__item">
             <button class="fr-nav__btn" aria-expanded="false" aria-controls="menu-configurer"
                     {% if conf_active %}aria-current="true"{% endif %}>Configurer</button>
@@ -110,6 +110,10 @@
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/pools"
                      {% if active == 'pools' %}aria-current="page"{% endif %}>Pools de questions</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/campaigns"
+                     {% if active == 'campaigns' %}aria-current="page"{% endif %}>Campagnes</a>
                 </li>
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/prompts"

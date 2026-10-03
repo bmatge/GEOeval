@@ -205,6 +205,9 @@ def add_tests(session: Session, pool: QuestionPool, test_ids: Iterable[int]) -> 
     foreign = [i for i in ids if i not in found or found[i].organization_id != pool.owner_org_id]
     if foreign:
         raise PoolError(f"Questions introuvables ou n'appartenant pas à l'entité propriétaire du pool : {foreign}")
+    drafts = [i for i in ids if found[i].status == "draft"]
+    if drafts:
+        raise PoolError(f"Questions encore en brouillon : publie-les avant de les partager ({drafts}).")
     existing = set(pool_test_ids(session, pool.id))
     added = 0
     for i in ids:
@@ -371,7 +374,7 @@ def effective_tests(
     if test_ids is not None:
         stmt = stmt.where(Test.test_id.in_([int(t) for t in test_ids] or [-1]))
     if active_only:
-        stmt = stmt.where(Test.validity_end_at.is_(None))
+        stmt = stmt.where(Test.validity_end_at.is_(None), Test.status == "published")
     if ready_only:
         stmt = stmt.where(Test.expected_answer.is_not(None))
     return list(session.execute(stmt.order_by(Test.test_id)).scalars())

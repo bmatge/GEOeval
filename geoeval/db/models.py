@@ -197,6 +197,7 @@ class Test(Base):
     __table_args__ = (
         Index("ix_tests_organization_id", "organization_id"),
         Index("ix_tests_perimeter_id", "perimeter_id"),
+        CheckConstraint("status IN ('draft', 'published', 'retired')", name="ck_tests_status"),
     )
     test_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
@@ -223,6 +224,9 @@ class Test(Base):
     validity_end_at: Mapped[Optional[datetime]] = mapped_column(
         TIMESTAMP(timezone=True)
     )
+    # Cycle de vie (E8) : draft (brouillon, hors runs / pools / campagnes) | published | retired.
+    # Invariant : retired ⇔ validity_end_at posé (historique ADR-076 : on retire, on ne supprime pas).
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="published")
 
 
 # =====================================================================
@@ -387,6 +391,7 @@ class RunRow(Base):
     __table_args__ = (
         Index("ix_runs_organization_id", "organization_id"),
         Index("ix_runs_perimeter_id", "perimeter_id"),
+        Index("ix_runs_campaign_id", "campaign_id"),
     )
     run_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
@@ -404,6 +409,8 @@ class RunRow(Base):
     )
 
     run_meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    # Campagne exécutée par ce run (E8) — NULL = run hors campagne.
+    campaign_id: Mapped[Optional[int]] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
 
 
 class RunResult(Base):
@@ -883,3 +890,51 @@ class DetectorSetting(Base):
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
     )
     updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+# =====================================================================
+# ADR-089 §2.9 (chantier E8) — campagnes.
+# =====================================================================
+class Campaign(Base):
+    """Protocole commun défini par une entité et exécuté par les participants qu'elle
+    désigne (elle-même ou ses descendants). `protocol` est figé à l'activation :
+    questions, IA évaluées, notateurs et répétitions, grilles de notation."""
+    __tablename__ = "campaigns"
+    __table_args__ = (
+        CheckConstraint("status IN ('draft', 'active', 'closed')", name="ck_campaigns_status"),
+        Index("ix_campaigns_owner", "owner_org_id"),
+        Index("ix_campaigns_due", "status", "next_run_at"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    status: Mapped[str] = mapped_column(Text, nullable=False, server_default="draft")
+    source_pool_id: Mapped[Optional[int]] = mapped_column(ForeignKey("question_pools.id", ondelete="SET NULL"), nullable=True)
+    # Brouillon : sélection en cours ; actif / clos : instantané figé à l'activation.
+    tested_models: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    judges: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    protocol: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    schedule_kind: Mapped[str] = mapped_column(Text, nullable=False)
+    schedule_config: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
+    next_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    activated_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    closed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+
+class CampaignParticipant(Base):
+    """Entité désignée pour exécuter une campagne (à ses frais, sous ses contrats)."""
+    __tablename__ = "campaign_participants"
+    __table_args__ = (Index("ix_campaign_participants_org", "organization_id"),)
+
+    campaign_id: Mapped[int] = mapped_column(ForeignKey("campaigns.id", ondelete="CASCADE"), primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    added_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    last_job_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    last_run_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_skipped_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    last_skip_reason: Mapped[Optional[str]] = mapped_column(Text, nullable=True)

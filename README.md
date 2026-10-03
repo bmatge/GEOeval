@@ -246,6 +246,18 @@ souverains ou hébergés dans l'UE. Une sous-entité ne peut que la durcir. Elle
 chaque échéance programmée, et les formulaires ne proposent que les modèles conformes. Les anciennes clés BYOK ont
 été converties en contrats.
 
+## Cycle de vie des questions et campagnes (ADR-089, chantier E8)
+
+Une question naît **publiée** ou en **brouillon** ; un brouillon n'entre dans aucune évaluation, aucun pool et
+aucune campagne tant qu'il n'est pas publié. Une question **retirée** sort des évaluations sans que son historique
+soit touché ; elle peut être republiée.
+
+Une **campagne** (*Configurer › Campagnes*, administrateurs de l'entité) fait exécuter un protocole commun par des
+entités désignées de son sous-arbre : les questions publiées d'un pool, les mêmes IA évaluées, les mêmes notateurs,
+à la même fréquence. À l'activation, ce protocole est figé ; chaque participant l'exécute ensuite à ses frais et
+sous ses contrats (un participant bloqué par son budget, un contrat ou sa politique de routage est sauté et tracé).
+La page de la campagne compare les notes par participant et par IA, avec l'écart d'une exécution à l'autre.
+
 ## Notifications (ADR-089, chantier E7)
 
 Le lien *Notifications* de l'en-tête ouvre une boîte de réception personnelle, toutes entités confondues. Les

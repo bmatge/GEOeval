@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from geoeval.web.ui import (
     admin,
+    campaigns,
     contracts,
     dashboard,
     home,
@@ -33,6 +34,7 @@ ROUTERS = [
     perimeters.router,
     questions.router,
     pools.router,
+    campaigns.router,
     prompts.router,
     launch.router,
     models.router,

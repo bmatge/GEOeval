@@ -536,7 +536,11 @@ def create_test(
     expected_answer: Optional[str],
     response_quality_prompt_id: Optional[int],
     citation_quality_prompt_id: Optional[int],
+    status: str = "published",
 ) -> Test:
+    """Crée une question, publiée par défaut ou en brouillon (E8)."""
+    if status not in ("draft", "published"):
+        raise ValueError(f"Statut de création invalide : {status!r} (brouillon ou publiée).")
     default_resp, default_cit = default_prompt_ids(session)
     test = Test(
         organization_id=org_id,
@@ -547,6 +551,7 @@ def create_test(
         citation_quality_prompt_id=citation_quality_prompt_id or default_cit,
         validity_start_at=datetime.now(timezone.utc),
         validity_end_at=None,
+        status=status,
     )
     session.add(test)
     session.commit()
@@ -567,6 +572,14 @@ def update_test(
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
     default_resp, default_cit = default_prompt_ids(session)
+    new_resp = response_quality_prompt_id or default_resp
+    new_cit = citation_quality_prompt_id or default_cit
+    if (new_resp, new_cit) != (test.response_quality_prompt_id, test.citation_quality_prompt_id):
+        from geoeval.web import campaigns
+
+        if test.test_id in campaigns.locked_test_ids(session):
+            raise ValueError("Cette question appartient à une campagne active : sa grille de notation est figée "
+                             "jusqu'à la clôture de la campagne.")
     test.prompt = prompt
     test.expected_answer = expected_answer or None
     test.response_quality_prompt_id = response_quality_prompt_id or default_resp
@@ -575,20 +588,42 @@ def update_test(
     return test
 
 
+TEST_STATUS_LABELS = {"draft": "brouillon", "published": "publiée", "retired": "retirée"}
+
+
 def deactivate_test(session: Session, org_id: int, test_id: int) -> None:
+    """Retire une question (E8 : statut « retirée ») ; l'historique est conservé."""
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
+    test.status = "retired"
     test.validity_end_at = datetime.now(timezone.utc)
     session.commit()
 
 
 def reactivate_test(session: Session, org_id: int, test_id: int) -> None:
+    """Republie une question retirée (un brouillon se publie avec `publish_test`)."""
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
+    if test.status == "draft":
+        raise ValueError("Une question en brouillon se publie, elle ne se réactive pas.")
+    test.status = "published"
     test.validity_end_at = None
     session.commit()
+
+
+def publish_test(session: Session, org_id: int, test_id: int) -> Test:
+    """Brouillon → publiée : la question entre dans les runs, pools et campagnes."""
+    test = get_test(session, org_id, test_id)
+    if test is None:
+        raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
+    if test.status != "draft":
+        raise ValueError(f"Seule une question en brouillon se publie (statut actuel : {TEST_STATUS_LABELS[test.status]}).")
+    test.status = "published"
+    test.validity_start_at = datetime.now(timezone.utc)
+    session.commit()
+    return test
 
 
 # -----------------------------

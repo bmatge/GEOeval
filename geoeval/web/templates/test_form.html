@@ -60,6 +60,16 @@
 
   {% include "_theme_checkboxes.html" %}
 
+  {% if not test %}
+  <div class="fr-checkbox-group fr-mt-2w">
+    <input type="checkbox" id="draft" name="draft" value="true">
+    <label class="fr-label" for="draft">Enregistrer comme brouillon
+      <span class="fr-hint-text">Un brouillon n'entre ni dans les évaluations, ni dans les pools, ni dans les campagnes tant qu'il n'est pas publié.</span></label>
+  </div>
+  {% elif test.status == 'draft' %}
+  <p class="fr-badge fr-badge--new fr-mt-2w">brouillon — à publier depuis la liste des questions</p>
+  {% endif %}
+
   <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
 </form>
 {% endblock %}

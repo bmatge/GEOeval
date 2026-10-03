@@ -158,7 +158,7 @@ def effective_questions(perimeter_id: int, principal: Principal = Depends(requir
     out = []
     for t in tests:
         q = EffectiveQuestionOut.model_validate(t)
-        q.is_active = t.validity_end_at is None
+        q.is_active = t.status == "published"
         q.own = t.perimeter_id == p.id
         q.pools = origins.get(t.test_id, [])
         q.theme_ids = [th.id for th in tmap.get(t.test_id, [])]
