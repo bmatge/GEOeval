@@ -12,6 +12,16 @@
       {% if perimeter.home_url %} · <a class="fr-link" href="{{ perimeter.home_url }}" target="_blank" rel="noopener">{{ perimeter.home_url }}</a>{% endif %}
     </p>
     {% if perimeter.description %}<p>{{ perimeter.description }}</p>{% endif %}
+    {% if perimeter_themes %}
+    <ul class="fr-tags-group">
+      {% for th in perimeter_themes %}<li><p class="fr-tag fr-tag--sm">{{ th.label }}</p></li>{% endfor %}
+    </ul>
+    {% endif %}
+    {% if perimeter.domains %}
+    <p class="fr-text--sm">Domaines officiels :
+      {% for d in perimeter.domains %}<code>{{ d }}</code>{% if not loop.last %}, {% endif %}{% endfor %}
+    </p>
+    {% endif %}
   </div>
   <div class="fr-col-auto">
     {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
@@ -38,7 +48,9 @@
       {% for t in tests %}
       <tr>
         <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
-        <td>{{ t.prompt|truncate(80) }}</td>
+        <td>{{ t.prompt|truncate(80) }}
+          {% for th in test_themes.get(t.test_id, []) %}<span class="fr-badge fr-badge--info fr-badge--sm fr-ml-1v">{{ th.label }}</span>{% endfor %}
+        </td>
         <td>{{ (t.expected_answer or '—')|truncate(40) }}</td>
         <td>
           {% if t.validity_end_at is none %}
@@ -65,6 +77,81 @@
     <a class="fr-link" href="{{ url_prefix }}/tests/new?perimeter_id={{ perimeter.id }}">Ajouter la première →</a>
     {% endif %}
   </p>
+</div>
+{% endif %}
+
+{% set can_edit = role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
+<h2 class="fr-mt-4w">Pools de questions abonnés ({{ subscriptions|length }})</h2>
+<p class="fr-hint-text">Les questions des pools abonnés s'ajoutent à celles du périmètre à chaque
+  évaluation (partage par référence : une modification du pool est prise en compte au run suivant).</p>
+{% if subscriptions %}
+<div class="fr-table">
+  <table>
+    <thead><tr><th>Pool</th><th>Entité propriétaire</th><th>Questions fournies</th><th>État</th>{% if can_edit %}<th>Actions</th>{% endif %}</tr></thead>
+    <tbody>
+      {% for s in subscriptions %}
+      <tr>
+        <td>{% if s.visible %}<a class="fr-link" href="{{ url_prefix }}/pools/{{ s.pool.id }}">{{ s.pool.name }}</a>{% else %}{{ s.pool.name }}{% endif %}</td>
+        <td>{{ s.owner.name }}</td>
+        <td>{{ s.n_questions }}</td>
+        <td>
+          {% if s.visible %}<p class="fr-badge fr-badge--success fr-badge--sm">actif</p>
+          {% else %}<p class="fr-badge fr-badge--warning fr-badge--sm">plus partagé</p>{% endif %}
+        </td>
+        {% if can_edit %}
+        <td>
+          <form method="post" action="{{ url_prefix }}/perimeters/{{ perimeter.id }}/pools/{{ s.pool.id }}/unsubscribe" style="display:inline">
+            <button type="submit" class="fr-link">Désabonner</button>
+          </form>
+        </td>
+        {% endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p>Aucun pool abonné.</p>
+{% endif %}
+{% if can_edit and subscribable_pools %}
+<form method="post" action="{{ url_prefix }}/perimeters/{{ perimeter.id }}/pools"
+      class="fr-grid-row fr-grid-row--bottom fr-grid-row--gutters" style="max-width: 50rem">
+  <div class="fr-col">
+    <div class="fr-select-group">
+      <label class="fr-label" for="subscribe-pool-id">Abonner un pool</label>
+      <select class="fr-select" id="subscribe-pool-id" name="pool_id" required>
+        {% for pl, ow in subscribable_pools %}
+        <option value="{{ pl.id }}">{{ pl.name }} ({{ ow.name }})</option>
+        {% endfor %}
+      </select>
+    </div>
+  </div>
+  <div class="fr-col-auto"><button type="submit" class="fr-btn fr-btn--secondary">Abonner</button></div>
+</form>
+{% endif %}
+
+{% if pooled_tests %}
+<h3 class="fr-mt-3w">Questions issues des pools ({{ pooled_tests|length }})</h3>
+<div class="fr-table">
+  <table>
+    <thead><tr><th>#</th><th>Question</th><th>Pool(s)</th><th>État</th></tr></thead>
+    <tbody>
+      {% for t in pooled_tests %}
+      <tr>
+        <td>{{ t.test_id }}</td>
+        <td>{{ t.prompt|truncate(80) }}
+          {% for th in test_themes.get(t.test_id, []) %}<span class="fr-badge fr-badge--info fr-badge--sm fr-ml-1v">{{ th.label }}</span>{% endfor %}
+        </td>
+        <td>{{ (pooled_origins.get(t.test_id) or [])|join(', ') }}</td>
+        <td>
+          {% if t.validity_end_at is not none %}<p class="fr-badge fr-badge--sm">inactive</p>
+          {% elif t.expected_answer is none %}<p class="fr-badge fr-badge--warning fr-badge--sm">non notable</p>
+          {% else %}<p class="fr-badge fr-badge--success fr-badge--sm">active</p>{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
 {% endif %}
 

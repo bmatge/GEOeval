@@ -89,7 +89,7 @@ def create_schedule(
         role=role, is_platform_admin=is_platform_admin,
     )
     next_run = next_run_or_raise(schedule_kind, schedule_config)
-    launching.estimate_and_check_budget(session, org_id, params)
+    launching.estimate_and_check_budget(session, org_id, params, perimeter_id=perimeter_id)
     return services.create_schedule(
         session, org_id, perimeter_id=perimeter_id, name=name,
         tested_models=params["tested_models"], judges=params["judges"], test_ids=params["test_ids"],

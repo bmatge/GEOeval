@@ -250,6 +250,9 @@ class Perimeter(Base):
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
     created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+    # E4 : domaines officiels du site (hôtes normalisés, sans schéma), base de la
+    # mesure des citations vers les sources du site.
+    domains: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
 
 
 class OrgCredential(Base):
@@ -671,3 +674,99 @@ class BudgetAlert(Base):
     )
     email_status: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'pending'"))
     emailed_to: Mapped[Optional[list[Any]]] = mapped_column(JSONB, nullable=True)
+
+
+# =====================================================================
+# Pools de questions, thèmes (ADR-089 §2.5, chantier E4)
+# =====================================================================
+class Theme(Base):
+    """Thème du catalogue global (géré par l'administration plateforme)."""
+
+    __tablename__ = "themes"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    slug: Mapped[str] = mapped_column(Text, nullable=False, unique=True)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class QuestionPool(Base):
+    """Pool de questions : propriété d'une entité, partagé par référence selon sa
+    visibilité (private = l'entité seule ; descendants = l'entité et son sous-arbre ;
+    all = toutes les entités). Exécuté en l'abonnant à un périmètre."""
+
+    __tablename__ = "question_pools"
+    __table_args__ = (
+        CheckConstraint("visibility IN ('private', 'descendants', 'all')", name="ck_question_pools_visibility"),
+        UniqueConstraint("owner_org_id", "name", name="uq_question_pools_owner_name"),
+        Index("ix_question_pools_owner_org_id", "owner_org_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    owner_org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    visibility: Mapped[str] = mapped_column(Text, nullable=False, server_default=text("'private'"))
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class PoolQuestion(Base):
+    """Question rattachée à un pool (toujours une question de l'entité propriétaire du pool)."""
+
+    __tablename__ = "pool_tests"
+    __table_args__ = (Index("ix_pool_tests_test_id", "test_id"),)
+
+    pool_id: Mapped[int] = mapped_column(ForeignKey("question_pools.id", ondelete="CASCADE"), primary_key=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+
+
+class PoolInclude(Base):
+    """Composition : un pool inclut un autre pool (sans cycle)."""
+
+    __tablename__ = "pool_includes"
+    __table_args__ = (
+        CheckConstraint("parent_pool_id <> child_pool_id", name="ck_pool_includes_not_self"),
+        Index("ix_pool_includes_child_pool_id", "child_pool_id"),
+    )
+
+    parent_pool_id: Mapped[int] = mapped_column(ForeignKey("question_pools.id", ondelete="CASCADE"), primary_key=True)
+    child_pool_id: Mapped[int] = mapped_column(ForeignKey("question_pools.id", ondelete="CASCADE"), primary_key=True)
+
+
+class PerimeterPool(Base):
+    """Abonnement d'un périmètre (site) à un pool : ses questions s'ajoutent aux
+    questions propres du périmètre pour les lancements et planifications."""
+
+    __tablename__ = "perimeter_pools"
+    __table_args__ = (Index("ix_perimeter_pools_pool_id", "pool_id"),)
+
+    perimeter_id: Mapped[int] = mapped_column(ForeignKey("perimeters.id", ondelete="CASCADE"), primary_key=True)
+    pool_id: Mapped[int] = mapped_column(ForeignKey("question_pools.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
+    )
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class QuestionTheme(Base):
+    __tablename__ = "test_themes"
+    __table_args__ = (Index("ix_test_themes_theme_id", "theme_id"),)
+
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), primary_key=True)
+    theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True)
+
+
+class PerimeterTheme(Base):
+    __tablename__ = "perimeter_themes"
+    __table_args__ = (Index("ix_perimeter_themes_theme_id", "theme_id"),)
+
+    perimeter_id: Mapped[int] = mapped_column(ForeignKey("perimeters.id", ondelete="CASCADE"), primary_key=True)
+    theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True)

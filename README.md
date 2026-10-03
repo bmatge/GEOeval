@@ -219,6 +219,20 @@ la planification. Les seuils de 80 % et 100 % produisent une alerte par période
 email aux administrateurs de l'entité qui porte le plafond si un SMTP est configuré (`GEOEVAL_SMTP_*`, voir
 `.env.example`), jauges `geoeval_budget_*` sur `/metrics`.
 
+## Pools de questions, thèmes et domaines officiels (ADR-089, chantier E4)
+
+Un **pool** regroupe des questions d'une entité pour les partager *par référence* : privé, avec ses
+sous-entités, ou avec toutes les entités (*Configurer › Pools de questions*). Une entité l'exécute en
+l'**abonnant à un de ses périmètres** : ses questions rejoignent alors chaque évaluation du périmètre, sans
+copie (une correction de la réponse attendue profite à tous les abonnés). Un pool peut en inclure d'autres
+(sans cycle), mais une inclusion n'élargit jamais le partage : seuls les pools visibles de l'entité qui
+exécute fournissent des questions.
+
+Les **thèmes** sont un catalogue commun (*Administrer › Thèmes*, admin plateforme) ; les éditeurs en
+étiquettent questions et périmètres, et filtrent la liste des questions par thème. Les **domaines officiels**
+d'un périmètre (ex. `service-public.fr`, sous-domaines inclus) donnent, dans le détail d'un run, la part des
+citations qui pointent vers une source officielle.
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

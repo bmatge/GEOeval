@@ -16,6 +16,7 @@ from geoeval.web import (
     ground_truth,
     perimeters,
     services,
+    themes,
 )
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import (
@@ -33,6 +34,7 @@ router = APIRouter()
 def tests(
     request: Request, ctx=Depends(require_org), db: Session = Depends(get_db),
     perimeter: str = "",
+    theme: str = "",
 ):
     org, role = ctx
     # Filtre optionnel par slug de périmètre.
@@ -41,11 +43,21 @@ def tests(
     if perimeter:
         peri_obj = perimeters.get_by_slug(db, org.id, perimeter)
         peri_id = peri_obj.id if peri_obj else -1
+    tlist = services.list_tests(db, org.id, perimeter_id=peri_id)
+    # Filtre optionnel par thème (E4, catalogue global), par slug.
+    all_themes = themes.list_all(db)
+    theme_obj = next((th for th in all_themes if th.slug == theme), None) if theme else None
+    if theme:
+        keep = themes.test_ids_with_theme(db, theme_obj.id) if theme_obj else set()
+        tlist = [t for t in tlist if t.test_id in keep]
     return render(
         request, "tests.html", active="tests", org=org, role=role,
-        tests=services.list_tests(db, org.id, perimeter_id=peri_id),
+        tests=tlist,
         all_perimeters=perimeters.list_for_org(db, org.id),
         current_perimeter=peri_obj,
+        all_themes=all_themes,
+        current_theme=theme_obj,
+        test_themes=themes.for_tests(db, [t.test_id for t in tlist]),
     )
 
 
@@ -66,6 +78,8 @@ def test_new(
         prompts=services.list_prompts(db),
         all_perimeters=perimeters.list_for_org(db, org.id),
         default_perimeter=default_peri,
+        all_themes=themes.list_all(db),
+        selected_theme_ids={th.id for th in themes.for_perimeter(db, default_peri.id)} if default_peri else set(),
     )
 
 
@@ -78,17 +92,23 @@ def test_create(
     expected_answer: str = Form(""),
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
+    theme_ids: list[int] = Form(default=[]),
 ):
     org, _ = ctx
     peri = perimeters.get_by_id(db, org.id, perimeter_id)
     if peri is None:
         raise HTTPException(status_code=400, detail="Périmètre invalide.")
-    services.create_test(
+    try:
+        theme_ids = themes.validate_ids(db, theme_ids)
+    except themes.ThemeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    test = services.create_test(
         db, org.id, perimeter_id=perimeter_id,
         prompt=prompt, expected_answer=expected_answer,
         response_quality_prompt_id=opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
     )
+    themes.set_for_test(db, test.test_id, theme_ids)
     return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 
@@ -104,6 +124,8 @@ def test_edit(test_id: int, request: Request, ctx=Depends(require_role("editor")
         prompts=services.list_prompts(db),
         all_perimeters=perimeters.list_for_org(db, org.id),
         default_perimeter=None,
+        all_themes=themes.list_all(db),
+        selected_theme_ids={th.id for th in themes.for_tests(db, [test_id]).get(test_id, [])},
     )
 
 
@@ -117,6 +139,7 @@ def test_update(
     expected_answer: str = Form(""),
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
+    theme_ids: list[int] = Form(default=[]),
 ):
     org, _ = ctx
     # Déplacement éventuel de périmètre.
@@ -126,6 +149,10 @@ def test_update(
     test = services.get_test(db, org.id, test_id)
     if test is None:
         raise HTTPException(status_code=404, detail="Test introuvable.")
+    try:
+        theme_ids = themes.validate_ids(db, theme_ids)
+    except themes.ThemeError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     if test.perimeter_id != perimeter_id:
         test.perimeter_id = perimeter_id
         db.commit()
@@ -135,6 +162,7 @@ def test_update(
         response_quality_prompt_id=opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
     )
+    themes.set_for_test(db, test_id, theme_ids)
     return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
 
 

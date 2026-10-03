@@ -24,6 +24,19 @@
         </select>
       </div>
     </div>
+    {% if all_themes %}
+    <div class="fr-col-12 fr-col-md-6">
+      <div class="fr-select-group">
+        <label class="fr-label" for="theme">Filtrer par thème</label>
+        <select class="fr-select" id="theme" name="theme" onchange="this.form.submit()">
+          <option value="">— tous les thèmes —</option>
+          {% for th in all_themes %}
+          <option value="{{ th.slug }}" {% if current_theme and current_theme.id == th.id %}selected{% endif %}>{{ th.label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    {% endif %}
   </div>
 </form>
 
@@ -37,7 +50,9 @@
       {% for t in tests %}
       <tr>
         <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
-        <td>{{ t.prompt|truncate(80) }}</td>
+        <td>{{ t.prompt|truncate(80) }}
+          {% for th in test_themes.get(t.test_id, []) %}<span class="fr-badge fr-badge--info fr-badge--sm fr-ml-1v">{{ th.label }}</span>{% endfor %}
+        </td>
         <td>
           {% for p in all_perimeters if p.id == t.perimeter_id %}
           <a class="fr-link" href="{{ url_prefix }}/perimeters/{{ p.id }}">{{ p.name }}</a>

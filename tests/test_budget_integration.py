@@ -179,7 +179,7 @@ def test_fin_de_job_declenche_l_evaluation(db_session, arbre, spend, monkeypatch
         spend(arbre["s"], 9)
         return 1
 
-    monkeypatch.setattr(jobs, "load_tests", lambda session, **kw: [object()])
+    monkeypatch.setattr(jobs, "select_tests", lambda session, **kw: [object()])
     monkeypatch.setattr(jobs, "execute_run", fake_run)
     monkeypatch.setattr(jobs, "evaluate_run", lambda session, **kw: None)
     monkeypatch.setattr(jobs, "HEARTBEAT_SECONDS", 3600)

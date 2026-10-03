@@ -90,7 +90,7 @@
 
           {# --- Configurer (dropdown, editor+) --- #}
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
-          {% set conf_active = active in ('perimeters', 'tests', 'prompts', 'schedules') %}
+          {% set conf_active = active in ('perimeters', 'tests', 'pools', 'prompts', 'schedules') %}
           <li class="fr-nav__item">
             <button class="fr-nav__btn" aria-expanded="false" aria-controls="menu-configurer"
                     {% if conf_active %}aria-current="true"{% endif %}>Configurer</button>
@@ -103,6 +103,10 @@
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/tests"
                      {% if active == 'tests' %}aria-current="page"{% endif %}>Questions</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/pools"
+                     {% if active == 'pools' %}aria-current="page"{% endif %}>Pools de questions</a>
                 </li>
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/prompts"
@@ -129,6 +133,7 @@
                        {% if active == 'models' %}aria-current="page"{% endif %}>Catalogue d'IA</a></li>
                 <li><a class="fr-nav__link" href="/admin/openrouter-import">Import OpenRouter</a></li>
                 <li><a class="fr-nav__link" href="/admin/pricing">Tarifs des IA</a></li>
+                <li><a class="fr-nav__link" href="/admin/themes">Thèmes</a></li>
                 <li><a class="fr-nav__link" href="/admin/organizations">Organisations</a></li>
                 <li><a class="fr-nav__link" href="/admin/users">Utilisateurs</a></li>
                 <li><a class="fr-nav__link" href="/admin/audit">Journal d'audit global</a></li>

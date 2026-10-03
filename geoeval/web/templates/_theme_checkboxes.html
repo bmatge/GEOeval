@@ -1,0 +1,17 @@
+{# Cases à cocher des thèmes (catalogue global, E4). Attend all_themes, selected_theme_ids. #}
+{% if all_themes %}
+<fieldset class="fr-fieldset" id="themes-fieldset" aria-labelledby="themes-legend">
+  <legend class="fr-fieldset__legend fr-text--regular" id="themes-legend">Thèmes
+    <span class="fr-hint-text">Catalogue commun à toutes les entités, géré par la plateforme.</span>
+  </legend>
+  {% for th in all_themes %}
+  <div class="fr-fieldset__element fr-fieldset__element--inline">
+    <div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="theme-{{ th.id }}" name="theme_ids" value="{{ th.id }}"
+             {% if th.id in selected_theme_ids %}checked{% endif %}>
+      <label class="fr-label" for="theme-{{ th.id }}">{{ th.label }}</label>
+    </div>
+  </div>
+  {% endfor %}
+</fieldset>
+{% endif %}

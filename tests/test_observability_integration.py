@@ -61,7 +61,7 @@ def test_metriques_jobs_et_contexte_job(db_session, test_org, monkeypatch):
         seen["job_id_in_context"] = job_id_var.get()
         return 7
 
-    monkeypatch.setattr(jobs, "load_tests", lambda session, **kw: [object()])
+    monkeypatch.setattr(jobs, "select_tests", lambda session, **kw: [object()])
     monkeypatch.setattr(jobs, "execute_run", fake_execute_run)
     monkeypatch.setattr(jobs, "evaluate_run", lambda session, **kw: None)
     monkeypatch.setattr(jobs, "HEARTBEAT_SECONDS", 3600)

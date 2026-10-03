@@ -202,6 +202,9 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Alertes 80 / 100 % (app + email) | ADR-089 §2.8 | `geoeval/web/budget_alerts.py` + `mailer.py` (E3), en fin de job et après un saut | Notifications générales (E7) |
 | Liste blanche des modèles par org | EPIC-001, ADR-089 | `geoeval/web/launching.py` + `org_models` : intersection sur la chaîne d'entités via `hierarchy.resolve_restrictive` (E1) | Idem |
 | Paramètres hérités dans l'arbre d'entités | ADR-089 §2.2 | `geoeval/web/hierarchy.py` (E1) : `resolve_nearest`, `resolve_restrictive` | Budget (E3), contrats (E5), notifications (E7) |
+| Questions effectives d'un périmètre (propres + pools abonnés visibles) | ADR-089 §2.5 | `launching.tests_for_run` → `pools.effective_tests` (E4), pour la validation, le devis, le planificateur et le worker | Idem |
+| Visibilité des pools, inclusions sans cycle, composition sans élargissement | ADR-089 §2.5 | `geoeval/web/pools.py` (E4) | Idem |
+| Catalogue de thèmes réservé à l'admin plateforme | ADR-089 §2.5 | `geoeval/web/themes.py` + `deps.require_platform_admin` (E4) | Idem |
 | Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
 | Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |

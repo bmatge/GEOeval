@@ -78,11 +78,11 @@ def test_recover_stale_marque_interrompu_sans_relance(db_session, test_org, clea
 # ---------------------------------------------------------------------
 @pytest.fixture()
 def fake_core(monkeypatch):
-    """Remplace load_tests / execute_run / evaluate_run dans le module jobs."""
+    """Remplace select_tests / execute_run / evaluate_run dans le module jobs."""
     calls = {"runs": [], "evals": []}
     counter = {"run_id": 1000}
 
-    def fake_load_tests(session, **kw):
+    def fake_select_tests(session, **kw):
         return [object(), object(), object()]
 
     def fake_execute_run(session, *, tested_model, tests, progress_cb=None, **kw):
@@ -99,7 +99,7 @@ def fake_core(monkeypatch):
             progress_cb(1, 1, "juge")
         calls["evals"].append(run_id)
 
-    monkeypatch.setattr(jobs, "load_tests", fake_load_tests)
+    monkeypatch.setattr(jobs, "select_tests", fake_select_tests)
     monkeypatch.setattr(jobs, "execute_run", fake_execute_run)
     monkeypatch.setattr(jobs, "evaluate_run", fake_evaluate_run)
     monkeypatch.setattr(jobs, "HEARTBEAT_SECONDS", 3600)  # pas de thread bavard pendant le test
@@ -137,7 +137,7 @@ def test_execute_job_en_echec(db_session, test_org, clean_jobs, fake_core, monke
 
 
 def test_execute_job_sans_question(db_session, test_org, clean_jobs, fake_core, monkeypatch):
-    monkeypatch.setattr(jobs, "load_tests", lambda session, **kw: [])
+    monkeypatch.setattr(jobs, "select_tests", lambda session, **kw: [])
     job = jobs.submit(db_session, _params(test_org["id"]))
     jobs.claim_next(db_session, "w1")
     jobs.execute(job.id)

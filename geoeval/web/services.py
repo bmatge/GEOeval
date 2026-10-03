@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from geoeval.db.models import (
     EvaluationPrompt,
     Model,
+    Perimeter,
     PromptType,
     RunEvaluation,
     RunResult,
@@ -28,6 +29,7 @@ from geoeval.db.models import (
     ScheduledRun,
     Test,
 )
+from geoeval.web import perimeters as perimeters_svc
 
 
 def _f(x: Any) -> Optional[float]:
@@ -153,15 +155,24 @@ def get_run_detail(session: Session, org_id: int, run_id: int) -> Optional[dict[
             )
         )
 
+    # E4 : domaines officiels du périmètre (valeur courante) → part des citations officielles.
+    peri = session.get(Perimeter, run_row.perimeter_id) if run_row.perimeter_id else None
+    domains = list(peri.domains or []) if peri is not None else []
+    all_urls: list[str] = []
     results = []
     for rr, test in result_rows:
+        citations = rr.raw_citations or []
+        urls = [_citation_url(c) for c in citations]
+        all_urls.extend(u for u in urls if u)
         results.append(
             dict(
                 test_id=test.test_id,
                 prompt=test.prompt,
                 expected_answer=test.expected_answer,
                 raw_answer=rr.raw_answer,
-                raw_citations=rr.raw_citations or [],
+                raw_citations=citations,
+                official_citations={u for u in urls if u and perimeters_svc.is_official(u, domains)},
+                official_share=perimeters_svc.official_share(urls, domains),
                 evals=evals_by_test.get(test.test_id, []),
             )
         )
@@ -173,7 +184,16 @@ def get_run_detail(session: Session, org_id: int, run_id: int) -> Optional[dict[
         model_name=tested_model.model_name,
         model_version=tested_model.model_version,
         results=results,
+        official_domains=domains,
+        official_share=perimeters_svc.official_share(all_urls, domains),
     )
+
+
+def _citation_url(c: Any) -> str:
+    """Une citation brute est une URL, ou un objet portant une clé `url`."""
+    if isinstance(c, dict):
+        return str(c.get("url") or "")
+    return str(c or "")
 
 
 def question_stats(session: Session, org_id: int) -> list[dict[str, Any]]:
@@ -192,7 +212,9 @@ def question_stats(session: Session, org_id: int) -> list[dict[str, Any]]:
         )
         .join(RunEvaluation, RunEvaluation.test_id == Test.test_id)
         .join(RunRow, RunRow.run_id == RunEvaluation.run_id)
-        .where(Test.organization_id == org_id, RunRow.organization_id == org_id)
+        # E4 : une question de pool partagé appartient à une autre org, mais ses
+        # évaluations dans NOS runs comptent : on filtre sur le run, pas la question.
+        .where(RunRow.organization_id == org_id)
         .group_by(Test.test_id, Test.prompt)
         .order_by(func.avg(RunEvaluation.response_quality_score).asc().nullslast())
     )
