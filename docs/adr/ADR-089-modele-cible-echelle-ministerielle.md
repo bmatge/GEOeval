@@ -376,6 +376,48 @@ les thèmes forment un **catalogue global géré par l'administration plateforme
   `/orgs/{slug}/perimeters/{id}/pools` (abonnements), `/orgs/{slug}/perimeters/{id}/effective-questions`,
   `/themes` ; `domains` et `theme_ids` sur périmètres et questions.
 
+## 4sexies. Mise en œuvre de E5 (amendement 2026-10-03)
+
+Arbitrages validés : un contrat couvre une **famille**, restreignable à des modèles ; la
+contrainte « souverain / hébergement UE » vise les **notateurs** seulement ; un contrat
+expiré ou au plafond **bloque** (jamais de repli silencieux) ; les clés BYOK sont
+**converties** en contrats, `org_credentials` restant intacte pour un retour arrière.
+
+- **Schéma** (révision `0005`) : `llm_contracts` (entité, famille, libellé, référence,
+  `base_url`, clé Fernet, en-têtes, `model_ids`, `valid_from` / `valid_to`, `cap_eur` sur
+  toute la durée, `hosting`, `sovereign`, `is_active`), `routing_policies`,
+  `usage.contract_id`, `models.hosting` (Albert marqué UE). Chaque ligne `org_credentials`
+  devient un contrat restreint à son modèle, avec le même blob chiffré. `org_credentials`
+  n'est plus lue ; sa suppression viendra dans une révision ultérieure.
+- **Résolution** (`geoeval/web/contracts.py`) : on remonte la chaîne ; au premier niveau qui
+  porte un contrat actif couvrant le modèle, la recherche s'arrête. En vigueur et sous son
+  plafond : il est utilisé (à un même niveau, un contrat restreint prime sur un contrat de
+  famille). Sinon l'appel est bloqué avec un motif qui nomme le contrat et l'entité. Un
+  contrat désactivé est ignoré : c'est l'échappatoire explicite. Deux contrats actifs d'une
+  même entité ne peuvent pas se chevaucher (dates et modèles) ; un successeur daté est permis.
+  Un contrat qui porte de la consommation ne se supprime pas, il se désactive.
+- **Imputation** : `usage.contract_id` et `billed_to = 'contract'` (les lignes `byok`
+  historiques ne sont pas réécrites). Le devis indique le contrat de chaque ligne. La
+  dépense sous contrat reste comptée dans le budget consolidé de l'entité.
+- **Politique de routage** (`geoeval/web/routing.py`) : fournisseurs autorisés
+  (intersection sur la chaîne, IA évaluées et notateurs), notateurs souverains, notateurs
+  hébergés dans l'UE (vrais dès qu'un niveau les pose). Souveraineté et hébergement
+  s'évaluent sur l'appel effectif : le contrat retenu peut les déclarer, sinon le modèle ;
+  un hébergement inconnu est refusé quand l'UE est obligatoire. La politique s'applique à
+  tous, administrateurs compris.
+- **Contrôles** : `launching.check_compliance` puis le plafond des contrats sur le devis
+  imputé, avant le budget, dans le chemin commun (lancement, « exécuter maintenant »,
+  création de planification, échéance du planificateur). Une échéance refusée est sautée
+  et tracée (`skip_routing`, `skip_contract`). À l'exécution, `client_for_model` bloque
+  aussi un contrat devenu inutilisable (le job échoue avec le motif). Les formulaires ne
+  proposent que les modèles conformes.
+- **UI** : *Paramètres › Contrats LLM et politique de routage* (org_admin) — contrats propres
+  et hérités, consommation et plafond, état (en vigueur, à venir, expiré, plafond atteint,
+  désactivé), clé effectivement utilisée pour chaque IA ; formulaire de modèle enrichi
+  (hébergement, souverain). **API v1** : `/orgs/{slug}/contracts` (CRUD, clé en écriture
+  seule), `/orgs/{slug}/contracts/resolution`, `/orgs/{slug}/routing-policy` (GET editor+,
+  PUT org_admin).
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

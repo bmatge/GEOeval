@@ -1,7 +1,8 @@
 """Schémas Pydantic de l'API v1 (entrées et sorties). Jamais de secret exposé."""
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Generic, Literal, Optional, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -151,6 +152,7 @@ class ModelOut(_Orm):
     is_active: bool
     is_judge: bool
     is_sovereign: bool = False
+    hosting: Optional[str] = None
     search_config: Optional[dict[str, Any]] = None
     testable: bool = False
 
@@ -465,3 +467,86 @@ class BudgetOut(BaseModel):
     own_month_spent_eur: float = Field(description="Dépense du mois de l'entité seule")
     constraints: list[BudgetConstraintOut]
     alerts: list[BudgetAlertOut]
+
+
+# ---- Contrats LLM et politique de routage (E5) ----------------------
+LlmFamily = Literal["openrouter", "openai", "mistral", "gemini", "albert", "generic"]
+Hosting = Literal["eu", "non_eu"]
+
+
+class ContractOut(BaseModel):
+    """Contrat LLM. La clé n'est jamais renvoyée (`has_api_key` seulement)."""
+    id: int
+    owner_org_slug: str
+    inherited: bool = False
+    family: str
+    label: str
+    reference: Optional[str] = None
+    base_url: Optional[str] = None
+    has_api_key: bool = False
+    header_names: list[str] = Field(default_factory=list)
+    model_ids: list[int] = Field(default_factory=list)
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+    cap_eur: Optional[Decimal] = None
+    spent_eur: Decimal = Decimal("0")
+    hosting: Optional[str] = None
+    sovereign: bool = False
+    is_active: bool = True
+    status: Literal["active", "upcoming", "expired", "exhausted", "inactive"]
+
+
+class ContractIn(BaseModel):
+    family: LlmFamily
+    label: str = Field(min_length=1, max_length=200)
+    reference: Optional[str] = Field(None, max_length=200)
+    base_url: Optional[str] = Field(None, max_length=500)
+    api_key: Optional[str] = Field(None, description="Écriture seule, chiffrée au repos")
+    extra_headers: Optional[dict[str, str]] = None
+    model_ids: list[int] = Field(default_factory=list, description="Vide = toute la famille")
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+    cap_eur: Optional[Decimal] = Field(None, ge=0, description="Plafond sur toute la durée du contrat")
+    hosting: Optional[Hosting] = None
+    sovereign: bool = False
+    is_active: bool = True
+
+
+class ContractPatch(BaseModel):
+    label: Optional[str] = Field(None, min_length=1, max_length=200)
+    reference: Optional[str] = Field(None, max_length=200)
+    base_url: Optional[str] = Field(None, max_length=500)
+    api_key: Optional[str] = Field(None, description="Nouvelle clé (écriture seule)")
+    clear_api_key: bool = False
+    extra_headers: Optional[dict[str, str]] = None
+    model_ids: Optional[list[int]] = None
+    valid_from: Optional[date] = None
+    valid_to: Optional[date] = None
+    cap_eur: Optional[Decimal] = Field(None, ge=0)
+    hosting: Optional[Hosting] = None
+    sovereign: Optional[bool] = None
+    is_active: Optional[bool] = None
+
+
+class KeyResolutionOut(BaseModel):
+    """Clé qu'utiliserait un appel de ce modèle pour l'entité."""
+    model_config = ConfigDict(protected_namespaces=())
+    model_id: int
+    model_version: str
+    source: Literal["contract", "platform", "blocked"]
+    contract_id: Optional[int] = None
+    owner_org_slug: Optional[str] = None
+    blocked_reason: Optional[str] = None
+
+
+class RoutingPolicyIn(BaseModel):
+    allowed_families: Optional[list[LlmFamily]] = Field(None, description="None = pas de restriction à ce niveau")
+    sovereign_only: bool = False
+    eu_only: bool = False
+
+
+class RoutingPolicyOut(BaseModel):
+    own: RoutingPolicyIn
+    effective_allowed_families: Optional[list[str]] = None
+    effective_sovereign_only: bool = False
+    effective_eu_only: bool = False

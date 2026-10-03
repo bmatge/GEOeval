@@ -103,11 +103,12 @@ def estimate_scan_cost(
     Renvoie un dict :
         {
           "total_eur": Decimal,
-          "by_model": [{"model_version", "billed_to", "input_tokens", "output_tokens", "cost_eur"}],
+          "by_model": [{"model_version", "model_id", "kind", "billed_to", "contract_id",
+                        "input_tokens", "output_tokens", "cost_eur"}],
           "unpriced": [<model_versions sans pricing>],
         }
     """
-    from geoeval.web import credentials  # local
+    from geoeval.web import contracts  # local
 
     input_tokens_total = sum(_estimate_tokens_for_prompt(t.prompt) for t in tests)
     n_tests = len(tests)
@@ -117,8 +118,8 @@ def estimate_scan_cost(
 
     def _line(model: Model, kind: str, factor_in: int, factor_out: int) -> None:
         pricing = get_current_pricing(session, model.model_id)
-        cred = credentials.get_for_model(session, org_id, model.model_id)
-        billed_to = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+        billing = contracts.billing_for(session, org_id, model, check_cap=False)
+        billed_to = billing.billed_to
         if pricing is None:
             unpriced.append(model.model_version)
             return
@@ -132,6 +133,8 @@ def estimate_scan_cost(
             model_version=model.model_version,
             kind=kind,
             billed_to=billed_to,
+            contract_id=billing.contract_id,
+            model_id=model.model_id,
             input_tokens=in_t,
             output_tokens=out_t,
             cost_eur=cost.quantize(Decimal("0.0001")),

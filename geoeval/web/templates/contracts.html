@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}Contrats LLM{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/settings">Retour aux paramètres</a>
+<h1 class="fr-mt-2w">Contrats LLM et politique de routage</h1>
+<p class="fr-text--lead">Un contrat (marché, clé d'API) couvre une famille de fournisseurs, ou certains de ses
+  modèles. Il vaut pour {{ org.name }} et toutes ses sous-entités, sauf si l'une d'elles pose le sien. Un contrat
+  expiré ou au plafond <strong>bloque</strong> les appels : il n'y a jamais de repli silencieux sur une autre clé.
+  Pour revenir à la clé de la plateforme, désactive le contrat.</p>
+
+{# ------------------------------------------------------------------ #}
+<h2 class="fr-mt-4w">Politique de routage</h2>
+{% set ep = effective_policy %}
+<div class="fr-callout {% if ep.is_restricted %}fr-callout--blue-ecume{% endif %}">
+  <p class="fr-callout__text">
+    <strong>Politique effective</strong> (l'entité et ses ancêtres, la plus restrictive s'applique) :<br>
+    Fournisseurs autorisés :
+    {% if ep.allowed_families is none %}tous{% elif ep.allowed_families %}{% for f in ep.allowed_families|sort %}{{ family_labels[f] }}{% if not loop.last %}, {% endif %}{% endfor %}{% else %}<strong>aucun</strong>{% endif %}
+    {% if ep.families_from %}<span class="fr-hint-text">(posé par {% for o in ep.families_from %}{{ o.name }}{% if not loop.last %}, {% endif %}{% endfor %})</span>{% endif %}<br>
+    Notateurs souverains obligatoires : {{ 'oui (' ~ ep.sovereign_from.name ~ ')' if ep.sovereign_only else 'non' }}<br>
+    Notateurs hébergés dans l'UE obligatoires : {{ 'oui (' ~ ep.eu_from.name ~ ')' if ep.eu_only else 'non' }}
+  </p>
+</div>
+
+<form method="post" action="{{ url_prefix }}/routing-policy" class="fr-mt-2w" style="max-width:48rem;">
+  <p class="fr-hint-text">Règles propres à {{ org.name }}. Elles s'ajoutent à celles héritées : une sous-entité ne peut
+    que restreindre davantage. Les fournisseurs autorisés valent pour les IA évaluées et les notateurs ; souveraineté et
+    hébergement ne visent que les notateurs (les IA évaluées sont l'objet de la mesure).</p>
+  <div class="fr-checkbox-group fr-mb-1w">
+    <input type="checkbox" id="restrict_families" name="restrict_families" value="true"
+           {% if policy and policy.allowed_families is not none %}checked{% endif %}>
+    <label class="fr-label" for="restrict_families">Restreindre les fournisseurs à :</label>
+  </div>
+  <fieldset class="fr-fieldset" aria-label="Fournisseurs autorisés">
+    {% for f in families %}
+    <div class="fr-fieldset__element fr-fieldset__element--inline">
+      <div class="fr-checkbox-group fr-checkbox-group--sm">
+        <input type="checkbox" id="fam-{{ f }}" name="allowed_families" value="{{ f }}"
+               {% if policy and policy.allowed_families and f in policy.allowed_families %}checked{% endif %}>
+        <label class="fr-label" for="fam-{{ f }}">{{ family_labels[f] }}</label>
+      </div>
+    </div>
+    {% endfor %}
+  </fieldset>
+  <div class="fr-checkbox-group">
+    <input type="checkbox" id="sovereign_only" name="sovereign_only" value="true" {% if policy and policy.sovereign_only %}checked{% endif %}>
+    <label class="fr-label" for="sovereign_only">Notateurs souverains obligatoires</label>
+  </div>
+  <div class="fr-checkbox-group fr-mt-1w">
+    <input type="checkbox" id="eu_only" name="eu_only" value="true" {% if policy and policy.eu_only %}checked{% endif %}>
+    <label class="fr-label" for="eu_only">Notateurs hébergés dans l'Union européenne obligatoires
+      <span class="fr-hint-text">Un hébergement inconnu est refusé.</span></label>
+  </div>
+  <button type="submit" class="fr-btn fr-mt-2w">Enregistrer la politique</button>
+</form>
+
+{# ------------------------------------------------------------------ #}
+<div class="fr-grid-row fr-grid-row--middle fr-mt-6w">
+  <div class="fr-col"><h2>Contrats de {{ org.name }} ({{ own|length }})</h2></div>
+  <div class="fr-col-auto"><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/contracts/new">Nouveau contrat</a></div>
+</div>
+{% macro contract_rows(items, editable) %}
+  {% for c, owner in items %}
+  <tr>
+    <td>{{ c.label }}{% if c.reference %}<br><span class="fr-hint-text">{{ c.reference }}</span>{% endif %}</td>
+    {% if not editable %}<td>{{ owner.name }}</td>{% endif %}
+    <td>{{ family_labels.get(c.family, c.family) }}</td>
+    <td>{% if c.model_ids %}{% for mid in c.model_ids %}{% for m in models_by_family.get(c.family, []) if m.model_id == mid %}<code>{{ m.model_version }}</code> {% endfor %}{% endfor %}{% else %}toute la famille{% endif %}</td>
+    <td>{{ window_label(c) }}</td>
+    <td>{{ '%.2f'|format(used.get(c.id, 0)) }} €{% if c.cap_eur is not none %} / {{ c.cap_eur }} €{% endif %}</td>
+    <td>{{ hosting_labels.get(c.hosting, '—') if c.hosting else '—' }}{% if c.sovereign %} <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">souverain</span>{% endif %}</td>
+    <td>{% set st = statuses[c.id] %}<p class="fr-badge fr-badge--sm {{ 'fr-badge--success' if st == 'active' else ('fr-badge--warning' if st in ('expired', 'exhausted') else '') }}">{{ status_labels[st] }}</p></td>
+    {% if editable %}
+    <td>
+      <a class="fr-link fr-mr-2w" href="{{ url_prefix }}/contracts/{{ c.id }}/edit">Éditer</a>
+      <form method="post" action="{{ url_prefix }}/contracts/{{ c.id }}/delete" style="display:inline"
+            onsubmit="return confirm('Supprimer ce contrat ? Impossible s\'il porte déjà de la consommation (désactive-le alors).')">
+        <button type="submit" class="fr-link">Supprimer</button>
+      </form>
+    </td>
+    {% endif %}
+  </tr>
+  {% endfor %}
+{% endmacro %}
+{% if own %}
+<div class="fr-table"><table>
+  <thead><tr><th>Contrat</th><th>Fournisseur</th><th>Modèles</th><th>Validité</th><th>Consommé / plafond</th><th>Hébergement</th><th>État</th><th>Actions</th></tr></thead>
+  <tbody>{% for c in own %}{{ contract_rows([(c, org)], true) }}{% endfor %}</tbody>
+</table></div>
+{% else %}
+<p>Aucun contrat propre : {{ org.name }} utilise ceux de ses ancêtres, sinon les clés de la plateforme.</p>
+{% endif %}
+
+{% if inherited %}
+<h3 class="fr-mt-4w">Contrats hérités ({{ inherited|length }})</h3>
+<div class="fr-table"><table>
+  <thead><tr><th>Contrat</th><th>Entité</th><th>Fournisseur</th><th>Modèles</th><th>Validité</th><th>Consommé / plafond</th><th>Hébergement</th><th>État</th></tr></thead>
+  <tbody>{{ contract_rows(inherited, false) }}</tbody>
+</table></div>
+{% endif %}
+
+{# ------------------------------------------------------------------ #}
+<h2 class="fr-mt-6w">Clé utilisée pour chaque IA</h2>
+<div class="fr-table fr-table--sm"><table>
+  <thead><tr><th>IA</th><th>Clé</th></tr></thead>
+  <tbody>
+    {% for m, res in effective %}
+    <tr>
+      <td>{{ m.model_name }} · <code>{{ m.model_version }}</code></td>
+      <td>
+        {% if not res.usable %}<p class="fr-badge fr-badge--error fr-badge--sm">bloqué</p> {{ res.blocked }}
+        {% elif res.contract %}Contrat « {{ res.contract.label }} »{% if res.owner.id != org.id %} (hérité de {{ res.owner.name }}){% endif %}
+        {% else %}<span class="fr-hint-text">Clé de la plateforme</span>{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table></div>
+{% endblock %}

@@ -33,7 +33,7 @@ flowchart LR
   subgraph Core["Cœur benchmark — modules racine"]
     RUN["run.py<br/>execute_run"]
     EVAL["evaluate.py<br/>evaluate_run · JSON strict"]
-    LLMC["llm_clients.client_for_model<br/>cascade BYOK → config modèle → .env<br/>retry · fail-fast"]
+    LLMC["llm_clients.client_for_model<br/>cascade contrat d'entité (hérité) → config modèle → .env<br/>retry · fail-fast"]
   end
 
   subgraph LLM["Fournisseurs LLM — egress Internet libre"]
@@ -95,11 +95,11 @@ flowchart LR
       SCH["Scheduler<br/>verrou PostgreSQL (advisory lock)"]
       RUN["run.py"]
       EVAL["evaluate.py"]
-      LLMC["llm_clients<br/>cascade BYOK → modèle → secret plateforme<br/>via proxy de sortie"]
+      LLMC["llm_clients<br/>cascade contrat d'entité → modèle → secret plateforme<br/>via proxy de sortie"]
     end
     MIG["Service migrate (one-shot)<br/>alembic upgrade head + seed<br/>(lot 1.4 : livré, révision 0001 convergente)"]
     DB[("PostgreSQL managé<br/>23 tables + jobs · job_logs")]
-    SEC["Secrets plateforme<br/>clés LLM · Fernet BYOK · session"]
+    SEC["Secrets plateforme<br/>clés LLM · Fernet (contrats) · session"]
     LOGS["Logs JSON stdout → collecte plateforme<br/>(lot 1.5 : request_id, job_id, org_id)"]
   end
 
@@ -171,8 +171,8 @@ sequenceDiagram
   loop pour chaque modèle testé
     W->>DB: load_tests(org, périmètre, actifs, prêts)
     W->>L: client_for_model(modèle, org)
-    L->>DB: org_credentials actif ? (BYOK déchiffré Fernet)
-    Note over L: sinon config du modèle, sinon secret plateforme
+    L->>DB: contrat de l'entité ou d'un ancêtre ? (clé déchiffrée Fernet)
+    Note over L: expiré / au plafond : blocage ; sans contrat : config du modèle, puis secret plateforme
     loop pour chaque test
       W->>T: question + recherche web (search_config : natif / Exa / off)
       T-->>W: réponse · citations url_citation · usage réel
@@ -207,7 +207,9 @@ immédiatement en `LLMCallError` ; les autres sont réessayées avec backoff et 
 | Catalogue de thèmes réservé à l'admin plateforme | ADR-089 §2.5 | `geoeval/web/themes.py` + `deps.require_platform_admin` (E4) | Idem |
 | Échéances des planifications, réactivation d'un one-shot passé | — | `geoeval/web/scheduling.py` (lot 1.3c) | Idem |
 | Historique inviolable : désactivation, jamais suppression | ADR-076 | `services.delete_model` refuse si runs référencés ; tests désactivés | Inchangé, exposé tel quel dans l'API (pas de DELETE sur runs) |
-| Cascade des clés BYOK → modèle → plateforme | ADR-078 | `llm_clients._byok_override` | Inchangé ; secret plateforme fourni par Nubo |
+| Cascade des clés : contrat d'entité (hérité) → modèle → plateforme ; contrat expiré ou épuisé = blocage | ADR-078, ADR-089 §2.6 | `contracts.resolve` appelé par `llm_clients._contract_override` (E5) ; imputation `usage.contract_id` | Secret plateforme fourni par Nubo |
+| Politique de routage restrictive héritée (fournisseurs autorisés ; notateurs souverains / UE) | ADR-089 §2.6 | `geoeval/web/routing.py` (E5), vérifiée par `launching.check_compliance` (lancement, planification, échéance) et appliquée aux formulaires | Idem |
+| Plafond d'un contrat sur sa durée | ADR-089 §2.6 | `launching._check_contract_caps` (devis imputé) + blocage à l'appel (E5) | Idem |
 | Retry, fail-fast, quota dur | — | `llm_clients.call_with_retry` | Inchangé |
 | Sortie JSON stricte des juges, score 0–10 | ADR-079 | `evaluate.parse_judge_output` | Inchangé |
 | Coût réel USD → EUR à l'ingestion | ADR-080 §6.3 | `geoeval/web/usage.record` | Inchangé |
@@ -229,7 +231,8 @@ alerte est émise.
 | `mistral` | `mistralai`, API Agents + `web_search` | native | testé, juge | legacy |
 | `gemini` / `google` | `google-genai`, `GoogleSearch` | native | testé, juge | legacy |
 
-Chaque famille résout sa clé par la même cascade : clé BYOK de l'organisation si active,
-sinon `base_url` / `api_key` du modèle en base, sinon variable d'environnement. Sur Nubo,
+Chaque famille résout sa clé par la même cascade (E5) : contrat actif le plus proche dans
+l'arbre de l'entité (un contrat expiré ou au plafond bloque l'appel, sans repli), sinon
+`base_url` / `api_key` du modèle en base, sinon variable d'environnement. Sur Nubo,
 tous ces appels passent par le proxy de sortie et l'allowlist egress ; c'est la question à
 poser en premier (ADR-088 §2.4).

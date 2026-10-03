@@ -12,7 +12,8 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from sqlalchemy.orm import Session
 
-from geoeval.web import agreement, budget, launching, perimeters
+from geoeval.db.models import Organization
+from geoeval.web import agreement, budget, launching, perimeters, routing
 from geoeval.web.auth import CurrentUser
 from geoeval.web.deps import get_db, require_role, require_user
 from geoeval.web.rendering import render
@@ -40,7 +41,10 @@ def run_form_context(
     (testés ET notateurs) aux rôles editor/viewer.
     """
     models = launching.allowed_models(db, org_id, role=role, is_platform_admin=is_platform_admin)
-    judges = [m for m in models if m.is_judge]
+    # E5 : politique de routage (fournisseurs autorisés ; notateurs souverains / UE).
+    org = db.get(Organization, org_id)
+    testable = routing.filter_models(db, org, models, as_judges=False)
+    judges = routing.filter_models(db, org, [m for m in models if m.is_judge], as_judges=True)
     judge_kappa: dict[int, Optional[float]] = {}
     for j in judges:
         ag = agreement.compute_agreement_vs_gold(db, j.model_id)
@@ -49,7 +53,7 @@ def run_form_context(
     tests_for_form = launching.tests_for_run(db, org_id, perimeter_id=perimeter_id)
     return dict(
         models=models,
-        testable_models=[m for m in models if (m.model_name or "").lower() in launching.TESTABLE_PROVIDERS],
+        testable_models=[m for m in testable if (m.model_name or "").lower() in launching.TESTABLE_PROVIDERS],
         judgeable_models=judges,
         judge_kappa=judge_kappa,
         kappa_threshold=0.6,

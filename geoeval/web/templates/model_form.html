@@ -54,6 +54,30 @@
   </div>
   {% endif %}
 
+  <fieldset class="fr-fieldset fr-mt-2w" id="conformite">
+    <legend class="fr-fieldset__legend">Conformité (politique de routage des entités)
+      <span class="fr-hint-text">Hébergement et souveraineté de l'endpoint plateforme. Un contrat d'entité peut
+      les surcharger. « Hébergement UE obligatoire » refuse un hébergement inconnu.</span>
+    </legend>
+    <div class="fr-fieldset__element">
+      <div class="fr-select-group">
+        <label class="fr-label" for="hosting">Hébergement</label>
+        <select class="fr-select" id="hosting" name="hosting">
+          <option value="">{{ hosting_labels[None] }}</option>
+          {% for h in hostings %}
+          <option value="{{ h }}" {% if model and model.hosting == h %}selected{% endif %}>{{ hosting_labels[h] }}</option>
+          {% endfor %}
+        </select>
+      </div>
+    </div>
+    <div class="fr-fieldset__element">
+      <div class="fr-checkbox-group">
+        <input type="checkbox" id="is_sovereign" name="is_sovereign" value="true" {% if model and model.is_sovereign %}checked{% endif %}>
+        <label class="fr-label" for="is_sovereign">Souverain (infrastructure publique, ex. Albert)</label>
+      </div>
+    </div>
+  </fieldset>
+
   <fieldset class="fr-fieldset fr-mt-2w" id="search-config">
     <legend class="fr-fieldset__legend">Recherche web (famille « openrouter » uniquement)
       <span class="fr-hint-text">ADR-080 : natif = moteur du provider (OpenAI…), exa = moteur

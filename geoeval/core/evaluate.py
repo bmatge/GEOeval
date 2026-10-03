@@ -319,9 +319,9 @@ def _record_judge_usage(
     if org_id is None:
         return
     try:
-        from geoeval.web import credentials, usage
-        cred = credentials.get_for_model(session, org_id, model_id)
-        billed = "byok" if (cred and cred.is_active and cred.api_key_encrypted) else "platform"
+        from geoeval.db.models import Model
+        from geoeval.web import contracts, usage
+        billing = contracts.billing_for(session, org_id, session.get(Model, model_id))
         if real_usage is not None:
             input_tokens = real_usage.input_tokens
             output_tokens = real_usage.output_tokens
@@ -333,7 +333,7 @@ def _record_judge_usage(
         usage.record(
             session,
             org_id=org_id, model_id=model_id, run_id=run_id,
-            kind="judge", billed_to=billed,
+            kind="judge", billed_to=billing.billed_to, contract_id=billing.contract_id,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost_usd,

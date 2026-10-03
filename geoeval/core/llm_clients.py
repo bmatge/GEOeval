@@ -106,31 +106,24 @@ def _headers_key(headers: Optional[dict]) -> str:
     return json.dumps(headers, sort_keys=True) if headers else ""
 
 
-def _byok_override(model: Any, organization_id: Optional[int]) -> tuple[Optional[str], Optional[str], Optional[dict]]:
-    """Cherche une clé BYOK active pour (org, modèle). Renvoie (base_url, api_key, headers) ou (None, None, None)."""
+def _contract_override(model: Any, organization_id: Optional[int]) -> tuple[Optional[str], Optional[str], Optional[dict]]:
+    """Contrat de l'entité ou d'un ancêtre pour ce modèle (E5). Renvoie (base_url, clé,
+    en-têtes) ou (None, None, None) sans contrat. Contrat le plus proche expiré ou
+    épuisé : LLMCallError (blocage explicite, jamais de repli sur une autre clé)."""
     if organization_id is None:
         return (None, None, None)
-    # Import local pour éviter un cycle au chargement.
-    try:
-        from geoeval.db.session import SessionLocal
-        from geoeval.db.models import OrgCredential
-        from geoeval.web.crypto import decrypt_secret
-    except Exception:  # noqa: BLE001
-        return (None, None, None)
+    from geoeval.db.models import Organization
+    from geoeval.db.session import SessionLocal
+    from geoeval.web import contracts
 
-    from sqlalchemy import select
     with SessionLocal() as session:
-        cred = session.execute(
-            select(OrgCredential).where(
-                OrgCredential.organization_id == organization_id,
-                OrgCredential.model_id == model.model_id,
-                OrgCredential.is_active.is_(True),
-            )
-        ).scalar_one_or_none()
-        if cred is None:
+        org = session.get(Organization, organization_id)
+        if org is None:
             return (None, None, None)
-        api_key = decrypt_secret(cred.api_key_encrypted)
-        return (cred.base_url or None, api_key, cred.extra_headers or None)
+        res = contracts.resolve(session, org, model)
+        if not res.usable:
+            raise LLMCallError(res.blocked)
+        return contracts.credentials_for(res.contract)
 
 
 def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
@@ -139,8 +132,9 @@ def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
     Pose aussi la famille du fournisseur dans le contexte d'observabilité : les
     appels qui suivent (call_with_retry) sont étiquetés par famille.
 
-    Ordre de résolution (ADR-078 §2) :
-        org_credentials (BYOK, si organization_id fourni)
+    Ordre de résolution (ADR-089 §2.6, E5) :
+        contrat de l'entité ou d'un ancêtre (si organization_id fourni ; bloquant
+        s'il est expiré ou épuisé)
         → models.api_key / base_url / headers (config plateforme)
         → variables d'environnement du provider.
     Mis en cache par configuration effective.
@@ -150,10 +144,10 @@ def client_for_model(model: Any, organization_id: Optional[int] = None) -> Any:
     if family is None:
         raise ValueError(f"Provider inconnu model_name={model.model_name!r}")
 
-    byok_base, byok_key, byok_headers = _byok_override(model, organization_id)
-    base_url = byok_base or getattr(model, "base_url", None) or None
-    api_key = byok_key or getattr(model, "api_key", None) or None
-    headers = byok_headers or getattr(model, "extra_headers", None) or None
+    c_base, c_key, c_headers = _contract_override(model, organization_id)
+    base_url = c_base or getattr(model, "base_url", None) or None
+    api_key = c_key or getattr(model, "api_key", None) or None
+    headers = c_headers or getattr(model, "extra_headers", None) or None
     key = (family, base_url, api_key, _headers_key(headers))
     if key in _CLIENTS_BY_CONFIG:
         return _CLIENTS_BY_CONFIG[key]

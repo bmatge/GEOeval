@@ -1,7 +1,7 @@
 # models.py
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Optional, Any
 
@@ -9,6 +9,7 @@ from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 from sqlalchemy import (
     Boolean,
     CheckConstraint,
+    Date,
     ForeignKey,
     Index,
     Integer,
@@ -256,11 +257,9 @@ class Perimeter(Base):
 
 
 class OrgCredential(Base):
-    """Clé d'accès BYOK d'une org sur un modèle du catalogue (ADR-078 §1-2).
-
-    L'`api_key_encrypted` est un blob Fernet (geoeval/web/crypto.py). Résolution en
-    cascade dans llm_clients.client_for_model() :
-        org_credentials (BYOK) → models.api_key (plateforme) → env.
+    """Ancienne clé BYOK d'une org sur un modèle (ADR-078). GELÉE depuis E5 : les
+    lignes ont été converties en `llm_contracts` (révision 0005) et ne sont plus lues.
+    Conservée pour un retour arrière ; à supprimer par une révision ultérieure.
     """
     __tablename__ = "org_credentials"
     __table_args__ = (
@@ -340,6 +339,9 @@ class Model(Base):
     is_sovereign: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False, server_default="false"
     )
+    # Hébergement de l'endpoint plateforme (E5) : 'eu' | 'non_eu' | NULL (inconnu).
+    # Un contrat peut le surcharger ; « UE obligatoire » refuse l'inconnu.
+    hosting: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 class ScheduledRun(Base):
@@ -464,6 +466,7 @@ class UsageRecord(Base):
     __table_args__ = (
         Index("ix_usage_org_ts", "organization_id", text("ts DESC")),
         Index("ix_usage_run_id", "run_id"),
+        Index("ix_usage_contract_id", "contract_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
@@ -485,6 +488,8 @@ class UsageRecord(Base):
     cost_eur: Mapped[Decimal] = mapped_column(Numeric(12, 6), nullable=False, default=Decimal("0"), server_default="0")
     # Coût réel provider en USD (OpenRouter, ADR-080 §6.3) — NULL si coût estimé.
     cost_usd: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 6), nullable=True)
+    # Contrat LLM imputé (E5) — NULL = clé plateforme.
+    contract_id: Mapped[Optional[int]] = mapped_column(ForeignKey("llm_contracts.id"), nullable=True)
 
 
 class Budget(Base):
@@ -770,3 +775,51 @@ class PerimeterTheme(Base):
 
     perimeter_id: Mapped[int] = mapped_column(ForeignKey("perimeters.id", ondelete="CASCADE"), primary_key=True)
     theme_id: Mapped[int] = mapped_column(ForeignKey("themes.id", ondelete="CASCADE"), primary_key=True)
+
+
+# =====================================================================
+# ADR-089 §2.6 (chantier E5) — contrats LLM et politique de routage.
+# =====================================================================
+class LlmContract(Base):
+    """Contrat (marché, clé) d'une entité auprès d'un fournisseur, hérité par ses
+    descendants. Couvre toute la famille, ou les seuls `model_ids` s'ils sont posés.
+    La clé est un blob Fernet (geoeval/web/crypto.py), jamais exposée."""
+    __tablename__ = "llm_contracts"
+    __table_args__ = (
+        CheckConstraint("hosting IS NULL OR hosting IN ('eu', 'non_eu')", name="ck_llm_contracts_hosting"),
+        CheckConstraint("valid_to IS NULL OR valid_from IS NULL OR valid_to >= valid_from", name="ck_llm_contracts_dates"),
+        Index("ix_llm_contracts_org_family", "organization_id", "family"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    family: Mapped[str] = mapped_column(Text, nullable=False)
+    label: Mapped[str] = mapped_column(Text, nullable=False)
+    reference: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    base_url: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    api_key_encrypted: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    extra_headers: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    model_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
+    valid_from: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    valid_to: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
+    cap_eur: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 2), nullable=True)
+    hosting: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    sovereign: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+class RoutingPolicy(Base):
+    """Politique de routage d'une entité, restrictive et héritée : fournisseurs
+    autorisés (NULL = pas de restriction), notateurs souverains / hébergés dans l'UE."""
+    __tablename__ = "routing_policies"
+
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
+    allowed_families: Mapped[Optional[list[Any]]] = mapped_column(JSONB, nullable=True)
+    sovereign_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    eu_only: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
+    )
+    updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)

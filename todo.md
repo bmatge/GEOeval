@@ -39,7 +39,8 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [x] E2 — rôles hérités vers le bas (utilisateurs et jetons, `EffectiveRole` ancré), délégation de structure dans le sous-arbre (UI paramètres › sous-entités, API `POST/PATCH /orgs`), liste blanche bornée au-dessus de l'ancre, membres hérités affichés
 - [x] E3 — budget consolidé dans l'arbre (plafond = entité + sous-arbre, refus si un plafond de la chaîne est dépassé), alertes 80/100 % dans l'app et par email (SMTP stdlib, `budget_alerts`, révision 0003), planificateur qui saute et trace, API `GET /orgs/{slug}/budget`, jauges Prometheus
 - [x] E4 — pools de questions partagés par référence (visibilité privé / sous-arbre / tous, inclusions sans cycle, abonnement à un périmètre), catalogue global de thèmes (admin plateforme), domaines officiels des périmètres + part des citations officielles (révision 0004), UI + API v1
-- [ ] E5 — `llm_contracts` (remplace `org_credentials`) + politique de routage
+- [x] E5 — contrats LLM hérités (famille ± modèles, validité, plafond, blocage sans repli), BYOK converties (révision 0005), politique de routage restrictive (fournisseurs ; notateurs souverains / UE), imputation `usage.contract_id`, UI + API v1
+- [ ] Révision ultérieure : supprimer `org_credentials` (gelée depuis E5)
 - [ ] E6 — ProConnect : rattachement proposé par `siret`, relecture à chaque connexion
 - [ ] E7 — notifications + détecteur « question toujours fausse »
 - [ ] E8 — campagnes, cycle de vie des questions (minimal au pilote)

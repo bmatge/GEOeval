@@ -43,10 +43,11 @@ def record(
     model_id: int,
     run_id: Optional[int],
     kind: str,               # 'tested' | 'judge'
-    billed_to: str,          # 'platform' | 'byok'
+    billed_to: str,          # 'platform' | 'contract' ('byok' : historique d'avant E5)
     input_tokens: int,
     output_tokens: int,
     cost_usd: Optional[Decimal] = None,  # coût réel provider (OpenRouter) si connu
+    contract_id: Optional[int] = None,   # contrat LLM imputé (E5)
 ) -> UsageRecord:
     if cost_usd is not None:
         cost = cost_usd * usd_eur_rate()
@@ -69,6 +70,7 @@ def record(
         output_tokens=output_tokens,
         cost_eur=cost.quantize(Decimal("0.000001")),
         cost_usd=cost_usd.quantize(Decimal("0.000001")) if cost_usd is not None else None,
+        contract_id=contract_id,
     )
     session.add(row)
     session.commit()
