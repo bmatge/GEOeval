@@ -255,6 +255,32 @@ Tables existantes conservées telles quelles : `users`, `auth_tokens`, `invitati
 | Partitionnement, priorité et équité, export ouvert | — | ✔ |
 | Refacturation par contrat | showback | chargeback |
 
+## 4bis. Mise en œuvre de E1 (amendement 2026-10-03)
+
+Arbitrages validés : les organisations existantes deviennent des **racines de type
+« autre »** (non qualifiées, à requalifier par un admin plateforme) ; le résolveur est
+livré avec un **premier consommateur, la liste blanche des modèles**.
+
+- Révision Alembic `0002` : `parent_id`, `kind` (CHECK ministere / direction / service /
+  autre, défaut autre), `path` matérialisé au format `/12/45/78/` (index
+  `text_pattern_ops`, sans piège de préfixe `/1/` vs `/12/`), `depth`, `siret` (CHECK 14
+  chiffres, indexé, non unique : plusieurs entités peuvent partager un établissement).
+  Profondeur maximale : 7 niveaux.
+- `geoeval/web/hierarchy.py` : lecture (fil d'Ariane, chaîne de résolution, enfants,
+  descendants), création, déplacement d'un sous-arbre (cycle → 409, réécriture de `path`
+  et `depth` en une requête), qualification. Validation complète avant toute écriture.
+- Résolveur : `resolve_nearest` (première valeur définie en remontant) et
+  `resolve_restrictive` (combinaison de toutes les valeurs définies, ici intersection).
+- **Liste blanche héritée** : liste effective = intersection des listes posées sur
+  l'entité et ses ancêtres. L'org_admin échappe à la liste de SON entité (il la gère) mais
+  reste borné par celles des ancêtres ; seul l'admin plateforme voit tout. Sans liste sur
+  la chaîne : catalogue global, comportement inchangé pour toutes les données existantes.
+  Conséquence assumée : une ligne explicitement décochée par une sous-entité reste
+  décochée si le parent élargit plus tard sa liste.
+- En E1, seul l'admin plateforme crée, qualifie et rattache des entités (UI
+  `/admin/organizations`, API `POST /orgs`, `PATCH /orgs/{slug}`). La délégation aux
+  org_admin vient avec les rôles hérités (E2).
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

@@ -9,8 +9,16 @@ from geoeval.db import migrate as m
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def test_une_seule_tete():
-    assert m.head_revision(m.alembic_config("postgresql+psycopg2://x:y@localhost/z")) == "0001"
+def test_une_seule_tete_et_chaine_lineaire():
+    from alembic.script import ScriptDirectory
+
+    cfg = m.alembic_config("postgresql+psycopg2://x:y@localhost/z")
+    script = ScriptDirectory.from_config(cfg)
+    assert len(script.get_heads()) == 1
+    revs = list(script.walk_revisions())  # de la tête vers la base
+    assert revs[-1].revision == "0001" and revs[-1].down_revision is None
+    for newer, older in zip(revs, revs[1:]):
+        assert newer.down_revision == older.revision, "chaîne de révisions linéaire"
 
 
 def test_instantane_sans_meta_commandes_psql():

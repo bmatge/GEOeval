@@ -45,30 +45,38 @@ class LaunchError(Exception):
 # Liste blanche des modèles (EPIC-001 S4.2)
 # ---------------------------------------------------------------------
 def is_unrestricted(role: Optional[str], is_platform_admin: bool) -> bool:
-    """True si le rôle échappe à l'allowlist org_models : org_admin de l'org
-    ou admin plateforme voient tout le catalogue actif."""
+    """True si le rôle échappe à la liste blanche de SON entité : org_admin
+    (qui la gère) ou admin plateforme. L'org_admin reste borné par les listes
+    des entités parentes (ADR-089 §2.2)."""
     return is_platform_admin or role == "org_admin"
 
 
 def allowed_models(session: Session, org_id: int, *, role: Optional[str], is_platform_admin: bool) -> list[Model]:
-    """Catalogue actif, restreint à l'allowlist de l'org pour editor/viewer."""
+    """Catalogue actif restreint par la liste blanche effective (ADR-089 §2.2).
+
+    Admin plateforme : tout. org_admin : listes des ancêtres seulement (il gère
+    celle de son entité). editor / viewer : listes de l'entité et des ancêtres.
+    """
     models = services.list_models(session)
-    if is_unrestricted(role, is_platform_admin):
+    if is_platform_admin:
         return models
-    return org_models.filter_models(session, org_id, models)
+    return org_models.filter_models(session, org_id, models, include_own=not is_unrestricted(role, False))
 
 
 def allowed_model_versions(
     session: Session, org_id: int, *, role: Optional[str], is_platform_admin: bool
 ) -> Optional[set[str]]:
-    """`model_version` autorisées pour une soumission ; None = tout.
+    """`model_version` autorisées pour une soumission ; None = tout le catalogue actif.
 
     Garde-fou serveur : le filtrage du formulaire ne suffit pas, une requête
-    forgée (UI ou API) doit aussi être refusée pour un editor/viewer.
+    forgée (UI ou API) doit aussi être refusée. Mêmes règles que `allowed_models`.
     """
-    if is_unrestricted(role, is_platform_admin):
+    if is_platform_admin:
         return None
-    return {m.model_version for m in allowed_models(session, org_id, role=role, is_platform_admin=is_platform_admin)}
+    allowed_ids = org_models.effective_allowed_ids(session, org_id, include_own=not is_unrestricted(role, False))
+    if allowed_ids is None:
+        return None
+    return {m.model_version for m in services.list_models(session) if m.model_id in allowed_ids}
 
 
 # ---------------------------------------------------------------------

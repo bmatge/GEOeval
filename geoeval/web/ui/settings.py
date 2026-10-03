@@ -16,6 +16,7 @@ from sqlalchemy.orm import Session
 from geoeval.db.models import AuditLog, User
 from geoeval.web import (
     api_tokens,
+    hierarchy,
     audit,
     budget,
     launching,
@@ -58,6 +59,8 @@ def _render_settings(request, db, org, role, *, new_token: Optional[str] = None,
         invitations=tenancy.list_invitations(db, org.id),
         roles=tenancy.ROLES,
         api_tokens=[(t, api_tokens.is_valid(t)) for t in tokens],
+        lineage=hierarchy.lineage(db, org),
+        kind_label=hierarchy.KIND_LABELS.get(org.kind, org.kind),
         new_token=new_token,
         token_error=token_error,
     )
@@ -114,13 +117,16 @@ def org_models_page(
     db: Session = Depends(get_db),
 ):
     org, role = ctx
-    catalog = services.list_models(db)  # catalogue global actif
-    allowed = org_models.allowed_model_ids(db, org.id)  # None = héritage
+    # Catalogue proposé : ce que les entités parentes autorisent (ADR-089 §2.2).
+    catalog = org_models.filter_models(db, org.id, services.list_models(db), include_own=False)
+    inherited = org_models.resolve_allowed_ids(db, org.id, include_own=False)
+    allowed = org_models.allowed_model_ids(db, org.id)  # liste propre ; None = héritage
     inherits = allowed is None
     checked_ids = {m.model_id for m in catalog} if inherits else allowed
     return render(
         request, "org_models.html", active="settings", org=org, role=role,
         catalog=catalog, checked_ids=checked_ids, inherits=inherits,
+        inherited_sources=inherited.sources,
         testable_providers=launching.TESTABLE_PROVIDERS,
     )
 

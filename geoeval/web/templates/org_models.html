@@ -6,16 +6,25 @@
 <p class="fr-text--lg">
   Choisis les IA du catalogue que les membres <strong>editor</strong> et
   <strong>viewer</strong> peuvent utiliser dans « Lancer une évaluation » et
-  « Programmations ». Les administrateurs de l'organisation voient toujours
-  tout le catalogue.
+  « Programmations ». Les administrateurs de l'organisation voient tout ce que
+  les entités parentes autorisent.
 </p>
+
+{% if inherited_sources %}
+<div class="fr-alert fr-alert--warning fr-mb-3w">
+  <h3 class="fr-alert__title">Restriction héritée</h3>
+  <p>Cette entité est bornée par la liste de
+  {% for o in inherited_sources %}<strong>{{ o.name }}</strong>{% if not loop.last %}, {% endif %}{% endfor %} :
+  seuls les modèles qu'elle autorise sont proposés ci-dessous. Une sélection posée ici ne peut que restreindre davantage.</p>
+</div>
+{% endif %}
 
 {% if inherits %}
 <div class="fr-alert fr-alert--info fr-mb-3w">
-  <h3 class="fr-alert__title">Héritage du catalogue global</h3>
-  <p>Aucune sélection n'a encore été posée : tous les modèles actifs du
-  catalogue (y compris ceux ajoutés plus tard) sont proposés. Enregistrer une
-  sélection fige la liste ci-dessous.</p>
+  <h3 class="fr-alert__title">Héritage {% if inherited_sources %}de l'entité parente{% else %}du catalogue global{% endif %}</h3>
+  <p>Aucune sélection n'a encore été posée pour cette entité : tous les modèles
+  ci-dessous (y compris ceux ajoutés plus tard) sont proposés. Enregistrer une
+  sélection fige la liste.</p>
 </div>
 {% else %}
 <div class="fr-alert fr-alert--success fr-mb-3w">
