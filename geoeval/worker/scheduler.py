@@ -86,9 +86,18 @@ def describe_schedule(kind: str, config: dict[str, Any]) -> str:
 SCHEDULER_LOCK_KEY = 0x47454F45
 
 
-def tick(session: Session) -> int:
+def tick_detailed(session: Session) -> tuple[int, set[int]]:
     """Met en file les planifications échues et recalcule leur prochaine échéance.
-    Ne commite pas : l'appelant tient la transaction (et le verrou)."""
+
+    E3 : le budget consolidé est revérifié au moment de l'échéance. Si l'exécution
+    dépasserait un plafond de la chaîne, elle est SAUTÉE (pas de mise en file), le
+    motif est enregistré sur la planification et dans le journal d'audit, et la
+    prochaine échéance est recalculée normalement (un one-shot sauté est clos).
+    Ne commite pas : l'appelant tient la transaction (et le verrou).
+    Renvoie (nombre mis en file, entités dont une échéance a été sautée).
+    """
+    from geoeval.db.models import AuditLog
+    from geoeval.web import launching
     from geoeval.worker import jobs
 
     now = datetime.now(timezone.utc)
@@ -100,28 +109,57 @@ def tick(session: Session) -> int:
         )
     ).scalars().all()
 
+    queued = 0
+    skipped_orgs: set[int] = set()
     for sr in due:
-        job = jobs.submit(
-            session,
-            dict(
-                organization_id=sr.organization_id,
-                perimeter_id=sr.perimeter_id,
-                tested_models=list(sr.tested_models),
-                judges=list(sr.judges),
-                note=sr.note or f"planifié : {sr.name}",
-                test_ids=list(sr.test_ids) if sr.test_ids else None,
-            ),
-            commit=False,
+        params = dict(
+            tested_models=list(sr.tested_models),
+            judges=list(sr.judges),
+            test_ids=list(sr.test_ids) if sr.test_ids else None,
         )
-        logger.info("planification %s (%s) -> job %s", sr.schedule_id, sr.name, job.id)
-        sr.last_run_at = now
-        sr.last_job_id = job.id
+        skip_reason: Optional[str] = None
+        try:
+            launching.estimate_and_check_budget(session, sr.organization_id, params)
+        except launching.LaunchError as exc:
+            if exc.kind == "budget":
+                skip_reason = exc.detail
+            else:
+                raise
+        except Exception:  # noqa: BLE001 — un devis en échec ne bloque pas le suivi longitudinal
+            logger.exception("devis impossible pour la planification %s : exécution maintenue", sr.schedule_id)
+
+        if skip_reason is not None:
+            logger.warning("planification %s (%s) sautée : %s", sr.schedule_id, sr.name, skip_reason)
+            sr.last_skipped_at = now
+            sr.last_skip_reason = skip_reason
+            session.add(AuditLog(
+                user_id=None, org_id=sr.organization_id, action="skip_budget", entity_type="scheduled_run",
+                entity_id=sr.schedule_id, meta_json={"name": sr.name, "reason": skip_reason},
+            ))
+            skipped_orgs.add(sr.organization_id)
+        else:
+            job = jobs.submit(
+                session,
+                dict(**params, organization_id=sr.organization_id, perimeter_id=sr.perimeter_id,
+                     note=sr.note or f"planifié : {sr.name}"),
+                commit=False,
+            )
+            logger.info("planification %s (%s) -> job %s", sr.schedule_id, sr.name, job.id)
+            sr.last_run_at = now
+            sr.last_job_id = job.id
+            sr.last_skip_reason = None
+            queued += 1
         if sr.schedule_kind == "once":
             sr.enabled = False
             sr.next_run_at = None
         else:
             sr.next_run_at = compute_next_run(sr.schedule_kind, sr.schedule_config, after=now)
-    return len(due)
+    return queued, skipped_orgs
+
+
+def tick(session: Session) -> int:
+    """Compatibilité : nombre d'exécutions mises en file."""
+    return tick_detailed(session)[0]
 
 
 def tick_if_leader(session: Session) -> Optional[int]:
@@ -132,9 +170,14 @@ def tick_if_leader(session: Session) -> Optional[int]:
         session.rollback()
         return None
     try:
-        n = tick(session)
+        n, skipped_orgs = tick_detailed(session)
         session.commit()  # libère le verrou
-        return n
     except Exception:
         session.rollback()
         raise
+    if skipped_orgs:
+        from geoeval.web import budget_alerts
+
+        for org_id in skipped_orgs:
+            budget_alerts.evaluate_safely(org_id)
+    return n

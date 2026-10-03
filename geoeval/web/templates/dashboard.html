@@ -2,6 +2,7 @@
 {% block title %}Tableau de bord{% endblock %}
 {% block content %}
 <h1>Tableau de bord</h1>
+{% include "_budget_alerts.html" %}
 
 {% if leaderboard %}
 {# --- Sources de données (API JSON org-scopée, cf. /api/stats/*) --- #}

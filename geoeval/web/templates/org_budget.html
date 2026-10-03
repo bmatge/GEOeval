@@ -2,46 +2,55 @@
 {% block title %}Budget — {{ org.name }}{% endblock %}
 {% block content %}
 <h1>Budget — {{ org.name }}</h1>
+<p class="fr-hint-text">Un plafond s'applique à la dépense <strong>consolidée</strong> : celle de l'entité et de ses
+{{ n_descendants }} sous-entité(s). Un lancement est refusé si un seul plafond de la chaîne serait dépassé —
+celui de l'entité ou celui d'une entité parente (ADR-089 §2.3).</p>
 
-<h2 class="fr-h5">Mois en cours</h2>
-<p>
-  <strong>Consommé ce mois :</strong> {{ "%.4f"|format(month_spent) }} €
-  {% if budget %} / plafond {{ "%.2f"|format(budget.monthly_cap_eur) }} € {% else %}<em>(pas de plafond posé)</em>{% endif %}
-</p>
+{% include "_budget_alerts.html" %}
 
-{% if budget and pct is not none %}
-<progress value="{{ pct }}" max="100" style="width:100%; height:1rem;"></progress>
-<p>{{ pct }} % du plafond mensuel utilisé.</p>
-{% if pct >= 90 %}
-<div class="fr-alert fr-alert--warning fr-mt-2w">
-  <p class="fr-alert__title">Attention</p>
-  <p>Le plafond mensuel est presque atteint. Les prochains scans peuvent être refusés (soft-stop).</p>
+<h2 class="fr-h5 fr-mt-3w">Dépense de la période</h2>
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Période</th><th>Consolidé (entité + sous-entités)</th><th>Dont cette entité</th></tr></thead>
+    <tbody>
+      <tr><td>Mois en cours</td><td>{{ "%.4f"|format(month_spent) }} €</td><td>{{ "%.4f"|format(own_month_spent) }} €</td></tr>
+      <tr><td>Aujourd'hui</td><td>{{ "%.4f"|format(day_spent) }} €</td><td>—</td></tr>
+    </tbody>
+  </table>
 </div>
-{% endif %}
-{% endif %}
 
-<h2 class="fr-h5 fr-mt-3w">Aujourd'hui</h2>
-<p>
-  <strong>Dépensé aujourd'hui :</strong> {{ "%.4f"|format(day_spent) }} €
-  {% if budget and budget.daily_cap_eur is not none %} / plafond jour {{ "%.2f"|format(budget.daily_cap_eur) }} € {% else %}<em>(pas de plafond journalier — illimité)</em>{% endif %}
-</p>
-
-{% if budget and pct_day is not none %}
-<progress value="{{ pct_day }}" max="100" style="width:100%; height:1rem;"></progress>
-<p>{{ pct_day }} % du plafond journalier utilisé.</p>
-{% if pct_day >= 90 %}
-<div class="fr-alert fr-alert--warning fr-mt-2w">
-  <p class="fr-alert__title">Attention</p>
-  <p>Le plafond journalier est presque atteint. Les prochains scans peuvent être refusés (soft-stop).</p>
+<h2 class="fr-h5 fr-mt-3w">Plafonds applicables</h2>
+{% if own or inherited %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Porté par</th><th>Période</th><th>Dépense consolidée</th><th>Plafond</th><th>Utilisation</th></tr></thead>
+    <tbody>
+      {% for c in own + inherited %}
+      <tr>
+        <td>{{ c.owner.name }}{% if c.inherited %} <span class="fr-badge fr-badge--sm">hérité</span>{% endif %}</td>
+        <td>{{ c.period_label }}</td>
+        <td>{{ "%.4f"|format(c.spent_eur) }} €</td>
+        <td>{{ "%.2f"|format(c.cap_eur) }} €</td>
+        <td>
+          <progress value="{{ [c.pct or 0, 100]|min }}" max="100" style="width:8rem"></progress>
+          {% if c.level == 'exceeded' %}<span class="fr-badge fr-badge--sm fr-badge--error">atteint</span>
+          {% elif c.level == 'warning' %}<span class="fr-badge fr-badge--sm fr-badge--warning">{{ c.pct }} %</span>
+          {% else %}{{ c.pct }} %{% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
 </div>
-{% endif %}
+{% else %}
+<p><em>Aucun plafond ne s'applique à cette entité (ni le sien, ni celui d'une entité parente) : pas de contrôle.</em></p>
 {% endif %}
 
-<h2 class="fr-mt-4w">Définir les plafonds</h2>
+<h2 class="fr-mt-4w">Plafonds de cette entité</h2>
 <form method="post" action="{{ url_prefix }}/budget" class="fr-mt-2w" style="max-width:30rem">
   <div class="fr-input-group">
     <label class="fr-label" for="monthly_cap_eur">Plafond mensuel (€ / mois)
-      <span class="fr-hint-text">0 = aucun scan possible (test). Vide (pas encore de plafond) = pas de contrôle.</span>
+      <span class="fr-hint-text">S'applique à l'entité et à ses sous-entités. 0 = aucun scan possible.</span>
     </label>
     <input class="fr-input" id="monthly_cap_eur" name="monthly_cap_eur" type="number"
            step="0.01" min="0" required
@@ -57,10 +66,42 @@
   </div>
   <button type="submit" class="fr-btn fr-mt-2w">Enregistrer</button>
 </form>
+{% if inherited %}
+<p class="fr-hint-text fr-mt-1w">Un plafond posé ici ne peut pas relâcher ceux des entités parentes : le plus contraignant s'applique.</p>
+{% endif %}
+
+<h2 class="fr-mt-4w">Alertes envoyées</h2>
+<p class="fr-hint-text">Une alerte par seuil (80 %, 100 %) et par période, adressée aux administrateurs de l'entité qui
+porte le plafond.
+{% if not smtp_configured %}<strong>Envoi d'email non configuré sur cette instance</strong> : les alertes restent visibles ici.{% endif %}</p>
+{% if alerts %}
+<div class="fr-table fr-table--bordered">
+  <table>
+    <thead><tr><th>Date</th><th>Plafond de</th><th>Période</th><th>Seuil</th><th>Dépense / plafond</th><th>Email</th></tr></thead>
+    <tbody>
+      {% for a in alerts %}
+      <tr>
+        <td>{{ a.created_at.strftime('%d/%m/%Y %H:%M') }}</td>
+        <td>{{ alert_owner_names.get(a.organization_id, a.organization_id) if alert_owner_names is defined else a.organization_id }}</td>
+        <td>{{ 'mensuel' if a.period == 'month' else 'journalier' }} ({{ a.period_key }})</td>
+        <td>{{ a.threshold }} %</td>
+        <td>{{ "%.2f"|format(a.spent_eur) }} / {{ "%.2f"|format(a.cap_eur) }} €</td>
+        <td>{% if a.email_status == 'sent' %}<span class="fr-badge fr-badge--sm fr-badge--success">envoyé</span>
+            {% elif a.email_status == 'failed' %}<span class="fr-badge fr-badge--sm fr-badge--error">échec</span>
+            {% elif a.email_status == 'no_recipient' %}<span class="fr-badge fr-badge--sm">sans destinataire</span>
+            {% else %}<span class="fr-badge fr-badge--sm">non configuré</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+<p><em>Aucune alerte pour l'instant.</em></p>
+{% endif %}
 
 <p class="fr-hint-text fr-mt-4w">
-  Politique : <em>soft-stop</em>. Un nouveau scan est refusé si l'estimation le ferait dépasser
-  l'un des plafonds (jour ou mois). Un scan déjà en cours va toujours au bout (l'historique du
-  benchmark reste comparable).
+  Politique : <em>soft-stop</em>. Un nouveau scan est refusé si l'estimation ferait dépasser un plafond (jour ou mois)
+  de l'entité ou d'une entité parente ; une exécution programmée qui le dépasserait est sautée et tracée. Un scan déjà
+  en cours va toujours au bout (l'historique du benchmark reste comparable).
 </p>
 {% endblock %}

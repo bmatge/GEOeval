@@ -16,6 +16,8 @@ from sqlalchemy.orm import Session
 from geoeval.db.models import AuditLog, User
 from geoeval.web import (
     api_tokens,
+    budget_alerts,
+    mailer,
     hierarchy,
     audit,
     budget,
@@ -378,18 +380,20 @@ def org_budget_view(
     db: Session = Depends(get_db),
 ):
     org, role = ctx
-    b = budget.get_budget(db, org.id)
-    spent = budget.current_period_spent(db, org.id, "month")
-    day_spent = budget.current_period_spent(db, org.id, "day")
-    pct = None
-    if b is not None and b.monthly_cap_eur:
-        pct = min(100, int((spent / Decimal(str(b.monthly_cap_eur))) * 100))
-    pct_day = None
-    if b is not None and b.daily_cap_eur:
-        pct_day = min(100, int((day_spent / Decimal(str(b.daily_cap_eur))) * 100))
+    constraints = budget.chain_constraints(db, org)
     return render(
         request, "org_budget.html", active="settings", org=org, role=role,
-        budget=b, month_spent=spent, day_spent=day_spent, pct=pct, pct_day=pct_day,
+        budget=budget.get_budget(db, org.id),
+        own=[c for c in constraints if not c.inherited],
+        inherited=[c for c in constraints if c.inherited],
+        budget_alerts=[c for c in constraints if c.level != "ok"],
+        month_spent=budget.subtree_period_spent(db, org, "month"),
+        day_spent=budget.subtree_period_spent(db, org, "day"),
+        own_month_spent=budget.own_period_spent(db, org.id, "month"),
+        n_descendants=len(hierarchy.descendants(db, org)),
+        alerts=budget_alerts.recent_for_chain(db, org),
+        alert_owner_names={o.id: o.name for o in hierarchy.chain(db, org)},
+        smtp_configured=mailer.is_configured(),
     )
 
 

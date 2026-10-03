@@ -211,6 +211,14 @@ services, jamais au-dessus. Il en va de même pour les jetons d'API. Un org_admi
 les sous-entités de son périmètre depuis *Paramètres › sous-entités* ; créer une racine ou sortir une
 entité de son périmètre reste réservé à l'administration plateforme.
 
+## Budget consolidé et alertes (ADR-089, chantier E3)
+
+Le plafond d'une entité couvre sa dépense et celle de ses sous-entités. Un lancement est refusé si un seul
+plafond de la chaîne serait dépassé, et une exécution programmée qui le dépasserait est sautée et tracée sur
+la planification. Les seuils de 80 % et 100 % produisent une alerte par période : bandeau dans l'application,
+email aux administrateurs de l'entité qui porte le plafond si un SMTP est configuré (`GEOEVAL_SMTP_*`, voir
+`.env.example`), jauges `geoeval_budget_*` sur `/metrics`.
+
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
 DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont

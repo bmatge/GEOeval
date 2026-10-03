@@ -233,6 +233,7 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
 
     ctx_job = job_id_var.set(job_id)
     ctx_org = None
+    alert_org: Optional[int] = None
     started = time.monotonic()
     outcome = "error"
     run_ids: list[int] = []
@@ -248,6 +249,7 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
         note: Optional[str] = params.get("note") or None
         test_ids: Optional[list[int]] = params.get("test_ids") or None
         organization_id = int(params["organization_id"])
+        alert_org = organization_id
         ctx_org = org_id_var.set(organization_id)
         perimeter_id = params.get("perimeter_id")
         if perimeter_id is not None:
@@ -313,6 +315,10 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
         root.removeHandler(handler)
         metrics.JOBS_EXECUTED.labels(outcome).inc()
         metrics.JOB_DURATION.observe(time.monotonic() - started)
+        # E3 : la dépense a pu franchir un seuil (80 / 100 %) sur la chaîne d'entités.
+        from geoeval.web import budget_alerts
+
+        budget_alerts.evaluate_safely(alert_org)
         if ctx_org is not None:
             org_id_var.reset(ctx_org)
         job_id_var.reset(ctx_job)

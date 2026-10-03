@@ -6,6 +6,15 @@
 #   docker compose -f deploy/docker-compose.local.yml up -d
 
 x-geoeval-env: &geoeval-env
+  # E3 : alertes budgétaires par email (inactif tant que GEOEVAL_SMTP_HOST est vide).
+  GEOEVAL_SMTP_HOST: ${GEOEVAL_SMTP_HOST:-}
+  GEOEVAL_SMTP_PORT: ${GEOEVAL_SMTP_PORT:-587}
+  GEOEVAL_SMTP_USER: ${GEOEVAL_SMTP_USER:-}
+  GEOEVAL_SMTP_PASSWORD: ${GEOEVAL_SMTP_PASSWORD:-}
+  GEOEVAL_SMTP_FROM: ${GEOEVAL_SMTP_FROM:-}
+  GEOEVAL_SMTP_STARTTLS: ${GEOEVAL_SMTP_STARTTLS:-1}
+  GEOEVAL_SMTP_SSL: ${GEOEVAL_SMTP_SSL:-0}
+  GEOEVAL_PUBLIC_URL: ${GEOEVAL_PUBLIC_URL:-}
   # Lot 1.5 : logs JSON une ligne par événement, collectés sur stdout.
   GEOEVAL_LOG_FORMAT: ${GEOEVAL_LOG_FORMAT:-json}
   GEOEVAL_LOG_LEVEL: ${GEOEVAL_LOG_LEVEL:-INFO}
