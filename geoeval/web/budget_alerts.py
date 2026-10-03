@@ -7,6 +7,7 @@ pas encore signalé sur la période calendaire en cours, une ligne `budget_alert
 est créée (unicité en base : jamais deux fois la même alerte) et un email part aux
 org_admin de l'entité qui porte le plafond (à défaut, ceux de l'ancêtre le plus
 proche qui en a). L'alerte reste visible dans l'application même sans SMTP.
+E7 : l'envoi passe par les notifications (in-app + email selon les préférences).
 """
 from __future__ import annotations
 
@@ -18,8 +19,8 @@ from sqlalchemy import select, text
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
-from geoeval.db.models import BudgetAlert, Membership, Organization, User
-from geoeval.web import budget, mailer
+from geoeval.db.models import BudgetAlert, Organization
+from geoeval.web import budget, mailer, notifications
 
 logger = logging.getLogger("geoeval.web.budget_alerts")
 
@@ -41,18 +42,9 @@ def thresholds_crossed(c: budget.Constraint) -> list[int]:
 
 def recipients_for(session: Session, owner: Organization) -> list[str]:
     """org_admin directs de l'entité qui porte le plafond ; à défaut, ceux de
-    l'ancêtre le plus proche qui en a."""
-    from geoeval.web.hierarchy import chain
-
-    for node in chain(session, owner):
-        emails = session.execute(
-            select(User.email).join(Membership, Membership.user_id == User.id)
-            .where(Membership.org_id == node.id, Membership.role == "org_admin")
-            .order_by(User.email)
-        ).scalars().all()
-        if emails:
-            return list(emails)
-    return []
+    l'ancêtre le plus proche qui en a (règle commune des notifications, E7)."""
+    users, _ = notifications.recipients(session, owner, notifications.ADMINS)
+    return [u.email for u in users]
 
 
 def _compose(c: budget.Constraint, threshold: int) -> tuple[str, str]:
@@ -96,10 +88,20 @@ def evaluate(session: Session, org_id: int) -> list[BudgetAlert]:
             if new_id is None:
                 continue  # déjà signalée sur cette période
             alert = session.get(BudgetAlert, new_id)
-            to = recipients_for(session, c.owner)
             subject, body = _compose(c, threshold)
-            alert.email_status = mailer.send(to, subject, body)
-            alert.emailed_to = to or None
+            # E7 : notification in-app des org_admin + email selon leurs préférences.
+            what = "atteint" if threshold >= 100 else f"à {threshold} %"
+            emission = notifications.notify(
+                session, c.owner, "budget_threshold",
+                title=f"Budget {c.period_label} {what} — {c.owner.name}",
+                body=f"Dépense consolidée {c.spent_eur:.2f} € pour un plafond de {c.cap_eur:.2f} €.",
+                link=f"/o/{c.owner.slug}/budget", dedup_key=f"budget_alert:{alert.id}",
+                payload={"period": c.period, "period_key": key, "threshold": threshold,
+                         "spent_eur": str(c.spent_eur), "cap_eur": str(c.cap_eur)},
+                email_subject=subject, email_body=body,
+            )
+            alert.email_status = emission.email_status
+            alert.emailed_to = emission.emailed or None
             session.commit()
             logger.warning("alerte budget %s %s %d %% (%s) : %.2f / %.2f €, email=%s",
                            c.owner.slug, c.period, threshold, key, c.spent_eur, c.cap_eur, alert.email_status)

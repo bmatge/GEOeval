@@ -46,12 +46,27 @@ def render(
     context = {
         "active": active,
         "user": user,
+        "unread_notifications": _unread_count(user),
         "org": {"id": org.id, "name": org.name, "slug": org.slug} if org is not None else None,
         "role": role,
         "url_prefix": f"/o/{org.slug}" if org is not None else "",
         **ctx,
     }
     return templates.TemplateResponse(request=request, name=template, context=context)
+
+
+def _unread_count(user: Optional[CurrentUser]) -> int:
+    """Notifications non lues de l'utilisateur (E7), pour le compteur de l'en-tête."""
+    if user is None or getattr(user, "id", None) is None:
+        return 0
+    try:
+        from geoeval.db.session import SessionLocal
+        from geoeval.web import notifications
+
+        with SessionLocal() as session:
+            return notifications.unread_count(session, user.id)
+    except Exception:  # noqa: BLE001 — le compteur ne doit jamais casser une page
+        return 0
 
 
 def nav_fallback(db: Session, user: Optional[CurrentUser]) -> tuple:

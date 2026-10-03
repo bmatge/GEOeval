@@ -1,0 +1,35 @@
+{% extends "base.html" %}
+{% block title %}Détecteurs{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/settings">Retour aux paramètres</a>
+<h1 class="fr-mt-2w">Détecteur « question toujours fausse »</h1>
+<p>Une notification part quand, pour une même IA évaluée, une question reste sous le seuil sur plusieurs
+  évaluations d'affilée (moyenne des notateurs, note de réponse sur 10). Une seule alerte par série : elle
+  ne se répète pas tant que la série continue. Les réglages valent pour {{ org.name }} et ses sous-entités,
+  sauf si l'une d'elles pose les siens.</p>
+
+<div class="fr-callout">
+  <p class="fr-callout__text">
+    <strong>Réglage effectif</strong> : {{ effective.runs }} évaluations d'affilée sous {{ effective.threshold }}/10.<br>
+    <span class="fr-hint-text">
+      Nombre : {{ ('posé par ' ~ effective.runs_from.name) if effective.runs_from else ('défaut plateforme (' ~ default_runs ~ ')') }} ·
+      seuil : {{ ('posé par ' ~ effective.threshold_from.name) if effective.threshold_from else ('défaut plateforme (' ~ default_threshold ~ ')') }}
+    </span>
+  </p>
+</div>
+
+<form method="post" action="{{ url_prefix }}/settings/detectors" class="fr-mt-3w" style="max-width:36rem;">
+  <p class="fr-hint-text">Réglages propres à {{ org.name }} — laisser vide pour hériter.</p>
+  <div class="fr-input-group">
+    <label class="fr-label" for="always_wrong_runs">Évaluations consécutives (2 à 20)</label>
+    <input class="fr-input" id="always_wrong_runs" name="always_wrong_runs" type="number" min="2" max="20"
+           value="{{ own.always_wrong_runs if own and own.always_wrong_runs is not none else '' }}">
+  </div>
+  <div class="fr-input-group">
+    <label class="fr-label" for="always_wrong_threshold">Seuil (note de réponse sur 10)</label>
+    <input class="fr-input" id="always_wrong_threshold" name="always_wrong_threshold" inputmode="decimal"
+           value="{{ own.always_wrong_threshold if own and own.always_wrong_threshold is not none else '' }}">
+  </div>
+  <button type="submit" class="fr-btn">Enregistrer</button>
+</form>
+{% endblock %}

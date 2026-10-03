@@ -31,6 +31,7 @@ LLM_DURATION = Histogram(
     "geoeval_llm_call_duration_seconds", "Durée d'un appel LLM (hors attente de retry)", ["family"],
     buckets=(0.5, 1, 2, 5, 10, 20, 30, 60, 120, 300),
 )
+NOTIFICATIONS = Counter("geoeval_notifications_total", "Notifications émises (par destinataire), par type", ["kind"])
 WORKER_ALIVE = Gauge("geoeval_worker_last_alive_timestamp_seconds", "Dernier signe de vie du worker (epoch)")
 
 

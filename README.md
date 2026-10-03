@@ -246,6 +246,16 @@ souverains ou hébergés dans l'UE. Une sous-entité ne peut que la durcir. Elle
 chaque échéance programmée, et les formulaires ne proposent que les modèles conformes. Les anciennes clés BYOK ont
 été converties en contrats.
 
+## Notifications (ADR-089, chantier E7)
+
+Le lien *Notifications* de l'en-tête ouvre une boîte de réception personnelle, toutes entités confondues. Les
+notifications partent selon le rôle dans l'entité : budget à 80 % ou atteint, et contrat LLM expirant (J-30, J-7)
+ou expiré pour les administrateurs ; évaluation en échec et « question toujours fausse » pour les éditeurs et
+administrateurs. Chacun choisit les types qu'il reçoit aussi par email (*Préférences d'email*). Le détecteur
+« question toujours fausse » alerte quand une question reste sous un seuil sur plusieurs évaluations d'affilée
+pour une même IA évaluée (défaut : 3 évaluations sous 5/10, réglable par entité dans *Paramètres*, et hérité
+par les sous-entités) ; une seule alerte par série.
+
 ## SSO OIDC et préparatifs ProConnect (ADR-089, chantier E6)
 
 Le SSO est optionnel et se configure par variables d'environnement (`.env.example`). Un compte est retrouvé par

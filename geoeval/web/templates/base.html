@@ -42,6 +42,9 @@
                   {{ user.email }}{% if user.is_platform_admin %} · <em>admin plateforme</em>{% endif %}
                 </span>
               </li>
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-notification-3-line fr-btn--icon-left" href="/notifications"
+                     {% if active == 'notifications' %}aria-current="page"{% endif %}>Notifications{% if unread_notifications %}
+                     <span class="fr-badge fr-badge--sm fr-badge--info fr-ml-1v" aria-label="{{ unread_notifications }} non lue(s)">{{ unread_notifications }}</span>{% endif %}</a></li>
               {% if org and (role == 'org_admin' or user.is_platform_admin) %}
               <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="{{ url_prefix }}/settings">Paramètres de l'org</a></li>
               {% endif %}

@@ -444,6 +444,42 @@ peut être déclaré **de confiance** pour l'email (opt-in, activé par le profi
   renvoie son endpoint `userinfo` en JWT signé : le callback devra l'appeler et le
   vérifier si l'`id_token` ne porte pas les claims, ce qui n'est pas fait ici.
 
+## 4octies. Mise en œuvre de E7 (amendement 2026-10-03)
+
+Arbitrages validés : destinataires **par rôle selon le type**, avec une préférence d'email
+par utilisateur (pas encore de table d'abonnements partagés, elle viendra avec les
+webhooks) ; seuil « question toujours fausse » **global, surchargeable par entité et
+hérité** ; périmètre **socle** ; emails **immédiats**, avec un défaut par type.
+
+- **Schéma** (révision `0006`) : `notifications` (destinataire, entité, type, titre, corps,
+  lien, charge utile, `dedup_key`, statut d'email, lu), `notification_preferences`
+  (utilisateur × type → email), `detector_settings` (N et seuil, NULL = hérité).
+- **Émission** (`geoeval/web/notifications.py`) : destinataires = membres directs de
+  l'entité ayant un rôle du type (budget et contrats : org_admin ; échec et « toujours
+  faux » : editor et plus), à défaut ceux de l'ancêtre le plus proche qui en a.
+  L'in-app est toujours actif ; un email groupé part aux destinataires qui l'ont activé
+  (défaut : oui pour budget, contrats et échec ; non pour « toujours faux »). `dedup_key`
+  rend l'émission idempotente par destinataire. Compteur `geoeval_notifications_total{kind}`.
+- **Types livrés** : `budget_threshold` (les alertes E3 passent désormais par les
+  notifications, `budget_alerts.email_status` gagne `disabled`) ; `job_failed` (couvre le
+  notateur indisponible, émis par le worker) ; `contract_expiring` (J-30 puis J-7) et
+  `contract_expired` (vérifiés par le planificateur, au plus une fois par heure) ;
+  `always_wrong` (après chaque évaluation, dans le worker).
+- **Détecteur « toujours faux »** (`geoeval/web/detectors.py`) : pour un couple (question,
+  IA évaluée) d'une entité, les N dernières évaluations sous le seuil (moyenne des
+  notateurs, note de réponse sur 10). Une alerte par série : la clé porte le premier run de
+  la série, qui ne change pas tant que la série continue. Défaut plateforme 3 et 5/10
+  (`GEOEVAL_ALWAYS_WRONG_RUNS`, `GEOEVAL_ALWAYS_WRONG_THRESHOLD`), surcharge par entité
+  résolue champ par champ (résolveur du plus proche). Les détecteurs n'écrivent que des
+  notifications, jamais un résultat.
+- **UI** : lien « Notifications » avec compteur dans l'en-tête, boîte de réception
+  personnelle (toutes entités, ouvrir = marquer comme lue, liens internes uniquement),
+  préférences d'email, réglages du détecteur (*Paramètres*, org_admin). **API v1** :
+  `/me/notifications` (session uniquement), `/me/notification-preferences`,
+  `/orgs/{slug}/detector-settings` (GET editor+, PUT org_admin).
+- **Reportés** : chute de la part de citations officielles, signalements humains,
+  webhooks (Tchap…), récapitulatifs quotidiens, abonnements partagés.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

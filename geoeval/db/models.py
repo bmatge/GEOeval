@@ -823,3 +823,63 @@ class RoutingPolicy(Base):
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
     )
     updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
+
+
+# =====================================================================
+# ADR-089 §2.8 (chantier E7) — notifications et détecteurs.
+# =====================================================================
+class Notification(Base):
+    """Notification adressée à un utilisateur (in-app, et email selon ses préférences).
+    `dedup_key` rend l'émission idempotente par destinataire : un détecteur peut
+    repasser sans dupliquer. Un détecteur n'écrit que des notifications, jamais un résultat."""
+    __tablename__ = "notifications"
+    __table_args__ = (
+        Index("uq_notifications_user_dedup", "user_id", "dedup_key", unique=True,
+              postgresql_where=text("dedup_key IS NOT NULL")),
+        Index("ix_notifications_user_created", "user_id", text("created_at DESC")),
+        Index("ix_notifications_org", "organization_id"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    kind: Mapped[str] = mapped_column(Text, nullable=False)
+    title: Mapped[str] = mapped_column(Text, nullable=False)
+    body: Mapped[str] = mapped_column(Text, nullable=False, server_default="")
+    link: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    payload: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
+    dedup_key: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # none (email non demandé) | sent | not_configured | failed
+    email_status: Mapped[str] = mapped_column(Text, nullable=False, server_default="none")
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+    read_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+
+
+class NotificationPreference(Base):
+    """Choix d'un utilisateur pour un type : email oui / non (l'in-app est toujours actif).
+    Sans ligne, le défaut du type s'applique."""
+    __tablename__ = "notification_preferences"
+
+    user_id: Mapped[int] = mapped_column(ForeignKey("users.id", ondelete="CASCADE"), primary_key=True)
+    kind: Mapped[str] = mapped_column(Text, primary_key=True)
+    email: Mapped[bool] = mapped_column(Boolean, nullable=False)
+
+
+class DetectorSetting(Base):
+    """Réglages des détecteurs posés par une entité, hérités par son sous-arbre
+    (résolveur du plus proche, champ par champ). NULL = hérité / défaut plateforme."""
+    __tablename__ = "detector_settings"
+    __table_args__ = (
+        CheckConstraint("always_wrong_runs IS NULL OR always_wrong_runs BETWEEN 2 AND 20",
+                        name="ck_detector_settings_runs"),
+        CheckConstraint("always_wrong_threshold IS NULL OR (always_wrong_threshold >= 0 AND always_wrong_threshold <= 10)",
+                        name="ck_detector_settings_threshold"),
+    )
+
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
+    always_wrong_runs: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    always_wrong_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
+    )
+    updated_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id"), nullable=True)
