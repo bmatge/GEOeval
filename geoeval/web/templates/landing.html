@@ -36,11 +36,22 @@ Les tableaux de bord et évaluations sont consultables librement —
   {% endfor %}
 </div>
 {% else %}
+{% if user and user.is_platform_admin %}
+<div class="fr-callout">
+  <p class="fr-callout__text">Aucune organisation n'existe encore. En tant qu'administrateur plateforme,
+    tu peux créer la première.</p>
+  <a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="/admin/organizations">Créer ou gérer les organisations</a>
+</div>
+{% else %}
 <div class="fr-callout fr-callout--brown-caramel">
   <p class="fr-callout__text">
     Aucune organisation ne t'est encore rattachée. Contacte un administrateur
     plateforme pour être invité(e).
   </p>
 </div>
+{% endif %}
+{% endif %}
+{% if orgs and user and user.is_platform_admin %}
+<p class="fr-mt-3w"><a class="fr-link fr-icon-settings-5-line fr-link--icon-left" href="/admin/organizations">Gérer les organisations</a></p>
 {% endif %}
 {% endblock %}
