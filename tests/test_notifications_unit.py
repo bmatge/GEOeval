@@ -31,11 +31,53 @@ def test_defauts_plateforme(monkeypatch):
 @pytest.mark.parametrize("kind", list(notifications.KINDS))
 def test_catalogue_des_types(kind):
     k = notifications.KINDS[kind]
-    assert k.label and k.description and set(k.roles) <= {"org_admin", "editor", "viewer"} and "org_admin" in k.roles
+    assert k.label and k.description and set(k.roles) <= {"org_admin", "editor", "viewer"}
+    assert k.default_mode in notifications.MODES
+    assert not k.roles or "org_admin" in k.roles, "un type par rôle notifie toujours les administrateurs"
 
 
 def test_defauts_email_par_type():
-    """Arbitrage E7 : email par défaut pour budget, contrats, échec ; in-app seul pour « toujours faux »."""
-    assert {k for k, v in notifications.KINDS.items() if v.email_default} == {
+    """Arbitrages E7 : email immédiat par défaut pour budget, contrats, échec ; application seule pour le reste."""
+    assert {k for k, v in notifications.KINDS.items() if v.default_mode == "immediate"} == {
         "budget_threshold", "job_failed", "contract_expiring", "contract_expired"}
-    assert notifications.KINDS["always_wrong"].email_default is False
+    assert {k for k, v in notifications.KINDS.items() if v.default_mode == "none"} == {
+        "always_wrong", "citation_drop", "report_opened", "report_resolved"}
+
+
+def test_echeance_du_recapitulatif(monkeypatch):
+    from datetime import datetime, timezone
+
+    monkeypatch.delenv("GEOEVAL_DIGEST_TIME", raising=False)
+    # 2026-10-03 : heure d'été, Paris = UTC+2 → 07:45 Paris = 05:45 UTC.
+    before = datetime(2026, 10, 3, 5, 0, tzinfo=timezone.utc)
+    after = datetime(2026, 10, 3, 6, 0, tzinfo=timezone.utc)
+    assert notifications.digest_cutoff(after) == datetime(2026, 10, 3, 5, 45, tzinfo=timezone.utc)
+    assert notifications.digest_cutoff(before) == datetime(2026, 10, 2, 5, 45, tzinfo=timezone.utc), "veille"
+    winter = datetime(2026, 12, 3, 12, 0, tzinfo=timezone.utc)
+    assert notifications.digest_cutoff(winter) == datetime(2026, 12, 3, 6, 45, tzinfo=timezone.utc), "heure d'hiver"
+    monkeypatch.setenv("GEOEVAL_DIGEST_TIME", "18:30")
+    assert notifications.digest_cutoff(after) == datetime(2026, 10, 2, 16, 30, tzinfo=timezone.utc)
+    monkeypatch.setenv("GEOEVAL_DIGEST_TIME", "n'importe quoi")
+    assert notifications.digest_cutoff(after) == datetime(2026, 10, 3, 5, 45, tzinfo=timezone.utc), "repli 07:45"
+
+
+def test_calcul_de_la_chute_des_citations():
+    pts = Decimal("20")
+    assert detectors.citation_drop(0.5, [0.8, 0.8, 0.6], pts) == pytest.approx((0.7333, 23.33), abs=1e-2)
+    assert detectors.citation_drop(0.6, [0.8, 0.8, 0.6], pts) is None, "13 points : sous le seuil"
+    assert detectors.citation_drop(0.0, [0.8, 0.8], pts) is None, "3 runs de référence exigés"
+    assert detectors.citation_drop(0.0, [None, 0.8, 0.8], pts) is None, "les runs sans citation ne comptent pas"
+    assert detectors.citation_drop(None, [0.8, 0.8, 0.8], pts) is None
+    assert detectors.citation_drop(0.5, [0.7, 0.7, 0.7], pts) is not None, "pile au seuil malgré les flottants"
+    assert detectors.citation_drop(0.6, [0.8, 0.8, 0.8, 0.0], pts) == pytest.approx((0.8, 20.0)), "3 plus récents, ≥ seuil"
+
+
+def test_defaut_ecart_citations(monkeypatch):
+    monkeypatch.delenv("GEOEVAL_CITATION_DROP_POINTS", raising=False)
+    assert detectors.citation_drop_default() == Decimal("20")
+    monkeypatch.setenv("GEOEVAL_CITATION_DROP_POINTS", "12,5")
+    assert detectors.citation_drop_default() == Decimal("12.5")
+    monkeypatch.setenv("GEOEVAL_CITATION_DROP_POINTS", "500")
+    assert detectors.citation_drop_default() == Decimal("100")
+    monkeypatch.setenv("GEOEVAL_CITATION_DROP_POINTS", "abc")
+    assert detectors.citation_drop_default() == Decimal("20")

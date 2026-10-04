@@ -139,7 +139,8 @@
         <td>{{ t.prompt|truncate(80) }}
           {% for th in test_themes.get(t.test_id, []) %}<span class="fr-badge fr-badge--info fr-badge--sm fr-ml-1v">{{ th.label }}</span>{% endfor %}
         </td>
-        <td>{{ (pooled_origins.get(t.test_id) or [])|join(', ') }}</td>
+        <td>{{ (pooled_origins.get(t.test_id) or [])|join(', ') }}
+          · <a class="fr-link fr-link--sm" href="{{ url_prefix }}/tests/{{ t.test_id }}/report">Signaler</a></td>
         <td>
           {{ test_status(t) }}
         </td>

@@ -122,7 +122,7 @@ def test_repli_sur_l_ancetre_et_sans_destinataire(db_session, monde):
 
 def test_preferences_email(db_session, monde, smtp):
     s, editor, admin_s = monde["s"], monde["editor_s"], monde["admin_s"]
-    assert notifications.preferences(db_session, editor.id)["always_wrong"] is False
+    assert notifications.preferences(db_session, editor.id)["always_wrong"] == "none"
     e = notifications.notify(db_session, s, "always_wrong", title="Toujours faux", dedup_key="aw:1")
     assert len(e.created) == 2 and e.emailed == [] and e.email_status == "disabled" and smtp == []
     notifications.set_preferences(db_session, editor.id, {"always_wrong": True})
@@ -310,9 +310,12 @@ def test_ui_boite_de_reception_preferences_reglages(client, db_session, monde):
     other = notifications.list_for_user(db_session, monde["editor_s"].id)[0]
     assert client.get(f"/notifications/{other.id}/open").status_code == 404
     assert notifications.unread_count(db_session, me.id) == 0
-    assert client.post("/notifications/preferences", data={"email_kinds": ["always_wrong"]}).status_code == 303
+    r = client.post("/notifications/preferences", data={"mode_always_wrong": "immediate", "mode_job_failed": "none",
+                                                        "mode_citation_drop": "digest"})
+    assert r.status_code == 303
     prefs = notifications.preferences(db_session, me.id)
-    assert prefs["always_wrong"] is True and prefs["job_failed"] is False
+    assert (prefs["always_wrong"], prefs["job_failed"], prefs["citation_drop"]) == ("immediate", "none", "digest")
+    assert client.post("/notifications/preferences", data={"mode_job_failed": "fax"}).status_code == 400
     assert "Préférences de notification" in client.get("/notifications/preferences").text
     assert client.post(f"/o/{s.slug}/settings/detectors", data={"always_wrong_runs": "4", "always_wrong_threshold": "6"}).status_code == 303
     page = client.get(f"/o/{s.slug}/settings/detectors")
@@ -344,9 +347,10 @@ def test_api_notifications_et_reglages(client, db_session, monde):
     assert client.post("/api/v1/me/notifications/read-all").json()["unread"] == 0
     h_admin, h_editor = _bearer(db_session, s, "org_admin"), _bearer(db_session, s, "editor")
     assert client.get("/api/v1/me/notifications", headers=h_admin).status_code == 403, "jeton : pas de boîte personnelle"
-    r = client.put("/api/v1/me/notification-preferences", json={"email": {"always_wrong": True}})
-    assert r.status_code == 200 and r.json()["email"]["always_wrong"] is True
-    assert client.put("/api/v1/me/notification-preferences", json={"email": {"x": True}}).status_code == 400
+    r = client.put("/api/v1/me/notification-preferences", json={"modes": {"always_wrong": "digest"}})
+    assert r.status_code == 200 and r.json()["modes"]["always_wrong"] == "digest"
+    assert client.put("/api/v1/me/notification-preferences", json={"modes": {"x": "none"}}).status_code == 400
+    assert client.put("/api/v1/me/notification-preferences", json={"modes": {"always_wrong": "fax"}}).status_code == 422
     base = f"/api/v1/orgs/{s.slug}/detector-settings"
     assert client.get(base, headers=h_editor).json()["effective_runs"] == 3
     assert client.put(base, json={"always_wrong_runs": 5}, headers=h_editor).status_code == 403

@@ -2,34 +2,55 @@
 {% block title %}Détecteurs{% endblock %}
 {% block content %}
 <a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/settings">Retour aux paramètres</a>
-<h1 class="fr-mt-2w">Détecteur « question toujours fausse »</h1>
-<p>Une notification part quand, pour une même IA évaluée, une question reste sous le seuil sur plusieurs
-  évaluations d'affilée (moyenne des notateurs, note de réponse sur 10). Une seule alerte par série : elle
-  ne se répète pas tant que la série continue. Les réglages valent pour {{ org.name }} et ses sous-entités,
-  sauf si l'une d'elles pose les siens.</p>
+<h1 class="fr-mt-2w">Détecteurs</h1>
+<p>Les détecteurs tournent après chaque évaluation et n'écrivent que des notifications. Les réglages valent
+  pour {{ org.name }} et ses sous-entités, sauf si l'une d'elles pose les siens.</p>
 
 <div class="fr-callout">
   <p class="fr-callout__text">
-    <strong>Réglage effectif</strong> : {{ effective.runs }} évaluations d'affilée sous {{ effective.threshold }}/10.<br>
+    <strong>Réglage effectif</strong> : {{ effective.runs }} évaluations d'affilée sous {{ effective.threshold }}/10 ·
+    chute de {{ '%g' % effective.citation_drop_points }} points des citations officielles.<br>
     <span class="fr-hint-text">
       Nombre : {{ ('posé par ' ~ effective.runs_from.name) if effective.runs_from else ('défaut plateforme (' ~ default_runs ~ ')') }} ·
-      seuil : {{ ('posé par ' ~ effective.threshold_from.name) if effective.threshold_from else ('défaut plateforme (' ~ default_threshold ~ ')') }}
+      seuil : {{ ('posé par ' ~ effective.threshold_from.name) if effective.threshold_from else ('défaut plateforme (' ~ default_threshold ~ ')') }} ·
+      écart : {{ ('posé par ' ~ effective.citation_drop_from.name) if effective.citation_drop_from else ('défaut plateforme (' ~ ('%g' % default_citation_drop) ~ ')') }}
     </span>
   </p>
 </div>
 
 <form method="post" action="{{ url_prefix }}/settings/detectors" class="fr-mt-3w" style="max-width:36rem;">
   <p class="fr-hint-text">Réglages propres à {{ org.name }} — laisser vide pour hériter.</p>
-  <div class="fr-input-group">
-    <label class="fr-label" for="always_wrong_runs">Évaluations consécutives (2 à 20)</label>
-    <input class="fr-input" id="always_wrong_runs" name="always_wrong_runs" type="number" min="2" max="20"
-           value="{{ own.always_wrong_runs if own and own.always_wrong_runs is not none else '' }}">
-  </div>
-  <div class="fr-input-group">
-    <label class="fr-label" for="always_wrong_threshold">Seuil (note de réponse sur 10)</label>
-    <input class="fr-input" id="always_wrong_threshold" name="always_wrong_threshold" inputmode="decimal"
-           value="{{ own.always_wrong_threshold if own and own.always_wrong_threshold is not none else '' }}">
-  </div>
+  <fieldset class="fr-fieldset">
+    <legend class="fr-fieldset__legend">Question toujours fausse</legend>
+    <p class="fr-hint-text fr-px-1w">Pour une même IA évaluée, une question reste sous le seuil sur plusieurs
+      évaluations d'affilée (moyenne des notateurs, note de réponse sur 10). Une seule alerte par série.</p>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="always_wrong_runs">Évaluations consécutives (2 à 20)</label>
+        <input class="fr-input" id="always_wrong_runs" name="always_wrong_runs" type="number" min="2" max="20"
+               value="{{ own.always_wrong_runs if own and own.always_wrong_runs is not none else '' }}">
+      </div>
+    </div>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="always_wrong_threshold">Seuil (note de réponse sur 10)</label>
+        <input class="fr-input" id="always_wrong_threshold" name="always_wrong_threshold" inputmode="decimal"
+               value="{{ own.always_wrong_threshold if own and own.always_wrong_threshold is not none else '' }}">
+      </div>
+    </div>
+  </fieldset>
+  <fieldset class="fr-fieldset">
+    <legend class="fr-fieldset__legend">Chute des citations officielles</legend>
+    <p class="fr-hint-text fr-px-1w">Pour un périmètre doté de domaines officiels et une IA évaluée, la part des
+      citations vers ces domaines tombe sous la moyenne des 3 runs précédents d'au moins N points. Une alerte par run.</p>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="citation_drop_points">Écart déclencheur (points de pourcentage, 1 à 100)</label>
+        <input class="fr-input" id="citation_drop_points" name="citation_drop_points" inputmode="decimal"
+               value="{{ ('%g' % own.citation_drop_points) if own and own.citation_drop_points is not none else '' }}">
+      </div>
+    </div>
+  </fieldset>
   <button type="submit" class="fr-btn">Enregistrer</button>
 </form>
 {% endblock %}

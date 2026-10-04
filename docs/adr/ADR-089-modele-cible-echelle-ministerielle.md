@@ -519,6 +519,50 @@ l'activation** ; résultats en **comparaison participants × IA**.
 - **Reportés** : cycle complet avec approbation métier, versions de juges rejugeant
   l'historique, jeux de calibration, campagnes à inscription volontaire.
 
+## 4decies. Suite de E7 (amendement 2026-10-03)
+
+Arbitrages validés : signalements — **tout membre signale, le propriétaire traite** ; chute
+des citations officielles — **écart en points, réglage hérité** ; emails — **trois choix
+par type** (immédiat, récapitulatif quotidien, aucun).
+
+- **Schéma** (révision `0008`) : `notification_preferences.email` (booléen) devient `mode`
+  (`immediate` | `digest` | `none`, migration vrai → immédiat, faux → aucun) ;
+  `notifications.email_status` gagne `digest_pending` (index partiel) ;
+  `detector_settings.citation_drop_points` ; table `test_reports`.
+- **Récapitulatif quotidien** (`notifications.send_digests`) : une notification d'un type
+  en mode récapitulatif attend (`digest_pending`). Chaque jour à `GEOEVAL_DIGEST_TIME`
+  (défaut 07:45, heure de Paris), le planificateur envoie à chaque utilisateur un seul
+  email listant ses notifications en attente créées avant l'échéance ; celles déjà lues
+  dans l'application ne sont pas rappelées. Sans état : chaque notification change de
+  statut une fois, l'appel à chaque tick est donc idempotent. Défauts inchangés
+  (immédiat pour budget, contrats, échec ; aucun pour les autres types).
+- **Signalements** (`geoeval/web/reports.py`) : un membre (viewer et plus) d'une entité
+  qui voit une question la signale : réponse attendue douteuse, question ambiguë ou
+  obsolète, citation hors sujet, autre (commentaire obligatoire dans ce dernier cas),
+  éventuellement depuis un run. Une question est vue si elle appartient à l'entité, si un
+  pool abonné à l'un de ses périmètres l'apporte, si elle figure au protocole d'une
+  campagne non brouillon à laquelle l'entité participe, ou si elle apparaît dans l'un de
+  ses runs. Les editor+ du propriétaire sont notifiés (`report_opened`) et clôturent
+  (corrigé ou rejeté, réponse obligatoire), ce qui notifie l'auteur (`report_resolved`).
+  Un signalement ne modifie ni la question ni un résultat : la correction passe par les
+  voies habituelles.
+- **Détecteur « chute des citations officielles »** (`detectors.check_citation_drop`,
+  après chaque évaluation, à côté de « toujours faux », chacun isolé) : pour un run
+  rattaché à un périmètre doté de domaines officiels, la part des citations vers ces
+  domaines est comparée à la moyenne des 3 runs précédents (même entité, même périmètre,
+  même IA évaluée ; les runs sans citation ne comptent pas). Une chute d'au moins N points
+  déclenche `citation_drop` (editor+), une alerte par run. N : défaut plateforme 20
+  (`GEOEVAL_CITATION_DROP_POINTS`), surchargeable par entité et hérité (résolveur du plus
+  proche), comme les réglages de « toujours faux ».
+- **UI** : *Configurer › Signalements* (reçus et envoyés), liens « Signaler » sur le
+  détail d'un run, les questions d'un périmètre issues d'un pool et la fiche question
+  (qui affiche les signalements ouverts) ; préférences d'email à trois choix ; réglage de
+  l'écart dans *Paramètres › Détecteurs*. **API v1** : `/orgs/{slug}/reports` (GET
+  `tab=received|sent`, `status` ; POST viewer+ ; GET `{id}` ; POST `{id}/resolve` editor+
+  du propriétaire), `/me/notification-preferences` en `modes`, `citation_drop_points`
+  dans `/orgs/{slug}/detector-settings`.
+- **Reportés** : webhooks (Tchap…), abonnements partagés, validation métier des questions.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

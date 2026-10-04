@@ -12,8 +12,12 @@ notifications : ils ne modifient jamais un résultat d'évaluation.
   sur 10). Une seule alerte par série : la clé porte le premier run de la série,
   qui ne change pas tant que la série continue.
 
-Réglages du détecteur `always_wrong` : défaut plateforme, surchargeable par entité et
-hérité par son sous-arbre (résolveur du plus proche, champ par champ).
+- `citation_drop`     : la part des citations officielles d'un run (domaines du périmètre)
+  chute d'au moins N points sous la moyenne des 3 runs précédents (même entité, même
+  périmètre, même IA évaluée). Une alerte par run.
+
+Réglages des détecteurs : défaut plateforme, surchargeable par entité et hérité par son
+sous-arbre (résolveur du plus proche, champ par champ).
 """
 from __future__ import annotations
 
@@ -28,13 +32,26 @@ from typing import Any, Optional
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from geoeval.db.models import DetectorSetting, LlmContract, Model, Organization, RunEvaluation, RunRow, Test
+from geoeval.db.models import (
+    DetectorSetting,
+    LlmContract,
+    Model,
+    Organization,
+    Perimeter,
+    RunEvaluation,
+    RunResult,
+    RunRow,
+    Test,
+)
 from geoeval.web import hierarchy, notifications
+from geoeval.web import perimeters as perimeters_svc
 
 logger = logging.getLogger("geoeval.web.detectors")
 
 DEFAULT_ALWAYS_WRONG_RUNS = 3
 DEFAULT_ALWAYS_WRONG_THRESHOLD = Decimal("5")
+DEFAULT_CITATION_DROP_POINTS = Decimal("20")
+CITATION_DROP_BASELINE_RUNS = 3
 CONTRACT_NOTICE_DAYS = (30, 7)
 
 
@@ -56,12 +73,27 @@ def platform_defaults() -> tuple[int, Decimal]:
     return runs, threshold
 
 
+def citation_drop_default() -> Decimal:
+    """Écart (en points de pourcentage) déclenchant `citation_drop` (GEOEVAL_CITATION_DROP_POINTS)."""
+    raw = (os.environ.get("GEOEVAL_CITATION_DROP_POINTS") or "").strip()
+    if not raw:
+        return DEFAULT_CITATION_DROP_POINTS
+    try:
+        return max(Decimal("1"), min(Decimal("100"), Decimal(raw.replace(",", "."))))
+    except InvalidOperation:
+        logger.warning("GEOEVAL_CITATION_DROP_POINTS invalide : défaut conservé")
+        return DEFAULT_CITATION_DROP_POINTS
+
+
 @dataclass
 class AlwaysWrongSettings:
+    """Réglages effectifs des détecteurs (nom historique : `always_wrong` en premier)."""
     runs: int
     threshold: Decimal
+    citation_drop_points: Decimal = DEFAULT_CITATION_DROP_POINTS
     runs_from: Optional[Organization] = None        # None = défaut plateforme
     threshold_from: Optional[Organization] = None
+    citation_drop_from: Optional[Organization] = None
 
 
 def own_settings(session: Session, org_id: int) -> Optional[DetectorSetting]:
@@ -70,7 +102,7 @@ def own_settings(session: Session, org_id: int) -> Optional[DetectorSetting]:
 
 def effective_settings(session: Session, org: Organization) -> AlwaysWrongSettings:
     runs, threshold = platform_defaults()
-    eff = AlwaysWrongSettings(runs=runs, threshold=threshold)
+    eff = AlwaysWrongSettings(runs=runs, threshold=threshold, citation_drop_points=citation_drop_default())
     r = hierarchy.resolve_nearest(session, org, lambda s, n: getattr(own_settings(s, n.id), "always_wrong_runs", None))
     if r.value is not None:
         eff.runs, eff.runs_from = int(r.value), r.source
@@ -78,24 +110,35 @@ def effective_settings(session: Session, org: Organization) -> AlwaysWrongSettin
                                   lambda s, n: getattr(own_settings(s, n.id), "always_wrong_threshold", None))
     if t.value is not None:
         eff.threshold, eff.threshold_from = Decimal(t.value), t.source
+    c = hierarchy.resolve_nearest(session, org,
+                                  lambda s, n: getattr(own_settings(s, n.id), "citation_drop_points", None))
+    if c.value is not None:
+        eff.citation_drop_points, eff.citation_drop_from = Decimal(c.value), c.source
     return eff
 
 
+def _decimal(raw: Any, error: str) -> Optional[Decimal]:
+    if raw is None or str(raw).strip() == "":
+        return None
+    try:
+        return Decimal(str(raw).replace(",", ".").strip())
+    except InvalidOperation:
+        raise ValueError(error)
+
+
 def set_settings(session: Session, org: Organization, *, runs: Optional[int], threshold: Any,
-                 updated_by: Optional[int] = None) -> Optional[DetectorSetting]:
-    """Réglages propres de l'entité (None = hériter). Sans aucun réglage, la ligne disparaît."""
+                 citation_drop_points: Any = None, updated_by: Optional[int] = None) -> Optional[DetectorSetting]:
+    """Remplace les réglages propres de l'entité (None = hériter). Sans aucun réglage, la ligne disparaît."""
     if runs is not None and not 2 <= int(runs) <= 20:
         raise ValueError("Le nombre d'évaluations consécutives doit être compris entre 2 et 20.")
-    thr: Optional[Decimal] = None
-    if threshold is not None and str(threshold).strip() != "":
-        try:
-            thr = Decimal(str(threshold).replace(",", ".").strip())
-        except InvalidOperation:
-            raise ValueError("Seuil invalide : note sur 10 attendue.")
-        if not Decimal("0") <= thr <= Decimal("10"):
-            raise ValueError("Le seuil doit être compris entre 0 et 10.")
+    thr = _decimal(threshold, "Seuil invalide : note sur 10 attendue.")
+    if thr is not None and not Decimal("0") <= thr <= Decimal("10"):
+        raise ValueError("Le seuil doit être compris entre 0 et 10.")
+    drop = _decimal(citation_drop_points, "Écart invalide : nombre de points attendu.")
+    if drop is not None and not Decimal("0") < drop <= Decimal("100"):
+        raise ValueError("L'écart de citations officielles doit être compris entre 0 (exclu) et 100 points.")
     row = own_settings(session, org.id)
-    if runs is None and thr is None:
+    if runs is None and thr is None and drop is None:
         if row is not None:
             session.delete(row)
             session.commit()
@@ -105,6 +148,7 @@ def set_settings(session: Session, org: Organization, *, runs: Optional[int], th
         session.add(row)
     row.always_wrong_runs = int(runs) if runs is not None else None
     row.always_wrong_threshold = thr
+    row.citation_drop_points = drop
     row.updated_by = updated_by
     session.commit()
     return row
@@ -266,13 +310,92 @@ def check_always_wrong(session: Session, run_id: int) -> int:
     return sent
 
 
+# ---------------------------------------------------------------------
+# citation_drop
+# ---------------------------------------------------------------------
+def run_official_share(session: Session, run_id: int, domains: list[str]) -> Optional[float]:
+    """Part des citations officielles d'un run (toutes questions confondues), None sans citation."""
+    from geoeval.web.services import _citation_url
+
+    urls: list[str] = []
+    for citations in session.execute(select(RunResult.raw_citations).where(RunResult.run_id == run_id)).scalars():
+        urls.extend(u for u in (_citation_url(c) for c in (citations or [])) if u)
+    return perimeters_svc.official_share(urls, domains)
+
+
+def citation_drop(current: Optional[float], previous: list[Optional[float]],
+                  points: Decimal) -> Optional[tuple[float, float]]:
+    """(moyenne de référence, écart en points) si la chute atteint `points`, sinon None.
+    Exige `CITATION_DROP_BASELINE_RUNS` parts précédentes exploitables."""
+    usable = [p for p in previous if p is not None]
+    if current is None or len(usable) < CITATION_DROP_BASELINE_RUNS:
+        return None
+    baseline = sum(usable[:CITATION_DROP_BASELINE_RUNS]) / CITATION_DROP_BASELINE_RUNS
+    gap = round((baseline - current) * 100, 6)  # 0.7 - 0.5 → 19.999… : arrondi avant comparaison
+    return (baseline, gap) if gap >= float(points) else None
+
+
+def check_citation_drop(session: Session, run_id: int) -> int:
+    """Après l'évaluation d'un run rattaché à un périmètre doté de domaines officiels :
+    compare sa part de citations officielles à la moyenne des 3 runs précédents
+    (même entité, périmètre, IA évaluée). Renvoie le nombre de notifications."""
+    run = session.get(RunRow, run_id)
+    if run is None or run.perimeter_id is None:
+        return 0
+    peri = session.get(Perimeter, run.perimeter_id)
+    domains = list(peri.domains or []) if peri is not None else []
+    if not domains:
+        return 0
+    org = session.get(Organization, run.organization_id)
+    model = session.get(Model, run.tested_model_id)
+    if org is None or model is None:
+        return 0
+    current = run_official_share(session, run_id, domains)
+    if current is None:
+        return 0
+    previous_ids = list(session.execute(
+        select(RunRow.run_id)
+        .where(RunRow.organization_id == org.id, RunRow.perimeter_id == peri.id,
+               RunRow.tested_model_id == model.model_id, RunRow.run_id < run_id)
+        .order_by(RunRow.run_id.desc()).limit(HISTORY_LIMIT)
+    ).scalars())
+    previous: list[float] = []
+    for rid in previous_ids:  # les runs sans citation ne comptent pas dans la référence
+        share = run_official_share(session, rid, domains)
+        if share is not None:
+            previous.append(share)
+        if len(previous) >= CITATION_DROP_BASELINE_RUNS:
+            break
+    cfg = effective_settings(session, org)
+    hit = citation_drop(current, previous, cfg.citation_drop_points)
+    if hit is None:
+        return 0
+    baseline, gap = hit
+    return len(notifications.notify(
+        session, org, "citation_drop",
+        title=f"Chute des citations officielles — {peri.name} · {model.model_version}",
+        body=(f"Dans le run #{run_id}, {current:.0%} des citations de {model.model_version} pointent vers les "
+              f"domaines officiels de « {peri.name} », contre {baseline:.0%} en moyenne sur les "
+              f"{CITATION_DROP_BASELINE_RUNS} runs précédents ({gap:.0f} points de moins ; seuil "
+              f"{cfg.citation_drop_points:g})."),
+        link=f"/o/{org.slug}/runs/{run_id}",
+        payload={"run_id": run_id, "perimeter_id": peri.id, "model_id": model.model_id,
+                 "share": round(current, 4), "baseline": round(baseline, 4), "gap_points": round(gap, 1),
+                 "threshold_points": str(cfg.citation_drop_points)},
+        dedup_key=f"citation_drop:{run_id}",
+    ).created)
+
+
 def after_evaluation_safely(run_id: int) -> int:
-    """Hook worker après l'évaluation d'un run (sa propre session, sans exception)."""
+    """Hook worker après l'évaluation d'un run (sa propre session, sans exception).
+    Chaque détecteur est isolé : l'échec de l'un n'empêche pas l'autre."""
     from geoeval.db.session import SessionLocal
 
-    try:
-        with SessionLocal() as session:
-            return check_always_wrong(session, run_id)
-    except Exception:  # noqa: BLE001 — un détecteur ne casse jamais un job
-        logger.exception("détecteur « toujours faux » en échec (run=%s)", run_id)
-        return 0
+    sent = 0
+    for name, check in (("toujours faux", check_always_wrong), ("chute des citations", check_citation_drop)):
+        try:
+            with SessionLocal() as session:
+                sent += check(session, run_id)
+        except Exception:  # noqa: BLE001 — un détecteur ne casse jamais un job
+            logger.exception("détecteur « %s » en échec (run=%s)", name, run_id)
+    return sent

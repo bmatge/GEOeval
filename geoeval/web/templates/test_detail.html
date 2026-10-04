@@ -7,6 +7,13 @@
 
 <p><strong>Question :</strong> {{ test.prompt }}</p>
 <p><strong>Réponse attendue :</strong> {{ test.expected_answer or "—" }}</p>
+{% if open_reports %}
+<div class="fr-alert fr-alert--info fr-alert--sm fr-mb-2w">
+  <p>{{ open_reports|length }} signalement(s) ouvert(s) :
+    {% for r in open_reports %}<a class="fr-link" href="{{ url_prefix }}/reports/{{ r.id }}">#{{ r.id }}</a>{% if not loop.last %}, {% endif %}{% endfor %}</p>
+</div>
+{% endif %}
+<p><a class="fr-link fr-link--sm fr-icon-flag-line fr-link--icon-left" href="{{ url_prefix }}/tests/{{ test.test_id }}/report">Signaler cette question</a></p>
 
 <h2 class="fr-mt-4w">Réponse de référence <span class="fr-hint-text">(passe le notateur en mode « conformité »)</span></h2>
 
