@@ -1,6 +1,7 @@
-{# Statut d'une question (E8) : brouillon / publiée / retirée. #}
+{# Statut d'une question (E8) : brouillon / en relecture / publiée / retirée. #}
 {% macro test_status(t) -%}
 {%- if t.status == 'draft' -%}<p class="fr-badge fr-badge--sm fr-badge--new">brouillon</p>
+{%- elif t.status == 'in_review' -%}<p class="fr-badge fr-badge--sm fr-badge--info">en relecture</p>
 {%- elif t.status == 'retired' or t.validity_end_at is not none -%}<p class="fr-badge fr-badge--sm">retirée</p>
 {%- elif t.expected_answer is none -%}<p class="fr-badge fr-badge--warning fr-badge--sm">publiée · non notable</p>
 {%- else -%}<p class="fr-badge fr-badge--success fr-badge--sm">publiée</p>

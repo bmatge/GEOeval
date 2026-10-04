@@ -10,6 +10,10 @@
   {% if run.official_share is not none %}<li><p class="fr-badge fr-badge--purple-glycine"
       title="Domaines officiels du périmètre : {{ run.official_domains|join(', ') }}">Sources officielles : {{ (run.official_share * 100)|round|int }} %</p></li>{% endif %}
 </ul>
+{% if reference_batch %}
+<div class="fr-alert fr-alert--info fr-alert--sm fr-mt-2w"><p>Notes officielles issues du rejugement
+  <a class="fr-link" href="{{ url_prefix }}/rejudge/{{ reference_batch }}">lot #{{ reference_batch }}</a> ; les notes d'origine sont archivées.</p></div>
+{% endif %}
 {% if role in ('editor', 'org_admin') %}
 <p class="fr-mt-2w"><a class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-refresh-line fr-btn--icon-left" href="{{ url_prefix }}/rejudge/new?run_id={{ run.run_id }}">Rejuger ce run</a>
   {% for b in batches %}<a class="fr-link fr-link--sm fr-ml-2w" href="{{ url_prefix }}/rejudge/{{ b }}">lot #{{ b }}</a>{% endfor %}</p>

@@ -93,7 +93,7 @@ def create_question(body: QuestionIn, principal: Principal = Depends(require_rol
     t = services.create_test(
         db, principal.org.id, perimeter_id=body.perimeter_id, prompt=body.prompt, expected_answer=body.expected_answer,
         response_quality_prompt_id=body.response_quality_prompt_id, citation_quality_prompt_id=body.citation_quality_prompt_id,
-        status=body.status,
+        status=body.status, created_by=principal.user_id,
     )
     themes.set_for_test(db, t.test_id, theme_ids)
     audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="create", entity_type="test",
@@ -119,6 +119,7 @@ def update_question(test_id: int, body: QuestionPatch, principal: Principal = De
                 expected_answer=fields.get("expected_answer", t.expected_answer),
                 response_quality_prompt_id=fields.get("response_quality_prompt_id", t.response_quality_prompt_id),
                 citation_quality_prompt_id=fields.get("citation_quality_prompt_id", t.citation_quality_prompt_id),
+                user_id=principal.user_id,
             )
         except ValueError as exc:
             raise HTTPException(status_code=409, detail=str(exc))
@@ -140,11 +141,11 @@ def deactivate_question(test_id: int, principal: Principal = Depends(require_rol
     return _out(t, _theme_ids(db, test_id))
 
 
-@router.post("/{test_id}/publish", response_model=QuestionOut, summary="Publier un brouillon (editor+)")
+@router.post("/{test_id}/publish", response_model=QuestionOut, summary="Publier un brouillon (editor+) — le soumet à la relecture si la validation métier est requise")
 def publish_question(test_id: int, principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
     t = _get_or_404(db, principal.org.id, test_id)
     try:
-        services.publish_test(db, principal.org.id, test_id)
+        services.publish_test(db, principal.org.id, test_id, user_id=principal.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="publish", entity_type="test",
@@ -157,7 +158,7 @@ def publish_question(test_id: int, principal: Principal = Depends(require_role("
 def reactivate_question(test_id: int, principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
     t = _get_or_404(db, principal.org.id, test_id)
     try:
-        services.reactivate_test(db, principal.org.id, test_id)
+        services.reactivate_test(db, principal.org.id, test_id, user_id=principal.user_id)
     except ValueError as exc:
         raise HTTPException(status_code=409, detail=str(exc))
     audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="reactivate", entity_type="test",

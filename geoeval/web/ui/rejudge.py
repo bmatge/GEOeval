@@ -87,9 +87,42 @@ def batch_detail(batch_id: int, request: Request, ctx=Depends(require_role("view
         raise http_error(exc)
     prompts = {p.prompt_id: p for p in db.execute(select(EvaluationPrompt).where(
         EvaluationPrompt.prompt_id.in_([i for i in (b.response_prompt_id, b.citation_prompt_id) if i] or [-1]))).scalars()}
+    campaign_runs = set(db.execute(select(RunRow.run_id).where(
+        RunRow.run_id.in_(b.run_ids or [-1]), RunRow.campaign_id.is_not(None))).scalars())
     return render(request, "rejudge_detail.html", active="rejudge", org=org, role=role, batch=b,
                   status=rejudge.status(db, b), comparison=rejudge.compare(db, b), prompts=prompts,
-                  judges_label=rejudge.judges_label(b), estimate=rejudge.estimate_display(b), fmt=calibration.fmt)
+                  judges_label=rejudge.judges_label(b), estimate=rejudge.estimate_display(b), fmt=calibration.fmt,
+                  promoted_runs=rejudge.promoted_runs(db, b), campaign_runs=campaign_runs,
+                  skipped=request.query_params.get("skipped", ""))
+
+
+@router.post("/o/{org_slug}/rejudge/{batch_id}/promote")
+def batch_promote(batch_id: int, ctx=Depends(require_role("org_admin")), db: Session = Depends(get_db),
+                  user: CurrentUser = Depends(require_user)):
+    org, _ = ctx
+    try:
+        b = rejudge.get_for_org(db, org, batch_id)
+        res = rejudge.promote(db, org, b, user_id=user.id)
+    except launching.LaunchError as exc:
+        raise http_error(exc)
+    audit.record(db, user_id=user.id, org_id=org.id, action="promote", entity_type="evaluation_batch", entity_id=b.id,
+                 meta={"runs": res.done, "skipped": [r for r, _ in res.skipped]})
+    suffix = f"?skipped={len(res.skipped)}" if res.skipped else ""
+    return RedirectResponse(f"/o/{org.slug}/rejudge/{b.id}{suffix}", status_code=303)
+
+
+@router.post("/o/{org_slug}/rejudge/{batch_id}/revert")
+def batch_revert(batch_id: int, ctx=Depends(require_role("org_admin")), db: Session = Depends(get_db),
+                 user: CurrentUser = Depends(require_user)):
+    org, _ = ctx
+    try:
+        b = rejudge.get_for_org(db, org, batch_id)
+        restored = rejudge.revert(db, org, b)
+    except launching.LaunchError as exc:
+        raise http_error(exc)
+    audit.record(db, user_id=user.id, org_id=org.id, action="revert", entity_type="evaluation_batch", entity_id=b.id,
+                 meta={"runs": restored})
+    return RedirectResponse(f"/o/{org.slug}/rejudge/{b.id}", status_code=303)
 
 
 # ---------------------------------------------------------------------

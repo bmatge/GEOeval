@@ -26,7 +26,7 @@ TESTABLE_PROVIDERS = {"openai", "chatgpt", "gpt", "mistral", "mistralai", "gemin
 
 # Statut HTTP suggéré par type d'erreur (l'UI et l'API s'y conforment).
 KIND_STATUS = {"validation": 400, "forbidden_models": 403, "routing": 403, "budget": 402, "contract": 409,
-               "not_found": 404}
+               "not_found": 404, "conflict": 409}
 
 # Refus qui font sauter (et tracer) une échéance programmée au lieu de l'exécuter.
 SKIPPABLE_KINDS = ("budget", "routing", "contract")

@@ -608,6 +608,41 @@ mauvais accord — **indicateur + notification**.
 - **Reportés** : promotion d'un lot comme référence, validation métier des questions,
   blocage d'un notateur mal calibré, campagnes à inscription volontaire.
 
+## 4duodecies. Fin de E8 : promotion d'un lot et validation métier (amendement 2026-10-04)
+
+Arbitrages validés : promotion — **échange réversible**, décidée par les **org_admin, hors
+runs de campagne** ; validation métier — **optionnelle, héritée, à quatre yeux**, par des
+**validateurs désignés**, avec **re-relecture** à la modification de l'énoncé.
+
+- **Schéma** (révision `0010`) : `evaluation_batches.kind` (`rejudge` | `origin`),
+  `promoted_at`, `promoted_by` ; `runs.reference_batch_id` (lot qui fait foi) et
+  `runs.origin_batch_id` (archive des notes d'origine) ; `tests.status` gagne `in_review`,
+  plus `submitted_by/at`, `reviewed_by/at`, `review_comment` ; `organizations.review_required`
+  (NULL = hériter) ; `memberships.is_validator`.
+- **Promotion** (`rejudge.promote` / `revert`) : pour chaque run du lot terminé, hors
+  campagne (le protocole d'une campagne fige ses notateurs), les notes d'origine sont
+  copiées une fois dans une archive (`kind = "origin"`), puis les notes du lot remplacent
+  celles de `run_evaluations` dans la même transaction. Tableaux de bord, statistiques,
+  détecteurs et API lisent donc les notes promues sans changement de code. Revenir en
+  arrière restaure l'archive ; promouvoir un autre lot sur le même run réutilise l'archive
+  existante. La comparaison d'un lot se fait toujours contre les notes d'origine. Les
+  archives ne sont ni listées ni rejugeables. Audit : `promote`, `revert`.
+- **Validation métier** (`geoeval/web/reviews.py`) : si le réglage est actif, publier,
+  créer « publiée » ou réactiver soumet la question (`in_review`, hors runs, pools et
+  campagnes). Un validateur (org_admin de l'entité ou d'un ancêtre, ou membre désigné,
+  valable pour le sous-arbre) l'approuve ou la renvoie en brouillon avec un motif ; jamais
+  l'auteur de la soumission. Changer l'énoncé ou la réponse attendue d'une question publiée
+  ou en relecture la remet en relecture (la grille seule, non). Notifications
+  `review_requested` (validateurs de l'entité, à défaut de l'ancêtre le plus proche ; email
+  immédiat par défaut) et `review_done` (auteur).
+- **UI** : boutons « Promouvoir comme référence » et « Revenir aux notes d'origine » sur un
+  lot, mention sur le détail d'un run ; *Configurer › Relectures* ; *Paramètres › Validation
+  métier des questions* (réglage et validateurs). **API v1** : `POST
+  /orgs/{slug}/rejudge/{id}/promote` et `/revert` (org_admin) ; `GET /orgs/{slug}/reviews`,
+  `POST /orgs/{slug}/questions/{id}/approve` et `/reject` (décision personnelle, en
+  session) ; `GET/PUT /orgs/{slug}/review-settings`.
+- **Reportés** : blocage d'un notateur mal calibré, campagnes à inscription volontaire.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

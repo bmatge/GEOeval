@@ -65,6 +65,8 @@ class Organization(Base):
     path: Mapped[str] = mapped_column(Text, nullable=False)
     depth: Mapped[int] = mapped_column(Integer, nullable=False, server_default=text("0"))
     siret: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    # Validation métier des questions (E8 fin) : NULL = hériter (défaut : non requise).
+    review_required: Mapped[Optional[bool]] = mapped_column(Boolean, nullable=True)
 
 
 class User(Base):
@@ -129,6 +131,8 @@ class Membership(Base):
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), primary_key=True)
     org_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), primary_key=True)
     role: Mapped[str] = mapped_column(Text, nullable=False)  # org_admin | editor | viewer
+    # Validateur métier désigné (E8 fin), valable pour l'entité et son sous-arbre.
+    is_validator: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now()
     )
@@ -197,7 +201,7 @@ class Test(Base):
     __table_args__ = (
         Index("ix_tests_organization_id", "organization_id"),
         Index("ix_tests_perimeter_id", "perimeter_id"),
-        CheckConstraint("status IN ('draft', 'published', 'retired')", name="ck_tests_status"),
+        CheckConstraint("status IN ('draft', 'in_review', 'published', 'retired')", name="ck_tests_status"),
     )
     test_id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(
@@ -227,6 +231,13 @@ class Test(Base):
     # Cycle de vie (E8) : draft (brouillon, hors runs / pools / campagnes) | published | retired.
     # Invariant : retired ⇔ validity_end_at posé (historique ADR-076 : on retire, on ne supprime pas).
     status: Mapped[str] = mapped_column(Text, nullable=False, server_default="published")
+    # Validation métier (E8 fin) : in_review = soumise, hors runs jusqu'à l'approbation d'un
+    # validateur autre que l'auteur de la soumission ; motif du dernier renvoi en brouillon.
+    submitted_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    submitted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    reviewed_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    review_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
 
 
 # =====================================================================
@@ -411,6 +422,10 @@ class RunRow(Base):
     run_meta: Mapped[Optional[dict[str, Any]]] = mapped_column(JSONB, nullable=True)
     # Campagne exécutée par ce run (E8) — NULL = run hors campagne.
     campaign_id: Mapped[Optional[int]] = mapped_column(ForeignKey("campaigns.id"), nullable=True)
+    # Promotion (E8 fin) : lot dont les notes sont officielles (NULL = notes d'origine) et
+    # archive des notes d'origine, créée à la première promotion.
+    reference_batch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("evaluation_batches.id"), nullable=True)
+    origin_batch_id: Mapped[Optional[int]] = mapped_column(ForeignKey("evaluation_batches.id"), nullable=True)
 
 
 class RunResult(Base):
@@ -998,10 +1013,17 @@ class EvaluationBatch(Base):
     (ou une autre grille). N'écrase rien : les notes vont dans `rejudge_evaluations`,
     les notes d'origine restent la référence des tableaux de bord."""
     __tablename__ = "evaluation_batches"
-    __table_args__ = (Index("ix_evaluation_batches_org", "organization_id", "created_at"),)
+    __table_args__ = (
+        Index("ix_evaluation_batches_org", "organization_id", "created_at"),
+        CheckConstraint("kind IN ('rejudge', 'origin')", name="ck_evaluation_batches_kind"),
+    )
 
     id: Mapped[int] = mapped_column(primary_key=True)
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    # rejudge = lot de rejugement ; origin = archive des notes d'origine (créée par une promotion).
+    kind: Mapped[str] = mapped_column(Text, nullable=False, server_default="rejudge")
+    promoted_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    promoted_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     run_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
     # [{"model_id", "model_version", "repeats"}] : versions épinglées à la création.

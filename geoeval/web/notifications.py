@@ -72,6 +72,10 @@ KINDS: dict[str, Kind] = {
                           "hors sujet…)."),
     "report_resolved": Kind("Réponse à un signalement", (), "none",
                             "L'entité propriétaire a traité un signalement que tu as fait."),
+    "review_requested": Kind("Question à relire", (), "immediate",
+                             "Une question de l'entité attend la validation métier (tu en es validateur)."),
+    "review_done": Kind("Question relue", (), "none",
+                        "Une question que tu as soumise a été approuvée ou renvoyée en brouillon."),
     "judge_disagreement": Kind("Notateur en désaccord avec le gold", EDITORS, "none",
                                "Sur le jeu de calibration de l'entité, l'accord d'un notateur avec les "
                                "annotations humaines passe sous le seuil (global ou pour un thème)."),
