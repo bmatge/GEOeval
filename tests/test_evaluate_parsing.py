@@ -5,6 +5,7 @@ from decimal import Decimal
 
 import pytest
 
+from geoeval.core import evaluate
 from geoeval.core.evaluate import (
     CONFORMITY_LABELS,
     JudgeResult,
@@ -69,3 +70,31 @@ def test_guardrails_rappellent_le_schema():
     assert out.startswith("Note cette réponse.")
     assert '"label"' in out and '"score"' in out
     assert "SANS markdown" in out
+
+
+# ---- Prompt du notateur de citations : les sources renvoyées à part comptent --------
+def test_citations_structurees_transmises_au_notateur():
+    answer = "Le loyer maximal est de 200 euros par mois [1][2]."
+    prompt = evaluate.build_citation_user_prompt(
+        "Tu évalues la QUALITÉ DES CITATIONS.", answer,
+        ["https://www.exemple.gouv.fr/a", {"url": "https://www.exemple.gouv.fr/b", "title": "B"},
+         "https://www.exemple.gouv.fr/a", "", None],
+    )
+    assert answer in prompt and "[Sources fournies par le modèle testé]" in prompt
+    assert "[1] https://www.exemple.gouv.fr/a" in prompt and "[2] https://www.exemple.gouv.fr/b" in prompt
+    assert prompt.count("exemple.gouv.fr/a") == 1, "sources dédoublonnées, ordre des renvois conservé"
+    assert "renvois numérotés" in prompt
+    assert prompt.index("Tu évalues") < prompt.index("=== DONNÉES À ÉVALUER ===") < prompt.index(answer)
+
+
+def test_sans_source_structuree_le_notateur_le_sait():
+    for raw in (None, [], "pas une liste", [{"title": "sans url"}]):
+        prompt = evaluate.build_citation_user_prompt("Grille.", "Réponse sans source.", raw)
+        assert "(aucune source renvoyée en dehors du texte)" in prompt and "[1]" not in prompt
+
+
+def test_liste_de_sources_bornee():
+    urls = [f"https://exemple.fr/{i}" for i in range(evaluate.MAX_CITATIONS_IN_PROMPT + 5)]
+    prompt = evaluate.build_citation_user_prompt("Grille.", "Réponse.", urls)
+    assert f"[{evaluate.MAX_CITATIONS_IN_PROMPT}] " in prompt and f"[{evaluate.MAX_CITATIONS_IN_PROMPT + 1}] " not in prompt
+    assert "et 5 autres sources" in prompt

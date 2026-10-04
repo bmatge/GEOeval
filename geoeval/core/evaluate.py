@@ -136,6 +136,45 @@ def parse_judge_output(raw: str) -> JudgeResult:
     raise ValueError("judge output is not valid JSON")
 
 
+MAX_CITATIONS_IN_PROMPT = 30
+
+
+def citation_urls(raw_citations: Any) -> list[str]:
+    """URLs des sources enregistrées avec une réponse (chaîne, ou objet portant `url`),
+    dédoublonnées, dans l'ordre : c'est l'ordre des renvois [1], [2]… du texte."""
+    urls: list[str] = []
+    for c in raw_citations if isinstance(raw_citations, list) else []:
+        url = str((c.get("url") if isinstance(c, dict) else c) or "").strip()
+        if url and url not in urls:
+            urls.append(url)
+    return urls
+
+
+def build_citation_user_prompt(grid_text: str, raw_answer: str, raw_citations: Any) -> str:
+    """Prompt du notateur de citations : la grille, la réponse, puis les sources que l'IA a
+    renvoyées à part. Sans cette liste, une IA qui cite par renvois numérotés ([1], [2]) et
+    fournit ses URL hors du texte (Perplexity Sonar…) serait notée comme si elle ne citait rien."""
+    urls = citation_urls(raw_citations)
+    if urls:
+        listed = "\n".join(f"[{i}] {u}" for i, u in enumerate(urls[:MAX_CITATIONS_IN_PROMPT], start=1))
+        if len(urls) > MAX_CITATIONS_IN_PROMPT:
+            listed += f"\n(… et {len(urls) - MAX_CITATIONS_IN_PROMPT} autres sources)"
+        sources = (
+            "[Sources fournies par le modèle testé]\n"
+            "Liste des sources renvoyées avec la réponse. Les renvois numérotés du texte ([1], [2]…) "
+            "s'y rapportent ; elles comptent comme des citations au même titre que les liens écrits dans le texte.\n"
+            f"{listed}\n"
+        )
+    else:
+        sources = "[Sources fournies par le modèle testé]\n(aucune source renvoyée en dehors du texte)\n"
+    return (
+        f"{build_prompt_json_guardrails(grid_text)}\n\n"
+        "=== DONNÉES À ÉVALUER ===\n"
+        f"[Réponse du modèle testé]\n{raw_answer}\n\n"
+        f"{sources}"
+    )
+
+
 # -----------------------------
 # LLM judge call
 # -----------------------------
@@ -463,12 +502,9 @@ def evaluate_run(
                     real_usage=response_quality_usage,
                 )
 
-                # 2) Qualité citation
-                citation_quality_prompt = build_prompt_json_guardrails(citation_prompt_text)
-                citation_quality_user_prompt = (
-                    f"{citation_quality_prompt}\n\n"
-                    "=== DONNÉES À ÉVALUER ===\n"
-                    f"[Réponse du modèle testé]\n{run_result.raw_answer}\n"
+                # 2) Qualité citation — la réponse ET les sources structurées renvoyées à part.
+                citation_quality_user_prompt = build_citation_user_prompt(
+                    citation_prompt_text, run_result.raw_answer, run_result.raw_citations
                 )
 
                 citation_quality_raw, citation_quality_usage = call_judge_llm(
