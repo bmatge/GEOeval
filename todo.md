@@ -50,6 +50,18 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [x] E8 (suite) — rejugement versionné (lots comparés aux notes d'origine, jamais écrasées), calibration des notateurs (annotation dans l'app héritée, accord par notateur et thème, notification sous seuil hérité) (révision 0009), UI + API v1
 - [x] E8 (fin) — promotion réversible d'un lot rejugé (archive des notes d'origine, org_admin, hors campagnes), validation métier optionnelle héritée à quatre yeux avec validateurs désignés et re-relecture (révision 0010), UI + API v1
 
+## Suites de la mise en service de `geoeval-beta` (2026-10-05)
+Instance https://geoeval-beta.lab.miweb.run (TTL 30 jours, `--auth link`, Mailpit, SSO), 6 entités, 7 périmètres, 60 questions.
+- [ ] Bilan du premier lot d'évaluations (36 jobs, 6 sites × 6 IA OpenRouter, notateur Albert `openweight-large`) : notes par IA et par site, coût réel
+- [ ] Rejuger les runs de `perplexity/sonar` avec la nouvelle notation des citations (PR #66) et mesurer l'écart avant / après
+- [ ] `sakana/sakana-namazu` : refusé par OpenRouter (politique de données du compte) — autoriser le fournisseur ou désactiver le modèle
+- [ ] IA sans recherche web configurée (`mistral-small-3.2`, `gpt-4o-mini`) : poser un `search_config` ou les sortir du comparatif (notes proches de 0 sur des faits de 2026)
+- [ ] Courbes « par passage de chaque IA » : filtrer par périmètre (elles mélangent les périmètres d'une entité)
+- [ ] Devis : il ignore les coûts de recherche (Exa, Sonar) et les modèles sans tarif (0,53 € annoncés pour plusieurs dollars réels)
+- [ ] Relire la question « chauffage au gaz dans les logements neufs » (Électrifions la France) : toutes les IA sous 4/10
+- [ ] Sites protégés contre les robots (4 sur 6 illisibles sans navigateur) : mesurer l'effet sur les citations officielles
+- [ ] Prod `geoeval.lab.miweb.run` restée sur la PR #40 : décider quand la remplacer par la version beta
+
 ## À faire
 - Rendre `main.py` paramétrable en ligne de commande (argparse) plutôt que des listes en dur.
 - Améliorer l'extraction de citations (utiliser les métadonnées de sources des API au lieu d'une regex).
