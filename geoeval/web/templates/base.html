@@ -6,6 +6,18 @@
   <title>{% block title %}GEOeval{% endblock %} — GEOeval</title>
   <link rel="stylesheet" href="/static/vendor/dsfr-1.13.0/dsfr.min.css">
   <link rel="stylesheet" href="/static/vendor/dsfr-1.13.0/utility/utility.min.css">
+  <style>
+    /* En-tête : le bloc Marianne ne se comprime jamais, et la zone d'outils passe à la ligne
+       plutôt que d'écraser la marque (nom d'organisation long, plusieurs boutons). */
+    .fr-header__logo, .fr-header__brand-top { flex-shrink: 0; }
+    @media (min-width: 62em) {
+      .fr-header__brand { flex: 1 1 26rem; min-width: 0; }
+      .fr-header__tools { flex: 0 1 auto; min-width: 0; }
+      .fr-header__tools-links .fr-btns-group { flex-wrap: wrap; justify-content: flex-end; }
+      .geoeval-header-user { flex-basis: 100%; text-align: right; }
+      .geoeval-header-user .fr-hint-text { margin: 0 .5rem .25rem 0; text-align: right; width: 100%; }
+    }
+  </style>
 </head>
 <body>
 <header role="banner" class="fr-header">
@@ -27,28 +39,28 @@
           </div>
           <div class="fr-header__service">
             <a href="{{ (url_prefix ~ '/') if org else '/' }}" title="Accueil — GEOeval">
-              <p class="fr-header__service-title">GEOeval{% if org %} · {{ org.name }}{% endif %}
+              <p class="fr-header__service-title">GEOeval
                 <span class="fr-badge fr-badge--sm fr-badge--green-emeraude">Prototype</span></p>
             </a>
-            <p class="fr-header__service-tagline">Suivre la visibilité de l'information dans les IA</p>
+            <p class="fr-header__service-tagline">{{ org.name if org else "Suivre la visibilité de l'information dans les IA" }}</p>
           </div>
         </div>
         <div class="fr-header__tools">
           <div class="fr-header__tools-links">
             <ul class="fr-btns-group">
               {% if user %}
-              <li>
-                <span class="fr-hint-text fr-mr-2w">
+              <li class="geoeval-header-user">
+                <p class="fr-hint-text">
                   {{ user.email }}{% if user.is_platform_admin %} · <em>admin plateforme</em>{% endif %}
-                </span>
+                </p>
               </li>
               <li><a class="fr-btn fr-btn--tertiary fr-btn--sm fr-icon-notification-3-line fr-btn--icon-left" href="/notifications"
                      {% if active == 'notifications' %}aria-current="page"{% endif %}>Notifications{% if unread_notifications %}
                      <span class="fr-badge fr-badge--sm fr-badge--info fr-ml-1v" aria-label="{{ unread_notifications }} non lue(s)">{{ unread_notifications }}</span>{% endif %}</a></li>
               {% if org and (role == 'org_admin' or user.is_platform_admin) %}
-              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="{{ url_prefix }}/settings">Paramètres de l'org</a></li>
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="{{ url_prefix }}/settings" title="Paramètres de {{ org.name }}">Paramètres</a></li>
               {% endif %}
-              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/">Changer d'organisation</a></li>
+              <li><a class="fr-btn fr-btn--tertiary fr-btn--sm" href="/" title="Changer d'organisation">Organisations</a></li>
               <li>
                 <form method="post" action="/logout">
                   <button type="submit" class="fr-btn fr-btn--tertiary fr-btn--sm">Se déconnecter</button>
