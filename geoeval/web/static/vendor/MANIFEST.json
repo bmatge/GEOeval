@@ -28,6 +28,13 @@
       "dest": "dsfr-data-0.42.0",
       "tarball_integrity": "sha512-Fqz0Am6jteDl/YEzpN4xLmRJjMec7wR/f//AyTO1vMPm+kRPfzUpqm9Q/YSzfuhee8YEQtEYuD1mcMnKTSrXPw==",
       "note": "Le cœur UMD charge les deux chunks (zstd, parquet) en relatif si une source le demande."
+    },
+    "swagger-ui-dist": {
+      "version": "5.33.1",
+      "license": "Apache-2.0",
+      "dest": "swagger-ui-5.33.1",
+      "tarball_integrity": "sha512-H872wWkA53bFIsGgi7OWgmq+CRWw3nFQGdJWRqOB9wNwTm6e5ol34+qPDkV4AJlK+gglM2EsJiOOzsGsEGbluA==",
+      "note": "Documentation interactive de l'API v1 (/api/v1/docs) : servie localement, jamais depuis un CDN."
     }
   },
   "files": {
@@ -706,6 +713,11 @@
     "dsfr-data-0.42.0/LICENSE": "12d376f49507d5b40ed840d7d54cbd030de2a4e374924968c92228727819ec54",
     "dsfr-data-0.42.0/dsfr-data.core.umd.js": "483e4a5c3a9a61bae3db52278656283f476f6d988f485defe674078bb5a2751d",
     "dsfr-data-0.42.0/fzstd-w50XBdvj.js": "b8968733e9b25063e7c59f7a0a1b18eddf29f5afd56943e2172ab6f8df87fa2b",
-    "dsfr-data-0.42.0/hyparquet-BlvNCtjd.js": "38934a8675a6a2ca3b2c2f2a20de228327cf9945c3549f00ad4203c882d2126a"
+    "dsfr-data-0.42.0/hyparquet-BlvNCtjd.js": "38934a8675a6a2ca3b2c2f2a20de228327cf9945c3549f00ad4203c882d2126a",
+    "swagger-ui-5.33.1/LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+    "swagger-ui-5.33.1/NOTICE": "0d20d1adef18aee3f40dd258172155521ce702ac445cb5f7b7d60ed32dad2fb2",
+    "swagger-ui-5.33.1/favicon-32x32.png": "3ed612f41e050ca5e7000cad6f1cbe7e7da39f65fca99c02e99e6591056e5837",
+    "swagger-ui-5.33.1/swagger-ui-bundle.js": "050bc415ee7048dcd881682678f720264e7da5e373f7461d7c58c755305255f7",
+    "swagger-ui-5.33.1/swagger-ui.css": "1ac324f7dcd27e4b9386b4bd6421271ec147e922a22c05ba24b11515e9aa6321"
   }
 }

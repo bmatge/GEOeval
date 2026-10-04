@@ -1,5 +1,5 @@
 """
-Vendorisation des ressources front (ADR-088 lot 1.6) — DSFR, Chart.js, dsfr-chart, dsfr-data.
+Vendorisation des ressources front (ADR-088 lot 1.6) — DSFR, Chart.js, dsfr-chart, dsfr-data, Swagger UI.
 
 Les fichiers sont versionnés dans le dépôt sous geoeval/web/static/vendor/ : aucune
 dépendance à un CDN à l'exécution (réseau fermé, CSP stricte), aucune chaîne Node.
@@ -65,6 +65,11 @@ PACKAGES: tuple[Package, ...] = (
         "dsfr-data", "0.42.0", "MIT", "dsfr-data-0.42.0",
         ("dist/dsfr-data.core.umd.js", "dist/fzstd-w50XBdvj.js", "dist/hyparquet-BlvNCtjd.js", "LICENSE"),
         note="Le cœur UMD charge les deux chunks (zstd, parquet) en relatif si une source le demande.",
+    ),
+    Package(
+        "swagger-ui-dist", "5.33.1", "Apache-2.0", "swagger-ui-5.33.1",
+        ("swagger-ui-bundle.js", "swagger-ui.css", "favicon-32x32.png", "LICENSE", "NOTICE"),
+        note="Documentation interactive de l'API v1 (/api/v1/docs) : servie localement, jamais depuis un CDN.",
     ),
 )
 
