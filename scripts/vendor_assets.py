@@ -62,7 +62,7 @@ PACKAGES: tuple[Package, ...] = (
         note="dist/chart.umd.js est déjà minifié (jsDelivr servait ce fichier sous le nom chart.umd.min.js).",
     ),
     Package(
-        "dsfr-data", "0.42.0", "MIT", "dsfr-data-0.42.0",
+        "dsfr-data", "0.46.0", "MIT", "dsfr-data-0.46.0",
         ("dist/dsfr-data.core.umd.js", "dist/fzstd-w50XBdvj.js", "dist/hyparquet-BlvNCtjd.js", "LICENSE"),
         note="Le cœur UMD charge les deux chunks (zstd, parquet) en relatif si une source le demande.",
     ),

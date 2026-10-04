@@ -307,7 +307,7 @@ confiance) ; le branchement réel (rattachement par SIRET, `userinfo` en JWT) re
 
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
-DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1, dsfr-data 0.42.0 et Swagger UI 5.33.1 sont
+DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1, dsfr-data 0.46.0 et Swagger UI 5.33.1 sont
 servis depuis `/static/vendor/<paquet>-<version>/…` : aucun CDN à l'exécution (réseau fermé, CSP stricte).
 `geoeval/web/static/vendor/MANIFEST.json` porte les versions, licences et empreintes SHA-256, vérifiées en CI.
 
