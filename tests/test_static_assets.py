@@ -46,7 +46,7 @@ def test_gabarits_pointent_sur_des_fichiers_vendorises():
     ("/static/vendor/dsfr-1.13.0/icons/system/arrow-right-line.svg", "image/svg+xml"),
     ("/static/vendor/chartjs-4.4.1/chart.umd.js", "javascript"),
     ("/static/vendor/dsfr-chart-2.1.1/DSFRChart/DSFRChart.js", "javascript"),
-    ("/static/vendor/dsfr-data-0.42.0/dsfr-data.core.umd.js", "javascript"),
+    ("/static/vendor/dsfr-data-0.46.0/dsfr-data.core.umd.js", "javascript"),
 ])
 def test_fichiers_statiques_servis(anonymous_client, path, ctype):
     r = anonymous_client.get(path)
