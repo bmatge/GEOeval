@@ -280,6 +280,16 @@ plateforme. L'accord (corrélation de rang, kappa) s'affiche globalement et par 
 réglable dans *Paramètres › Détecteurs*), les éditeurs sont notifiés. Pour calibrer un nouveau notateur, on
 rejuge des runs déjà annotés.
 
+## Explorer les scores
+
+La page *Explorer les scores* (menu principal) montre les notes d'une entité et de ses sous-entités, question par
+question. Une recherche sur le texte des questions et trois facettes (entité, périmètre, IA évaluée) filtrent
+deux vues : un tableau détaillé (tri, pagination, export CSV, notes colorées par niveau) et une matrice
+question × IA pour les réponses et pour les citations. Par défaut, seule la dernière évaluation de chaque
+périmètre et de chaque IA est affichée ; un lien donne tout l'historique. Les données viennent de
+`/o/{slug}/api/stats/scores` (et `/api/v1/orgs/{slug}/stats/scores`), le rendu des composants `dsfr-data`
+(`search`, `facets`, `list`, `pivot`).
+
 ## Notifications (ADR-089, chantier E7)
 
 Le lien *Notifications* de l'en-tête ouvre une boîte de réception personnelle, toutes entités confondues. Les

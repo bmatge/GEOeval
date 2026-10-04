@@ -74,6 +74,21 @@ def api_stats_questions(request: Request, ctx=Depends(public_org), db: Session =
     return JSONResponse(services.question_stats(db, org.id))
 
 
+@router.get("/o/{org_slug}/explore", response_class=HTMLResponse)
+def explore(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db), history: int = 0):
+    """Explorateur de scores : recherche, facettes (entité, périmètre, IA), tableau et matrice."""
+    org, role = ctx
+    return render(request, "explore.html", active="explore", org=org, role=role, history=bool(history),
+                  limit=services.SCORE_ROWS_LIMIT)
+
+
+@router.get("/o/{org_slug}/api/stats/scores")
+def api_stats_scores(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db), history: int = 0):
+    """Une ligne par (évaluation, question) de l'entité et de son sous-arbre (explorateur de scores)."""
+    org, _ = ctx
+    return JSONResponse(services.score_rows(db, org, history=bool(history)))
+
+
 @router.get("/o/{org_slug}/api/stats/evolution")
 def api_stats_evolution(request: Request, ctx=Depends(public_org), db: Session = Depends(get_db)):
     """Scores par IA et par n° de passage (format long — courbes par IA)."""

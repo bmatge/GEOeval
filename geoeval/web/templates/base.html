@@ -96,6 +96,10 @@
             <a class="fr-nav__link" href="{{ url_prefix }}/runs"
                {% if active == 'runs' %}aria-current="page"{% endif %}>Évaluations</a>
           </li>
+          <li class="fr-nav__item">
+            <a class="fr-nav__link" href="{{ url_prefix }}/explore"
+               {% if active == 'explore' %}aria-current="page"{% endif %}>Explorer les scores</a>
+          </li>
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
           <li class="fr-nav__item">
             <a class="fr-nav__link" href="{{ url_prefix }}/launch"
