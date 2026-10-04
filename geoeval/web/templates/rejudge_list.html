@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Rejugements{% endblock %}
+{% block content %}
+<h1>Rejugements</h1>
+<p>Un rejugement fait noter à nouveau des runs passés par d'autres notateurs, ou avec une autre grille. Les notes
+  d'origine ne changent pas et restent la référence des tableaux de bord : le lot s'affiche à côté, avec les écarts.
+  Il passe par les contrôles habituels (notateurs autorisés, routage, contrats, budget) et se paie comme une
+  évaluation (appels des notateurs seulement).</p>
+{% if role in ('editor', 'org_admin') %}
+<p><a class="fr-btn fr-icon-add-line fr-btn--icon-left" href="{{ url_prefix }}/rejudge/new">Nouveau rejugement</a>
+  <a class="fr-btn fr-btn--secondary fr-ml-2w" href="{{ url_prefix }}/calibration">Calibration des notateurs</a></p>
+{% endif %}
+{% if items %}
+<div class="fr-table"><table>
+  <thead><tr><th>Lot</th><th>Libellé</th><th>Notateurs</th><th>Runs</th><th>Devis</th><th>Date</th><th>État</th></tr></thead>
+  <tbody>
+  {% for b in items %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/rejudge/{{ b.id }}">#{{ b.id }}</a></td>
+      <td>{{ b.label or '—' }}</td>
+      <td>{{ judges_label(b) }}</td>
+      <td>{{ b.run_ids|length }}</td>
+      <td>{{ ('%.2f €' % b.estimate_eur) if b.estimate_eur is not none else '—' }}</td>
+      <td>{{ b.created_at.strftime("%d/%m/%Y %H:%M") }}</td>
+      <td>{% include "_batch_status.html" %}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucun rejugement pour l'instant.</p>
+{% endif %}
+{% endblock %}

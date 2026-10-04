@@ -10,7 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session, aliased
 
-from geoeval.db.models import Model, Test, RunResult, RunEvaluation, EvaluationPrompt
+from geoeval.db.models import Model, Test, RunResult, RunEvaluation, EvaluationPrompt, RejudgeEvaluation
 
 from geoeval.core import llm_clients
 from geoeval.core.run import resolve_model
@@ -348,6 +348,10 @@ def evaluate_run(
     judges: list[Any],
     organization_id: Optional[int] = None,
     progress_cb: Callable[[int, int, str], None] | None = None,
+    *,
+    batch_id: Optional[int] = None,
+    response_prompt_id: Optional[int] = None,
+    citation_prompt_id: Optional[int] = None,
 ) -> None:
     """
     judges: liste de juges, chacun étant soit un JudgeRunConfig, soit un dict.
@@ -360,6 +364,11 @@ def evaluate_run(
 
     progress_cb: callback optionnel (current, total, detail) appelé après chaque
                  couple (juge, test) évalué (utilisé par l'UI).
+
+    Rejugement (E8 suite) : avec `batch_id`, les notes vont dans `rejudge_evaluations`
+    (les notes d'origine ne sont jamais touchées). `response_prompt_id` /
+    `citation_prompt_id` imposent une grille à toutes les questions ; la grille de
+    conformité (vérité de référence présente) reste prioritaire pour la réponse.
     """
     judge_specs = _normalize_judges(session, judges)
 
@@ -376,6 +385,14 @@ def evaluate_run(
     rows = session.execute(stmt).all()
     if not rows:
         raise ValueError(f"Aucun run_results pour run_id={run_id}")
+    if response_prompt_id is not None or citation_prompt_id is not None:
+        forced_resp = session.get(EvaluationPrompt, response_prompt_id) if response_prompt_id else None
+        forced_cit = session.get(EvaluationPrompt, citation_prompt_id) if citation_prompt_id else None
+        rows = [
+            (rr, test, forced_resp.prompt_text if forced_resp else resp, forced_cit.prompt_text if forced_cit else cit)
+            for rr, test, resp, cit in rows
+        ]
+    target = RejudgeEvaluation if batch_id is not None else RunEvaluation
 
     n_evaluable = sum(1 for _, test, _, _ in rows if test.expected_answer)
     total = sum(repeats for _, repeats in judge_specs) * n_evaluable
@@ -465,6 +482,7 @@ def evaluate_run(
                 )
 
                 payload = dict(
+                    **({"batch_id": batch_id} if batch_id is not None else {}),
                     run_id=run_id,
                     test_id=test.test_id,
                     judge_model_id=judge_model.model_id,
@@ -475,13 +493,14 @@ def evaluate_run(
                     citation_quality_score=citation_quality.score,
                 )
 
-                ins = insert(RunEvaluation).values(**payload)
+                ins = insert(target).values(**payload)
                 upsert = ins.on_conflict_do_update(
                     index_elements=[
-                        RunEvaluation.run_id,
-                        RunEvaluation.test_id,
-                        RunEvaluation.judge_model_id,
-                        RunEvaluation.judge_run_index,
+                        *([target.batch_id] if batch_id is not None else []),
+                        target.run_id,
+                        target.test_id,
+                        target.judge_model_id,
+                        target.judge_run_index,
                     ],
                     set_={
                         "response_quality_label": ins.excluded.response_quality_label,

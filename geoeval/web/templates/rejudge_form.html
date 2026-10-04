@@ -1,0 +1,56 @@
+{% extends "base.html" %}
+{% block title %}Nouveau rejugement{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/rejudge">Retour aux rejugements</a>
+<h1 class="fr-mt-2w">Nouveau rejugement</h1>
+<p>Les runs choisis sont notés à nouveau ; leurs notes d'origine ne changent pas. Les versions des notateurs et
+  l'empreinte des grilles sont figées à la création du lot. Pour calibrer un nouveau notateur, rejuge des runs déjà
+  annotés : son accord avec les annotations apparaît dans <a class="fr-link" href="{{ url_prefix }}/calibration">Calibration</a>.</p>
+<form method="post" action="{{ url_prefix }}/rejudge/new" style="max-width:56rem;">
+  <div class="fr-input-group">
+    <label class="fr-label" for="label">Libellé <span class="fr-hint-text">(optionnel, ex. « nouvelle grille v2 »)</span></label>
+    <input class="fr-input" id="label" name="label" maxlength="200">
+  </div>
+  <fieldset class="fr-fieldset" aria-labelledby="judge-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="judge-legend">Notateurs</legend>
+    {% for m in judge_models %}
+    <div class="fr-fieldset__element fr-fieldset__element--inline"><div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="jm-{{ m.model_id }}" name="judge_models" value="{{ m.model_version }}">
+      <label class="fr-label" for="jm-{{ m.model_id }}">{{ m.model_version }}{% if m.is_sovereign %} · souverain{% endif %}</label>
+    </div></div>
+    {% else %}<p class="fr-hint-text">Aucun notateur autorisé pour cette entité.</p>{% endfor %}
+  </fieldset>
+  <div class="fr-input-group" style="max-width:14rem;">
+    <label class="fr-label" for="repeats">Répétitions par notateur (1 à {{ max_repeats }})</label>
+    <input class="fr-input" id="repeats" name="repeats" type="number" min="1" max="{{ max_repeats }}" value="1">
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="response_prompt_id">Grille de réponse
+      <span class="fr-hint-text">Par défaut, celle de chaque question. Une question dotée d'une vérité de référence garde la grille de conformité.</span></label>
+    <select class="fr-select" id="response_prompt_id" name="response_prompt_id">
+      <option value="0">Grille de chaque question</option>
+      {% for p in response_prompts %}<option value="{{ p.prompt_id }}">{{ p.prompt_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <div class="fr-select-group">
+    <label class="fr-label" for="citation_prompt_id">Grille de citations</label>
+    <select class="fr-select" id="citation_prompt_id" name="citation_prompt_id">
+      <option value="0">Grille de chaque question</option>
+      {% for p in citation_prompts %}<option value="{{ p.prompt_id }}">{{ p.prompt_name }}</option>{% endfor %}
+    </select>
+  </div>
+  <fieldset class="fr-fieldset fr-mt-2w" aria-labelledby="runs-legend">
+    <legend class="fr-fieldset__legend fr-text--bold" id="runs-legend">Runs à rejuger
+      <span class="fr-hint-text">Au plus {{ max_runs }} par lot (les {{ runs|length }} plus récents sont listés).</span></legend>
+    {% for r in runs %}
+    <div class="fr-fieldset__element"><div class="fr-checkbox-group fr-checkbox-group--sm">
+      <input type="checkbox" id="run-{{ r.run_id }}" name="run_ids" value="{{ r.run_id }}" {% if r.run_id in selected_runs %}checked{% endif %}>
+      <label class="fr-label" for="run-{{ r.run_id }}">#{{ r.run_id }} · {{ r.model_version }}
+        {% if r.started_at %}· {{ r.started_at.strftime("%d/%m/%Y %H:%M") }}{% endif %}
+        {% if r.run_meta and r.run_meta.note %}· {{ r.run_meta.note }}{% endif %}</label>
+    </div></div>
+    {% else %}<p class="fr-hint-text">Aucun run pour cette entité.</p>{% endfor %}
+  </fieldset>
+  <button type="submit" class="fr-btn fr-mt-2w">Lancer le rejugement</button>
+</form>
+{% endblock %}

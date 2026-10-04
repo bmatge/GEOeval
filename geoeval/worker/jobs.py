@@ -229,6 +229,40 @@ def select_tests(
                                    campaign_id=campaign_id)
 
 
+def _execute_rejudge(job_id: str, params: dict[str, Any], stop_event: Optional[threading.Event]) -> list[int]:
+    """Lot de rejugement (E8 suite) : les runs du lot sont notés à nouveau ; les notes
+    vont dans `rejudge_evaluations`, celles d'origine ne sont jamais touchées."""
+    from geoeval.db.models import EvaluationBatch
+
+    with SessionLocal() as session:
+        batch = session.get(EvaluationBatch, int(params["batch_id"]))
+        if batch is None:
+            raise ValueError(f"lot de rejugement {params['batch_id']} introuvable")
+        run_ids = [int(r) for r in batch.run_ids]
+        judges = [{"model_id": int(j["model_id"]), "repeats": int(j.get("repeats", 1))} for j in batch.judges]
+        resp_id, cit_id, batch_id = batch.response_prompt_id, batch.citation_prompt_id, batch.id
+    organization_id = int(params["organization_id"])
+    logger.info("Job %s : rejugement du lot %s (%d run(s))", job_id, batch_id, len(run_ids))
+    _set(job_id, run_ids=list(run_ids))
+    for idx, run_id in enumerate(run_ids):
+        if stop_event is not None and stop_event.is_set():
+            raise JobInterrupted(
+                f"Interrompu par l'arrêt du worker avant le run {run_id} ({idx}/{len(run_ids)} traité(s)). "
+                "Les notes déjà écrites sont conservées."
+            )
+        with SessionLocal() as session:
+            def cb(cur: int, tot: int, detail: str, _rid=run_id, _i=idx) -> None:
+                _set(job_id, phase=f"REJUGEMENT run {_rid} ({_i + 1}/{len(run_ids)}) · {detail}", current=cur, total=tot)
+
+            evaluate_run(session, run_id=run_id, judges=judges, organization_id=organization_id, progress_cb=cb,
+                         batch_id=batch_id, response_prompt_id=resp_id, citation_prompt_id=cit_id)
+            session.commit()
+    from geoeval.web import detectors
+
+    detectors.calibration_after_evaluation_safely(organization_id, [j["model_id"] for j in judges], batch_id=batch_id)
+    return run_ids
+
+
 def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> None:
     """Exécute un job déjà réclamé (status=running) : RUN puis ÉVALUATION par
     modèle testé. Progression, logs et battement de cœur écrits en base."""
@@ -254,6 +288,15 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
             if job is None:
                 raise ValueError(f"job {job_id} introuvable")
             params = dict(job.params)
+
+        if params.get("kind") == "rejudge":
+            alert_org = int(params["organization_id"])
+            ctx_org = org_id_var.set(alert_org)
+            run_ids = _execute_rejudge(job_id, params, stop_event)
+            _set(job_id, status=STATUS_DONE, phase="terminé", finished_at=func.now())
+            outcome = "done"
+            logger.info("Job %s (rejugement) terminé (runs %s)", job_id, run_ids)
+            return
 
         tested_models: list[str] = params["tested_models"]
         judges: list[dict[str, Any]] = params["judges"]
@@ -310,10 +353,12 @@ def execute(job_id: str, *, stop_event: Optional[threading.Event] = None) -> Non
                     progress_cb=eval_cb,
                 )
                 session.commit()
-            # E7 : détecteur « question toujours fausse » (n'écrit que des notifications).
+            # E7 : détecteurs « toujours faux », « chute des citations » ; E8 suite : calibration.
             from geoeval.web import detectors
 
             detectors.after_evaluation_safely(run_id)
+            detectors.calibration_after_evaluation_safely(
+                organization_id, [j["model"] for j in judges], batch_id=None)
 
         _set(job_id, status=STATUS_DONE, phase="terminé", finished_at=func.now())
         outcome = "done"

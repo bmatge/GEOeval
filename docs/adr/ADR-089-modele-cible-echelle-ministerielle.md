@@ -563,6 +563,51 @@ par type** (immédiat, récapitulatif quotidien, aucun).
   dans `/orgs/{slug}/detector-settings`.
 - **Reportés** : webhooks (Tchap…), abonnements partagés, validation métier des questions.
 
+## 4undecies. Suite de E8 : rejugement versionné et calibration (amendement 2026-10-04)
+
+Arbitrages validés : rejugement — **comparaison, origine inchangée** ; lancement —
+**editor+, contrôles habituels** ; gold — **annotation dans l'application** ; effet d'un
+mauvais accord — **indicateur + notification**.
+
+- **Schéma** (révision `0009`) : `evaluation_batches` (runs, notateurs épinglés, grilles
+  imposées éventuelles, empreintes SHA-256 des grilles, devis, job) ;
+  `rejudge_evaluations` (mêmes colonnes que `run_evaluations`, clé `batch_id` en plus) ;
+  `gold_annotations.organization_id` (NULL = gold set importé par la plateforme) et
+  `annotator_user_id` ; `detector_settings.calibration_min_rho`.
+- **Rejugement** (`geoeval/web/rejudge.py`) : un editor+ choisit des runs de son entité
+  (au plus 100), des notateurs autorisés, des répétitions, et éventuellement une grille de
+  réponse ou de citations imposée à toutes les questions. Mêmes contrôles qu'un lancement :
+  liste blanche, routage, contrats, devis limité aux appels des notateurs (l'IA évaluée
+  n'est pas rappelée), plafonds des contrats et budget consolidé. Le job (`kind =
+  "rejudge"`) note à nouveau les réponses stockées ; `evaluate_run(batch_id=…)` écrit dans
+  `rejudge_evaluations` et **jamais** dans `run_evaluations`. Tableaux de bord, campagnes
+  et détecteurs continuent de lire les notes d'origine.
+- **Comparaison** : par paire (run, question), par IA évaluée et au global, notes
+  d'origine et du lot (moyenne des notateurs), écart, écart absolu, corrélation de rang
+  entre les deux séries. La promotion d'un lot comme référence reste à faire.
+- **Calibration** (`geoeval/web/calibration.py`) : un editor+ annote un résultat d'un run
+  de son entité (label et note pour la réponse et les citations ; une annotation par
+  personne et par résultat). Le jeu de calibration d'une entité = ses annotations, celles
+  de ses ancêtres et le gold set de la plateforme. Accord de chaque version de notateur
+  (notes d'origine par modèle, ou lot × modèle) : corrélation de rang (Spearman) et kappa
+  de Cohen, réponse et citations, écart absolu moyen, global et par thème. Un nouveau
+  notateur se calibre en rejugeant des runs déjà annotés. La page méthodologie de la
+  plateforme ne lit plus que le gold set importé.
+- **Détecteur `judge_disagreement`** : après chaque évaluation (notateurs du job) et
+  chaque lot, si la corrélation sur la note de réponse passe sous le seuil (défaut 0,5,
+  `GEOEVAL_CALIBRATION_MIN_RHO`, surchargeable par entité et hérité), globalement ou pour
+  un thème, avec au moins `GEOEVAL_CALIBRATION_MIN_PAIRS` paires (défaut 10), les editor+
+  sont notifiés ; au plus une fois par semaine par (version de notateur, thème). Rien
+  n'est bloqué.
+- **UI** : *Configurer › Rejugements* (liste, création, détail avec comparaison),
+  *Configurer › Calibration des notateurs*, liens « Rejuger ce run » et « Annoter » sur le
+  détail d'un run, seuil dans *Paramètres › Détecteurs*. **API v1** :
+  `/orgs/{slug}/rejudge` (GET, POST editor+, GET `{id}` avec comparaison),
+  `/orgs/{slug}/calibration`, `/orgs/{slug}/annotations` (GET ; PUT editor+ en session),
+  `calibration_min_rho` dans `/orgs/{slug}/detector-settings`.
+- **Reportés** : promotion d'un lot comme référence, validation métier des questions,
+  blocage d'un notateur mal calibré, campagnes à inscription volontaire.
+
 ## 5. Conséquences
 
 - Les chantiers du lot 1 (ADR-088) absorbent ces décisions : le worker lit `jobs` avec

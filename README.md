@@ -258,6 +258,19 @@ entités désignées de son sous-arbre : les questions publiées d'un pool, les 
 sous ses contrats (un participant bloqué par son budget, un contrat ou sa politique de routage est sauté et tracé).
 La page de la campagne compare les notes par participant et par IA, avec l'écart d'une exécution à l'autre.
 
+## Rejugement et calibration des notateurs (ADR-089, suite E8)
+
+Un **rejugement** (*Configurer › Rejugements*, éditeurs) fait noter à nouveau des runs passés par d'autres
+notateurs, ou avec une grille imposée. Les réponses stockées sont réutilisées : seuls les notateurs sont appelés,
+sous les contrôles habituels (notateurs autorisés, routage, contrats, budget). Les notes d'origine ne changent
+jamais et restent celles des tableaux de bord ; le lot s'affiche à côté, avec les écarts par question et par IA.
+
+La **calibration** (*Configurer › Calibration des notateurs*) compare chaque notateur aux annotations humaines :
+celles de l'entité (bouton « Annoter » sur le détail d'un run), de ses entités parentes et le gold set de la
+plateforme. L'accord (corrélation de rang, kappa) s'affiche globalement et par thème ; sous un seuil (défaut 0,5,
+réglable dans *Paramètres › Détecteurs*), les éditeurs sont notifiés. Pour calibrer un nouveau notateur, on
+rejuge des runs déjà annotés.
+
 ## Notifications (ADR-089, chantier E7)
 
 Le lien *Notifications* de l'en-tête ouvre une boîte de réception personnelle, toutes entités confondues. Les

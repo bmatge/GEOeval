@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Calibration des notateurs{% endblock %}
+{% block content %}
+<h1>Calibration des notateurs</h1>
+<p>Le jeu de calibration rassemble les annotations humaines de {{ org.name }}, celles de ses entités parentes et le
+  gold set de la plateforme : {{ n_gold }} paire(s) (run, question) annotée(s). Chaque version de notateur y est
+  comparée : notes d'origine par modèle, et notes de chaque lot de rejugement. Pour annoter, ouvre un run et choisis
+  « Annoter » sur une question ; pour calibrer un nouveau notateur, <a class="fr-link" href="{{ url_prefix }}/rejudge/new">rejuge</a>
+  des runs déjà annotés.</p>
+<div class="fr-callout">
+  <p class="fr-callout__text">Seuil d'alerte : corrélation de rang d'au moins <strong>{{ threshold }}</strong> sur la note de
+    réponse ({{ ('posé par ' ~ threshold_from.name) if threshold_from else 'défaut plateforme' }}), à partir de
+    {{ min_pairs }} paires. Sous ce seuil, globalement ou pour un thème, les éditeurs reçoivent une notification ;
+    rien n'est bloqué.{% if role == 'org_admin' %} <a class="fr-link" href="{{ url_prefix }}/settings/detectors">Régler</a>{% endif %}</p>
+</div>
+
+{% if judges %}
+<div class="fr-table fr-mt-3w"><table>
+  <thead><tr><th>Notateur</th><th>Source</th><th>Paires</th><th>Réponse : ρ</th><th>Réponse : κ</th><th>Écart absolu</th><th>Citations : ρ</th><th>Citations : κ</th></tr></thead>
+  <tbody>
+  {% for j in judges %}
+    {% set rho = j.overall.response_spearman %}
+    <tr>
+      <td><code>{{ j.model.model_version }}</code></td>
+      <td>{% if j.batch %}<a class="fr-link" href="{{ url_prefix }}/rejudge/{{ j.batch.id }}">lot #{{ j.batch.id }}</a>{% else %}notes d'origine{% endif %}</td>
+      <td>{{ j.overall.n_pairs }}</td>
+      <td>{{ fmt(rho) }}{% if rho is not none and j.overall.n_pairs >= min_pairs and rho < threshold|float %} <span class="fr-badge fr-badge--warning fr-badge--sm">sous le seuil</span>{% endif %}</td>
+      <td>{{ fmt(j.overall.response_kappa) }}</td>
+      <td>{{ fmt(j.overall.response_mae) }}</td>
+      <td>{{ fmt(j.overall.citation_spearman) }}</td>
+      <td>{{ fmt(j.overall.citation_kappa) }}</td>
+    </tr>
+    {% for t in j.by_theme %}
+    <tr class="fr-text--sm">
+      <td class="fr-pl-4w">↳ {{ t.label }}</td><td></td><td>{{ t.n_pairs }}</td>
+      <td>{{ fmt(t.response_spearman) }}{% if t.response_spearman is not none and t.n_pairs >= min_pairs and t.response_spearman < threshold|float %} <span class="fr-badge fr-badge--warning fr-badge--sm">sous le seuil</span>{% endif %}</td>
+      <td>{{ fmt(t.response_kappa) }}</td><td>{{ fmt(t.response_mae) }}</td>
+      <td>{{ fmt(t.citation_spearman) }}</td><td>{{ fmt(t.citation_kappa) }}</td>
+    </tr>
+    {% endfor %}
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p class="fr-mt-3w">Aucun notateur n'a encore noté une paire annotée.</p>
+{% endif %}
+
+<h2 class="fr-mt-4w">Annotations récentes de {{ org.name }}</h2>
+{% if own %}
+<div class="fr-table fr-table--sm"><table>
+  <thead><tr><th>Run</th><th>Question</th><th>Annotateur</th><th>Réponse</th><th>Citations</th><th>Date</th></tr></thead>
+  <tbody>
+  {% for a in own %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/runs/{{ a.run_id }}">#{{ a.run_id }}</a></td>
+      <td>#{{ a.test_id }}</td><td>{{ a.annotator_email }}</td>
+      <td>{{ a.response_label }} · {{ a.response_score }}</td><td>{{ a.citation_label }} · {{ a.citation_score }}</td>
+      <td>{{ a.annotated_at.strftime("%d/%m/%Y") }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucune annotation propre à l'entité.</p>
+{% endif %}
+{% endblock %}

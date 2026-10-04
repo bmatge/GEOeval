@@ -78,23 +78,26 @@ def detectors_form(request: Request, ctx=Depends(require_role("org_admin")), db:
     return render(request, "detector_settings.html", active="settings", org=org, role=role,
                   own=detectors.own_settings(db, org.id), effective=detectors.effective_settings(db, org),
                   default_runs=defaults[0], default_threshold=defaults[1],
-                  default_citation_drop=detectors.citation_drop_default())
+                  default_citation_drop=detectors.citation_drop_default(),
+                  default_calibration=detectors.calibration_defaults())
 
 
 @router.post("/o/{org_slug}/settings/detectors")
 def detectors_submit(ctx=Depends(require_role("org_admin")), db: Session = Depends(get_db),
                      user: CurrentUser = Depends(require_user),
                      always_wrong_runs: str = Form(""), always_wrong_threshold: str = Form(""),
-                     citation_drop_points: str = Form("")):
+                     citation_drop_points: str = Form(""), calibration_min_rho: str = Form("")):
     org, _ = ctx
     try:
         runs = int(always_wrong_runs) if always_wrong_runs.strip() else None
         detectors.set_settings(db, org, runs=runs, threshold=always_wrong_threshold or None,
-                               citation_drop_points=citation_drop_points or None, updated_by=user.id)
+                               citation_drop_points=citation_drop_points or None,
+                               calibration_min_rho=calibration_min_rho or None, updated_by=user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     audit.record(db, user_id=user.id, org_id=org.id, action="update", entity_type="detector_settings",
                  entity_id=org.id, meta={"always_wrong_runs": always_wrong_runs or None,
                                          "always_wrong_threshold": always_wrong_threshold or None,
-                                         "citation_drop_points": citation_drop_points or None})
+                                         "citation_drop_points": citation_drop_points or None,
+                                         "calibration_min_rho": calibration_min_rho or None})
     return RedirectResponse(f"/o/{org.slug}/settings/detectors", status_code=303)

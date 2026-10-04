@@ -1,0 +1,2 @@
+{% set st = statuses[b.id] if statuses is defined else status %}
+<p class="fr-badge fr-badge--sm {{ {'done': 'fr-badge--success', 'error': 'fr-badge--error', 'running': 'fr-badge--info', 'queued': 'fr-badge--new'}.get(st, '') }}">{{ {'done': 'terminé', 'error': 'en échec', 'running': 'en cours', 'queued': 'en file'}.get(st, st) }}</p>

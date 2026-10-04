@@ -41,7 +41,7 @@ def test_defauts_email_par_type():
     assert {k for k, v in notifications.KINDS.items() if v.default_mode == "immediate"} == {
         "budget_threshold", "job_failed", "contract_expiring", "contract_expired"}
     assert {k for k, v in notifications.KINDS.items() if v.default_mode == "none"} == {
-        "always_wrong", "citation_drop", "report_opened", "report_resolved"}
+        "always_wrong", "citation_drop", "report_opened", "report_resolved", "judge_disagreement"}
 
 
 def test_echeance_du_recapitulatif(monkeypatch):
@@ -81,3 +81,25 @@ def test_defaut_ecart_citations(monkeypatch):
     assert detectors.citation_drop_default() == Decimal("100")
     monkeypatch.setenv("GEOEVAL_CITATION_DROP_POINTS", "abc")
     assert detectors.citation_drop_default() == Decimal("20")
+
+
+def test_defauts_calibration(monkeypatch):
+    monkeypatch.delenv("GEOEVAL_CALIBRATION_MIN_RHO", raising=False)
+    monkeypatch.delenv("GEOEVAL_CALIBRATION_MIN_PAIRS", raising=False)
+    assert detectors.calibration_defaults() == (Decimal("0.5"), 10)
+    monkeypatch.setenv("GEOEVAL_CALIBRATION_MIN_RHO", "0,7")
+    monkeypatch.setenv("GEOEVAL_CALIBRATION_MIN_PAIRS", "1")
+    assert detectors.calibration_defaults() == (Decimal("0.7"), 3), "au moins 3 paires"
+    monkeypatch.setenv("GEOEVAL_CALIBRATION_MIN_RHO", "2")
+    assert detectors.calibration_defaults()[0] == Decimal("1")
+    monkeypatch.setenv("GEOEVAL_CALIBRATION_MIN_RHO", "abc")
+    assert detectors.calibration_defaults()[0] == Decimal("0.5")
+
+
+def test_portees_en_desaccord():
+    scopes = [(None, "tous thèmes", {"n_pairs": 12, "response_spearman": 0.3}),
+              (1, "Fiscalité", {"n_pairs": 4, "response_spearman": -0.5}),       # trop peu de paires
+              (2, "Santé", {"n_pairs": 10, "response_spearman": 0.8}),
+              (3, "Emploi", {"n_pairs": 10, "response_spearman": None})]
+    assert detectors.disagreements(scopes, Decimal("0.5"), 10) == [(None, "tous thèmes", 0.3, 12)]
+    assert [s[0] for s in detectors.disagreements(scopes, Decimal("0.9"), 4)] == [None, 1, 2]

@@ -80,17 +80,20 @@ def _settings_out(db: Session, org) -> DetectorSettingsOut:
     return DetectorSettingsOut(
         own=DetectorSettingsIn(always_wrong_runs=own.always_wrong_runs if own else None,
                                always_wrong_threshold=own.always_wrong_threshold if own else None,
-                               citation_drop_points=own.citation_drop_points if own else None),
+                               citation_drop_points=own.citation_drop_points if own else None,
+                               calibration_min_rho=own.calibration_min_rho if own else None),
         effective_runs=eff.runs, effective_threshold=eff.threshold,
         effective_citation_drop_points=eff.citation_drop_points,
+        effective_calibration_min_rho=eff.calibration_min_rho,
         runs_from_org_slug=eff.runs_from.slug if eff.runs_from else None,
         threshold_from_org_slug=eff.threshold_from.slug if eff.threshold_from else None,
         citation_drop_from_org_slug=eff.citation_drop_from.slug if eff.citation_drop_from else None,
+        calibration_from_org_slug=eff.calibration_from.slug if eff.calibration_from else None,
     )
 
 
 @router.get("/orgs/{org_slug}/detector-settings", response_model=DetectorSettingsOut,
-            summary="Réglages des détecteurs (toujours faux, chute des citations) : propres et effectifs (editor+)")
+            summary="Réglages des détecteurs (toujours faux, chute des citations, calibration) : propres et effectifs (editor+)")
 def get_detector_settings(principal: Principal = Depends(require_role("editor")), db: Session = Depends(get_db)):
     return _settings_out(db, principal.org)
 
@@ -101,7 +104,8 @@ def put_detector_settings(body: DetectorSettingsIn, principal: Principal = Depen
                           db: Session = Depends(get_db)):
     try:
         detectors.set_settings(db, principal.org, runs=body.always_wrong_runs, threshold=body.always_wrong_threshold,
-                               citation_drop_points=body.citation_drop_points, updated_by=principal.user_id)
+                               citation_drop_points=body.citation_drop_points,
+                               calibration_min_rho=body.calibration_min_rho, updated_by=principal.user_id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="update", entity_type="detector_settings",

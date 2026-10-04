@@ -16,6 +16,11 @@ notifications : ils ne modifient jamais un résultat d'évaluation.
   chute d'au moins N points sous la moyenne des 3 runs précédents (même entité, même
   périmètre, même IA évaluée). Une alerte par run.
 
+- `judge_disagreement` : sur le jeu de calibration de l'entité (annotations humaines,
+  héritées), la corrélation de rang notateur / gold (note de réponse) passe sous un seuil,
+  globalement ou pour un thème, avec assez de paires. Au plus une alerte par semaine et
+  par (version de notateur, thème).
+
 Réglages des détecteurs : défaut plateforme, surchargeable par entité et hérité par son
 sous-arbre (résolveur du plus proche, champ par champ).
 """
@@ -51,6 +56,8 @@ logger = logging.getLogger("geoeval.web.detectors")
 DEFAULT_ALWAYS_WRONG_RUNS = 3
 DEFAULT_ALWAYS_WRONG_THRESHOLD = Decimal("5")
 DEFAULT_CITATION_DROP_POINTS = Decimal("20")
+DEFAULT_CALIBRATION_MIN_RHO = Decimal("0.5")
+DEFAULT_CALIBRATION_MIN_PAIRS = 10
 CITATION_DROP_BASELINE_RUNS = 3
 CONTRACT_NOTICE_DAYS = (30, 7)
 
@@ -85,15 +92,33 @@ def citation_drop_default() -> Decimal:
         return DEFAULT_CITATION_DROP_POINTS
 
 
+def calibration_defaults() -> tuple[Decimal, int]:
+    """Seuil de corrélation (GEOEVAL_CALIBRATION_MIN_RHO, 0 à 1) et nombre minimal de
+    paires annotées pour juger un notateur (GEOEVAL_CALIBRATION_MIN_PAIRS, au moins 3)."""
+    rho, pairs = DEFAULT_CALIBRATION_MIN_RHO, DEFAULT_CALIBRATION_MIN_PAIRS
+    try:
+        raw = (os.environ.get("GEOEVAL_CALIBRATION_MIN_RHO") or "").strip()
+        if raw:
+            rho = max(Decimal("0"), min(Decimal("1"), Decimal(raw.replace(",", "."))))
+        raw = (os.environ.get("GEOEVAL_CALIBRATION_MIN_PAIRS") or "").strip()
+        if raw:
+            pairs = max(3, int(raw))
+    except (ValueError, InvalidOperation):
+        logger.warning("réglage de calibration invalide dans l'environnement : défauts conservés")
+    return rho, pairs
+
+
 @dataclass
 class AlwaysWrongSettings:
     """Réglages effectifs des détecteurs (nom historique : `always_wrong` en premier)."""
     runs: int
     threshold: Decimal
     citation_drop_points: Decimal = DEFAULT_CITATION_DROP_POINTS
+    calibration_min_rho: Decimal = DEFAULT_CALIBRATION_MIN_RHO
     runs_from: Optional[Organization] = None        # None = défaut plateforme
     threshold_from: Optional[Organization] = None
     citation_drop_from: Optional[Organization] = None
+    calibration_from: Optional[Organization] = None
 
 
 def own_settings(session: Session, org_id: int) -> Optional[DetectorSetting]:
@@ -102,7 +127,8 @@ def own_settings(session: Session, org_id: int) -> Optional[DetectorSetting]:
 
 def effective_settings(session: Session, org: Organization) -> AlwaysWrongSettings:
     runs, threshold = platform_defaults()
-    eff = AlwaysWrongSettings(runs=runs, threshold=threshold, citation_drop_points=citation_drop_default())
+    eff = AlwaysWrongSettings(runs=runs, threshold=threshold, citation_drop_points=citation_drop_default(),
+                              calibration_min_rho=calibration_defaults()[0])
     r = hierarchy.resolve_nearest(session, org, lambda s, n: getattr(own_settings(s, n.id), "always_wrong_runs", None))
     if r.value is not None:
         eff.runs, eff.runs_from = int(r.value), r.source
@@ -114,6 +140,10 @@ def effective_settings(session: Session, org: Organization) -> AlwaysWrongSettin
                                   lambda s, n: getattr(own_settings(s, n.id), "citation_drop_points", None))
     if c.value is not None:
         eff.citation_drop_points, eff.citation_drop_from = Decimal(c.value), c.source
+    k = hierarchy.resolve_nearest(session, org,
+                                  lambda s, n: getattr(own_settings(s, n.id), "calibration_min_rho", None))
+    if k.value is not None:
+        eff.calibration_min_rho, eff.calibration_from = Decimal(k.value), k.source
     return eff
 
 
@@ -127,7 +157,8 @@ def _decimal(raw: Any, error: str) -> Optional[Decimal]:
 
 
 def set_settings(session: Session, org: Organization, *, runs: Optional[int], threshold: Any,
-                 citation_drop_points: Any = None, updated_by: Optional[int] = None) -> Optional[DetectorSetting]:
+                 citation_drop_points: Any = None, calibration_min_rho: Any = None,
+                 updated_by: Optional[int] = None) -> Optional[DetectorSetting]:
     """Remplace les réglages propres de l'entité (None = hériter). Sans aucun réglage, la ligne disparaît."""
     if runs is not None and not 2 <= int(runs) <= 20:
         raise ValueError("Le nombre d'évaluations consécutives doit être compris entre 2 et 20.")
@@ -137,8 +168,11 @@ def set_settings(session: Session, org: Organization, *, runs: Optional[int], th
     drop = _decimal(citation_drop_points, "Écart invalide : nombre de points attendu.")
     if drop is not None and not Decimal("0") < drop <= Decimal("100"):
         raise ValueError("L'écart de citations officielles doit être compris entre 0 (exclu) et 100 points.")
+    rho = _decimal(calibration_min_rho, "Seuil de calibration invalide : corrélation entre 0 et 1 attendue.")
+    if rho is not None and not Decimal("0") <= rho <= Decimal("1"):
+        raise ValueError("Le seuil de calibration doit être compris entre 0 et 1.")
     row = own_settings(session, org.id)
-    if runs is None and thr is None and drop is None:
+    if runs is None and thr is None and drop is None and rho is None:
         if row is not None:
             session.delete(row)
             session.commit()
@@ -149,6 +183,7 @@ def set_settings(session: Session, org: Organization, *, runs: Optional[int], th
     row.always_wrong_runs = int(runs) if runs is not None else None
     row.always_wrong_threshold = thr
     row.citation_drop_points = drop
+    row.calibration_min_rho = rho
     row.updated_by = updated_by
     session.commit()
     return row
@@ -399,3 +434,74 @@ def after_evaluation_safely(run_id: int) -> int:
         except Exception:  # noqa: BLE001 — un détecteur ne casse jamais un job
             logger.exception("détecteur « %s » en échec (run=%s)", name, run_id)
     return sent
+
+
+# ---------------------------------------------------------------------
+# judge_disagreement (E8 suite)
+# ---------------------------------------------------------------------
+def disagreements(overall_and_themes: list[tuple[Optional[int], str, dict[str, Any]]], min_rho: Decimal,
+                  min_pairs: int) -> list[tuple[Optional[int], str, float, int]]:
+    """(theme_id, libellé, rho, n) sous le seuil, parmi les portées ayant assez de paires."""
+    out = []
+    for theme_id, label, m in overall_and_themes:
+        rho = m.get("response_spearman")
+        if m.get("n_pairs", 0) >= min_pairs and rho is not None and rho < float(min_rho):
+            out.append((theme_id, label, rho, m["n_pairs"]))
+    return out
+
+
+def check_judge_disagreement(session: Session, org: Organization, model_ids: list[int], *,
+                             batch_id: Optional[int] = None, today: Optional[date] = None) -> int:
+    """Accord de chaque version de notateur avec le jeu de calibration de l'entité ;
+    notifie sous le seuil. Renvoie le nombre de notifications."""
+    from geoeval.web import calibration
+
+    cfg = effective_settings(session, org)
+    _, min_pairs = calibration_defaults()
+    gold = calibration.gold_pairs(session, org)
+    if len(gold) < min_pairs:
+        return 0
+    week = (today or date.today()).isocalendar()
+    sent = 0
+    for model_id in dict.fromkeys(model_ids):
+        ag = calibration.agreement_for(session, org, model_id=model_id, batch_id=batch_id, gold=gold)
+        if ag is None:
+            continue
+        scopes = [(None, "tous thèmes", ag.overall)] + [(t["theme_id"], t["label"], t) for t in ag.by_theme]
+        source = f"lot #{batch_id} · " if batch_id is not None else ""
+        for theme_id, label, rho, n in disagreements(scopes, cfg.calibration_min_rho, min_pairs):
+            sent += len(notifications.notify(
+                session, org, "judge_disagreement",
+                title=f"Notateur en désaccord avec le gold — {source}{ag.model.model_version} ({label})",
+                body=(f"Sur {n} paires annotées ({label}), la corrélation de rang entre {ag.model.model_version} "
+                      f"et les annotations humaines est de {rho:.2f}, sous le seuil de {cfg.calibration_min_rho}. "
+                      "Ses notes sont à lire avec prudence ; un rejugement avec un autre notateur permet de comparer."),
+                link=f"/o/{org.slug}/calibration",
+                payload={"model_id": model_id, "batch_id": batch_id, "theme_id": theme_id, "rho": round(rho, 3),
+                         "n_pairs": n, "threshold": str(cfg.calibration_min_rho)},
+                dedup_key=(f"judge_disagreement:{org.id}:{batch_id or 'orig'}:{model_id}:{theme_id or 'all'}:"
+                           f"{week[0]}-W{week[1]:02d}"),
+            ).created)
+    return sent
+
+
+def calibration_after_evaluation_safely(org_id: Optional[int], judges: list[Any], *,
+                                        batch_id: Optional[int] = None) -> int:
+    """Hook worker : `judges` = versions (str) ou model_id (int). Sa propre session, sans exception."""
+    if org_id is None or not judges:
+        return 0
+    from geoeval.db.session import SessionLocal
+
+    try:
+        with SessionLocal() as session:
+            org = session.get(Organization, org_id)
+            if org is None:
+                return 0
+            ids = [j for j in judges if isinstance(j, int)]
+            versions = [j for j in judges if isinstance(j, str)]
+            if versions:
+                ids += list(session.execute(select(Model.model_id).where(Model.model_version.in_(versions))).scalars())
+            return check_judge_disagreement(session, org, ids, batch_id=batch_id)
+    except Exception:  # noqa: BLE001 — un détecteur ne casse jamais un job
+        logger.exception("détecteur de calibration en échec (org=%s, lot=%s)", org_id, batch_id)
+        return 0

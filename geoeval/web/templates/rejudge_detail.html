@@ -1,0 +1,61 @@
+{% extends "base.html" %}
+{% block title %}Rejugement #{{ batch.id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/rejudge">Retour aux rejugements</a>
+<h1 class="fr-mt-2w">Rejugement #{{ batch.id }}{% if batch.label %} — {{ batch.label }}{% endif %}</h1>
+<ul class="fr-badge-group">
+  <li>{% include "_batch_status.html" %}</li>
+  <li><p class="fr-badge fr-badge--sm">{{ batch.created_at.strftime("%d/%m/%Y %H:%M") }}</p></li>
+  {% if estimate is not none %}<li><p class="fr-badge fr-badge--sm">devis {{ estimate }} €</p></li>{% endif %}
+</ul>
+<dl class="fr-mt-2w">
+  <dt class="fr-text--bold">Notateurs (versions figées)</dt><dd>{{ judges_label }}</dd>
+  <dt class="fr-text--bold fr-mt-1w">Grilles</dt>
+  <dd>Réponse : {{ prompts[batch.response_prompt_id].prompt_name if batch.response_prompt_id else 'celle de chaque question' }} ·
+      citations : {{ prompts[batch.citation_prompt_id].prompt_name if batch.citation_prompt_id else 'celle de chaque question' }}
+      <details class="fr-mt-1v"><summary class="fr-text--sm">Empreintes</summary>
+        <ul class="fr-text--xs">{% for pid, g in batch.grids.items() %}<li>#{{ pid }} {{ g.name }} — <code>{{ g.sha256[:16] }}…</code></li>{% endfor %}</ul>
+      </details></dd>
+  <dt class="fr-text--bold fr-mt-1w">Runs</dt>
+  <dd>{% for r in batch.run_ids %}<a class="fr-link fr-mr-1w" href="{{ url_prefix }}/runs/{{ r }}">#{{ r }}</a>{% endfor %}</dd>
+  {% if batch.job_id %}<dt class="fr-text--bold fr-mt-1w">Exécution</dt><dd><a class="fr-link" href="{{ url_prefix }}/jobs/{{ batch.job_id }}">job {{ batch.job_id }}</a></dd>{% endif %}
+</dl>
+
+<h2 class="fr-mt-4w">Comparaison avec les notes d'origine</h2>
+<p class="fr-hint-text">Moyennes tous notateurs confondus, sur 10. Écart = lot − origine. Les tableaux de bord continuent d'afficher les notes d'origine.</p>
+{% set s = comparison.summary %}
+{% if s.n_pairs %}
+<div class="fr-table"><table>
+  <thead><tr><th>IA évaluée</th><th>Paires</th><th>Réponse : origine → lot</th><th>Écart moyen</th><th>Écart absolu</th><th>Citations : origine → lot</th><th>Corrélation de rang</th></tr></thead>
+  <tbody>
+  {% for m in comparison.by_model + [dict(tested_model='Ensemble', **s)] %}
+    <tr{% if loop.last %} class="fr-text--bold"{% endif %}>
+      <td>{{ m.tested_model }}</td><td>{{ m.n_pairs }}</td>
+      <td>{{ fmt(m.orig_response) }} → {{ fmt(m.new_response) }}</td>
+      <td>{{ fmt(m.delta_response) }}</td><td>{{ fmt(m.abs_delta_response) }}</td>
+      <td>{{ fmt(m.orig_citation) }} → {{ fmt(m.new_citation) }}</td>
+      <td>{{ fmt(m.rank_correlation) }}</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+
+<h3 class="fr-mt-3w">Plus grands écarts</h3>
+<div class="fr-table fr-table--sm"><table>
+  <thead><tr><th>Run</th><th>Question</th><th>IA</th><th>Réponse : origine → lot (écart)</th><th>Citations : origine → lot (écart)</th></tr></thead>
+  <tbody>
+  {% for p in comparison.pairs %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/runs/{{ p.run_id }}">#{{ p.run_id }}</a></td>
+      <td>#{{ p.test_id }} {{ p.prompt|truncate(70) }}</td>
+      <td>{{ p.tested_model }}</td>
+      <td>{{ fmt(p.orig_response) }} → {{ fmt(p.new_response) }} ({{ fmt(p.delta_response) }})</td>
+      <td>{{ fmt(p.orig_citation) }} → {{ fmt(p.new_citation) }} ({{ fmt(p.delta_citation) }})</td>
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Pas encore de note dans ce lot.</p>
+{% endif %}
+{% endblock %}
