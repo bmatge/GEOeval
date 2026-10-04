@@ -833,3 +833,20 @@ class ReviewSettingsIO(BaseModel):
     validator_user_ids: list[int] = Field(default_factory=list, description="Validateurs désignés (membres directs)")
     effective_required: Optional[bool] = None
     source_org_slug: Optional[str] = None
+
+
+# ---- Explorateur de scores -------------------------------------------
+class ScoreRowOut(BaseModel):
+    """Notes moyennes des notateurs pour une question d'une évaluation."""
+    entite: str
+    perimetre: str
+    ia: str
+    question: str
+    question_id: int
+    evaluation: str
+    run_id: int
+    date: Optional[str] = None
+    note_reponse: Optional[float] = None
+    note_citations: Optional[float] = None
+    notes: int
+    lien: str

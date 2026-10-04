@@ -4967,6 +4967,93 @@
         "title": "SchedulePatch",
         "type": "object"
       },
+      "ScoreRowOut": {
+        "description": "Notes moyennes des notateurs pour une question d'une évaluation.",
+        "properties": {
+          "date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Date"
+          },
+          "entite": {
+            "title": "Entite",
+            "type": "string"
+          },
+          "evaluation": {
+            "title": "Evaluation",
+            "type": "string"
+          },
+          "ia": {
+            "title": "Ia",
+            "type": "string"
+          },
+          "lien": {
+            "title": "Lien",
+            "type": "string"
+          },
+          "note_citations": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Citations"
+          },
+          "note_reponse": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Note Reponse"
+          },
+          "notes": {
+            "title": "Notes",
+            "type": "integer"
+          },
+          "perimetre": {
+            "title": "Perimetre",
+            "type": "string"
+          },
+          "question": {
+            "title": "Question",
+            "type": "string"
+          },
+          "question_id": {
+            "title": "Question Id",
+            "type": "integer"
+          },
+          "run_id": {
+            "title": "Run Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "entite",
+          "perimetre",
+          "ia",
+          "question",
+          "question_id",
+          "evaluation",
+          "run_id",
+          "notes",
+          "lien"
+        ],
+        "title": "ScoreRowOut",
+        "type": "object"
+      },
       "StatsSummaryOut": {
         "properties": {
           "avg_citation": {
@@ -23648,6 +23735,214 @@
           }
         ],
         "summary": "Scores moyens par question, pires d'abord",
+        "tags": [
+          "statistiques"
+        ]
+      }
+    },
+    "/orgs/{org_slug}/stats/scores": {
+      "get": {
+        "description": "Par défaut, la dernière évaluation de chaque (entité, périmètre, IA). `history=true` : tous les\npassages, plus récents d'abord (5 000 lignes au plus).",
+        "operationId": "scores_orgs__org_slug__stats_scores_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "org_slug",
+            "required": true,
+            "schema": {
+              "title": "Org Slug",
+              "type": "string"
+            }
+          },
+          {
+            "in": "query",
+            "name": "history",
+            "required": false,
+            "schema": {
+              "default": false,
+              "title": "History",
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "items": {
+                    "$ref": "#/components/schemas/ScoreRowOut"
+                  },
+                  "title": "Response Scores Orgs  Org Slug  Stats Scores Get",
+                  "type": "array"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "401": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Erreur au format RFC 9457. Des champs supplémentaires peuvent préciser un refus de lancement.",
+                  "properties": {
+                    "detail": {
+                      "example": "Organisation introuvable.",
+                      "type": "string"
+                    },
+                    "instance": {
+                      "example": "/api/v1/orgs/inconnue/perimeters",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": 404,
+                      "type": "integer"
+                    },
+                    "title": {
+                      "example": "Ressource introuvable",
+                      "type": "string"
+                    },
+                    "type": {
+                      "example": "about:blank",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status"
+                  ],
+                  "title": "Problem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Jeton absent, invalide, expiré ou révoqué."
+          },
+          "403": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Erreur au format RFC 9457. Des champs supplémentaires peuvent préciser un refus de lancement.",
+                  "properties": {
+                    "detail": {
+                      "example": "Organisation introuvable.",
+                      "type": "string"
+                    },
+                    "instance": {
+                      "example": "/api/v1/orgs/inconnue/perimeters",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": 404,
+                      "type": "integer"
+                    },
+                    "title": {
+                      "example": "Ressource introuvable",
+                      "type": "string"
+                    },
+                    "type": {
+                      "example": "about:blank",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status"
+                  ],
+                  "title": "Problem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Rôle insuffisant pour cette entité, ou action réservée à une session."
+          },
+          "404": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Erreur au format RFC 9457. Des champs supplémentaires peuvent préciser un refus de lancement.",
+                  "properties": {
+                    "detail": {
+                      "example": "Organisation introuvable.",
+                      "type": "string"
+                    },
+                    "instance": {
+                      "example": "/api/v1/orgs/inconnue/perimeters",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": 404,
+                      "type": "integer"
+                    },
+                    "title": {
+                      "example": "Ressource introuvable",
+                      "type": "string"
+                    },
+                    "type": {
+                      "example": "about:blank",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status"
+                  ],
+                  "title": "Problem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Ressource introuvable ou hors de l'entité."
+          },
+          "422": {
+            "content": {
+              "application/problem+json": {
+                "schema": {
+                  "additionalProperties": true,
+                  "description": "Erreur au format RFC 9457. Des champs supplémentaires peuvent préciser un refus de lancement.",
+                  "properties": {
+                    "detail": {
+                      "example": "Organisation introuvable.",
+                      "type": "string"
+                    },
+                    "instance": {
+                      "example": "/api/v1/orgs/inconnue/perimeters",
+                      "type": "string"
+                    },
+                    "status": {
+                      "example": 404,
+                      "type": "integer"
+                    },
+                    "title": {
+                      "example": "Ressource introuvable",
+                      "type": "string"
+                    },
+                    "type": {
+                      "example": "about:blank",
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "title",
+                    "status"
+                  ],
+                  "title": "Problem",
+                  "type": "object"
+                }
+              }
+            },
+            "description": "Corps ou paramètres de la requête mal formés."
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          }
+        ],
+        "summary": "Notes par évaluation et par question, pour l'entité et son sous-arbre (explorateur de scores)",
         "tags": [
           "statistiques"
         ]

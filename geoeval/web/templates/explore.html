@@ -1,0 +1,77 @@
+{% extends "base.html" %}
+{% block title %}Explorer les scores{% endblock %}
+{% block content %}
+<h1>Explorer les scores</h1>
+<p>Les notes de {{ org.name }} et de ses sous-entités, question par question : moyenne des notateurs, sur 10.
+  {% if history %}Tous les passages sont affichés, les plus récents d'abord ({{ limit }} lignes au plus).
+  <a class="fr-link" href="{{ url_prefix }}/explore">Voir seulement la dernière évaluation</a>
+  {% else %}Seule la dernière évaluation de chaque périmètre et de chaque IA est affichée.
+  <a class="fr-link" href="{{ url_prefix }}/explore?history=1">Voir tout l'historique</a>{% endif %}</p>
+
+{# Pipeline : source → colonnes de niveau → recherche → facettes → tableau et matrice #}
+<dsfr-data-source id="scores" url="{{ url_prefix }}/api/stats/scores{{ '?history=1' if history else '' }}"></dsfr-data-source>
+<dsfr-data-normalize id="scores-niveaux" source="scores"
+  compute="niveau_reponse = when is_null(note_reponse) then 'note-absente' when note_reponse >= 7 then 'note-bonne' when note_reponse >= 4 then 'note-moyenne' else 'note-faible';
+           niveau_citations = when is_null(note_citations) then 'note-absente' when note_citations >= 7 then 'note-bonne' when note_citations >= 4 then 'note-moyenne' else 'note-faible'">
+</dsfr-data-normalize>
+
+<dsfr-data-search id="scores-recherche" source="scores-niveaux" fields="question"
+  label="Rechercher dans les questions" placeholder="Mot de la question : leasing, pompe à chaleur, chômage…"
+  operator="words" count count-label="ligne" url-search-param="q" url-sync></dsfr-data-search>
+
+<dsfr-data-facets id="scores-filtres" source="scores-recherche" class="fr-mt-2w"
+  fields="entite, perimetre, ia"
+  labels="entite:Entité | perimetre:Périmètre | ia:IA évaluée"
+  display="entite:multiselect | perimetre:multiselect | ia:multiselect"
+  sort="alpha" span="4" url-params url-sync
+  url-param-map="entite:entite | perimetre:perimetre | ia:ia"></dsfr-data-facets>
+
+<div class="fr-tabs fr-mt-3w">
+  <ul class="fr-tabs__list" role="tablist" aria-label="Vues des scores">
+    <li role="presentation"><button type="button" id="tab-detail" class="fr-tabs__tab" tabindex="0" role="tab"
+        aria-selected="true" aria-controls="panel-detail">Détail par question</button></li>
+    <li role="presentation"><button type="button" id="tab-matrice-reponse" class="fr-tabs__tab" tabindex="-1" role="tab"
+        aria-selected="false" aria-controls="panel-matrice-reponse">Matrice question × IA — réponses</button></li>
+    <li role="presentation"><button type="button" id="tab-matrice-citations" class="fr-tabs__tab" tabindex="-1" role="tab"
+        aria-selected="false" aria-controls="panel-matrice-citations">Matrice question × IA — citations</button></li>
+  </ul>
+  <div id="panel-detail" class="fr-tabs__panel fr-tabs__panel--selected" role="tabpanel" aria-labelledby="tab-detail" tabindex="0">
+    <p class="fr-hint-text">Une ligne par question et par évaluation. Clique sur un en-tête pour trier.
+      <span class="geoeval-legende note-bonne">7 et plus</span>
+      <span class="geoeval-legende note-moyenne">de 4 à 7</span>
+      <span class="geoeval-legende note-faible">moins de 4</span>
+      <span class="geoeval-legende note-absente">pas encore notée</span></p>
+    <dsfr-data-list source="scores-filtres" caption="Scores par question et par évaluation"
+      columns="question:Question, entite:Entité, perimetre:Périmètre, ia:IA évaluée, note_reponse:Réponse /10, note_citations:Citations /10, evaluation:Évaluation, date:Date"
+      cell-class="note_reponse:niveau_reponse, note_citations:niveau_citations"
+      sort="note_reponse:asc" pagination="25" export="csv"></dsfr-data-list>
+  </div>
+  <div id="panel-matrice-reponse" class="fr-tabs__panel" role="tabpanel" aria-labelledby="tab-matrice-reponse" tabindex="0">
+    <p class="fr-hint-text">Note moyenne de réponse par question (lignes) et par IA (colonnes), sur les lignes filtrées.
+      Une case vide signifie que cette IA n'a pas été évaluée sur cette question.</p>
+    <dsfr-data-pivot id="matrice-reponse" source="scores-filtres" row="question" column="ia"
+      value="note_reponse" aggregate="avg" column-order="asc"></dsfr-data-pivot>
+    <dsfr-data-list source="matrice-reponse" caption="Note de réponse par question et par IA"
+      columns="question:Question" columns-auto decimals="1" sort="question:asc" pagination="25" export="csv"></dsfr-data-list>
+  </div>
+  <div id="panel-matrice-citations" class="fr-tabs__panel" role="tabpanel" aria-labelledby="tab-matrice-citations" tabindex="0">
+    <p class="fr-hint-text">Note moyenne de citations par question (lignes) et par IA (colonnes), sur les lignes filtrées.</p>
+    <dsfr-data-pivot id="matrice-citations" source="scores-filtres" row="question" column="ia"
+      value="note_citations" aggregate="avg" column-order="asc"></dsfr-data-pivot>
+    <dsfr-data-list source="matrice-citations" caption="Note de citations par question et par IA"
+      columns="question:Question" columns-auto decimals="1" sort="question:asc" pagination="25" export="csv"></dsfr-data-list>
+  </div>
+</div>
+
+<style>
+  /* Niveaux de note : la couleur double un texte (la note elle-même), jamais seule. */
+  .note-bonne { background: var(--background-contrast-success); }
+  .note-moyenne { background: var(--background-contrast-warning); }
+  .note-faible { background: var(--background-contrast-error); font-weight: 700; }
+  .note-absente { background: var(--background-alt-grey); }
+  .geoeval-legende { display: inline-block; padding: 0 .5rem; margin-left: .5rem; border-radius: .25rem; font-weight: 400; }
+</style>
+{% endblock %}
+{% block scripts %}
+{% include "_dsfr_data_deps.html" %}
+{% endblock %}

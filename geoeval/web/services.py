@@ -263,6 +263,61 @@ def model_evolution(session: Session, org_id: int) -> list[dict[str, Any]]:
     return out
 
 
+SCORE_ROWS_LIMIT = 5000
+
+
+def score_rows(session: Session, org: Organization, *, history: bool = False,
+               limit: int = SCORE_ROWS_LIMIT) -> list[dict[str, Any]]:
+    """Une ligne par (évaluation, question) pour l'entité **et son sous-arbre** : entité,
+    périmètre, IA évaluée, question, notes moyennes des notateurs (réponse, citations).
+    Format plat pour l'explorateur de scores (facettes, recherche, tableau, matrice).
+
+    Par défaut, seule la dernière évaluation de chaque (entité, périmètre, IA) est gardée :
+    c'est l'état courant. `history=True` rend tous les passages, plus récents d'abord, bornés à `limit`."""
+    from geoeval.web import hierarchy
+
+    org_ids = hierarchy.descendant_ids(session, org, include_self=True)
+    runs = select(RunRow).where(RunRow.organization_id.in_(org_ids))
+    if not history:
+        latest = (
+            select(func.max(RunRow.run_id))
+            .where(RunRow.organization_id.in_(org_ids))
+            .group_by(RunRow.organization_id, RunRow.perimeter_id, RunRow.tested_model_id)
+        )
+        runs = runs.where(RunRow.run_id.in_(latest))
+    runs = runs.subquery()
+    stmt = (
+        select(
+            runs.c.run_id, runs.c.started_at, Organization.name, Organization.slug, Perimeter.name,
+            Model.model_version, Test.test_id, Test.prompt,
+            func.avg(RunEvaluation.response_quality_score), func.avg(RunEvaluation.citation_quality_score),
+            func.count(RunEvaluation.judge_model_id),
+        )
+        .select_from(runs)
+        .join(RunResult, RunResult.run_id == runs.c.run_id)
+        .join(Test, Test.test_id == RunResult.test_id)
+        .join(Organization, Organization.id == runs.c.organization_id)
+        .join(Model, Model.model_id == runs.c.tested_model_id)
+        .outerjoin(Perimeter, Perimeter.id == runs.c.perimeter_id)
+        .outerjoin(RunEvaluation, (RunEvaluation.run_id == runs.c.run_id) & (RunEvaluation.test_id == RunResult.test_id))
+        .group_by(runs.c.run_id, runs.c.started_at, Organization.name, Organization.slug, Perimeter.name,
+                  Model.model_version, Test.test_id, Test.prompt)
+        .order_by(runs.c.run_id.desc(), Test.test_id)
+        .limit(limit)
+    )
+    out = []
+    for run_id, started, org_name, org_slug, peri, model, test_id, prompt, resp, cit, n in session.execute(stmt).all():
+        out.append(dict(
+            entite=org_name, perimetre=peri or "Sans périmètre", ia=model,
+            question=prompt, question_id=test_id, evaluation=f"#{run_id}", run_id=run_id,
+            date=started.strftime("%Y-%m-%d") if started else None,
+            note_reponse=round(_f(resp), 2) if resp is not None else None,
+            note_citations=round(_f(cit), 2) if cit is not None else None,
+            notes=int(n), lien=f"/o/{org_slug}/runs/{run_id}",
+        ))
+    return out
+
+
 def org_stats_summary(session: Session, org_id: int) -> dict[str, Any]:
     """Agrégats globaux d'une org pour les KPIs du tableau de bord (dsfr-data)."""
     row = session.execute(
