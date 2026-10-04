@@ -50,10 +50,10 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
 │   ├── web/               → app.py (assemblage), ui/ (routers HTML minces), api/ (API v1 sur /api/v1 : deps jetons/session, problems RFC 9457, schemas, v1/ routers), launching.py + scheduling.py (règles : liste blanche, devis, budget, échéances), hierarchy.py (arbre d'entités, résolveur de paramètres hérités), budget.py + budget_alerts.py + mailer.py (budget consolidé, alertes 80/100 %, SMTP), pools.py + themes.py (pools partagés par référence, questions effectives, catalogue de thèmes), contracts.py + routing.py (contrats LLM hérités, blocage sans repli, politique restrictive), notifications.py + detectors.py + reports.py (notifications par rôle, email immédiat/récap/aucun, détecteurs worker, signalements), campaigns.py (protocole figé, participants, exécution planifiée, résultats comparés), rejudge.py + calibration.py + reviews.py (lots de rejugement comparés et promus, gold par entité, accord des notateurs, validation métier), tenancy.py (rôles hérités `resolve_role`, délégation `can_*`), api_tokens.py, services.py (DAO), auth* + oidc.py (identité (issuer, sub), profils generic/proconnect), tenancy… + templates/ + static/vendor/ (DSFR, Chart.js… vendorisés, MANIFEST.json)
 │   ├── observability/     → logs.py (JSON/texte, request_id, job_id), middleware.py (X-Request-ID, journal d'accès, métriques HTTP), metrics.py (Prometheus), health.py
 │   └── worker/            → main.py (processus worker, SIGTERM gracieux), health.py (:9100 /healthz /readyz /metrics), jobs.py (file `jobs`, SKIP LOCKED), scheduler.py (verrou advisory)
-├── scripts/               → migrate, vendor_assets (--verify / --refresh), set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
+├── scripts/               → migrate, vendor_assets (--verify / --refresh), export_openapi (--check), set_password, run_web (`python -m scripts.<nom>`) ; legacy/ = CLI historiques
 ├── deploy/                → docker-entrypoint.sh, docker-compose.local.yml
 ├── tests/ + pyproject.toml → pytest (unitaires sans base + `integration` sur PostgreSQL), ruff ; CI .github/workflows/ci.yml
-├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, epics/, spikes/
+├── docs/                  → adr/ (ADR-080, 088, 089), architecture.md, api.md + openapi.json (contrat de l'API v1, régénéré par export_openapi), epics/, spikes/
 └── Dockerfile + docker-compose.yml     → racine imposée par le contrat spawn ; services migrate (one-shot), web (entrypoint : attente db → uvicorn :3000), worker, db
 ```
 
@@ -102,7 +102,7 @@ ssh vps "spawn up geoeval"              # clés API dans /opt/apps/geoeval/.env 
   budgets consolidés, pools, contrats LLM, ProConnect) : `docs/adr/` · schémas : `docs/architecture.md`
 - Backlog : issues GitHub **désactivées** sur ce repo → suivre via PR + `todo.md`
 - Sondes : `/healthz` `/readyz` `/metrics` (web) et `:9100` (worker) · logs JSON sur stdout (`GEOEVAL_LOG_FORMAT`)
-- Proto : https://geoeval.lab.miweb.run · API v1 : `/api/v1/docs` (jeton `Authorization: Bearer`, créé dans Paramètres de l'org) · plateforme : ADR-038 (spawn), ADR-056 (secrets partagés)
+- Proto : https://geoeval.lab.miweb.run · API v1 : `/api/v1/docs` (Swagger UI vendorisé ; après tout changement de route : `python -m scripts.export_openapi` ; jeton `Authorization: Bearer`, créé dans Paramètres de l'org) · plateforme : ADR-038 (spawn), ADR-056 (secrets partagés)
 
 ---
 

@@ -38,7 +38,9 @@ from geoeval.worker.main import inline_worker_enabled, start_inline_thread
 
 configure_logging("web")
 
-app = FastAPI(title="GEOeval")
+# Pas de /docs ni /redoc à la racine : ils chargeraient leurs ressources depuis un CDN et ne
+# décriraient que des pages HTML. La documentation de l'API vit sur /api/v1/docs (Swagger UI vendorisé).
+app = FastAPI(title="GEOeval", docs_url=None, redoc_url=None)
 
 # Ordre des middlewares (dernier ajouté = plus externe) : SessionMiddleware doit
 # envelopper AuthMiddleware, qui lit request.session (ADR-086).

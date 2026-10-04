@@ -307,7 +307,7 @@ confiance) ; le branchement réel (rattachement par SIRET, `userinfo` en JWT) re
 
 ## Ressources front vendorisées (ADR-088 lot 1.6)
 
-DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1 et dsfr-data 0.42.0 sont
+DSFR 1.13.0 (CSS, JS, fontes Marianne, icônes), Chart.js 4.4.1, dsfr-chart 2.1.1, dsfr-data 0.42.0 et Swagger UI 5.33.1 sont
 servis depuis `/static/vendor/<paquet>-<version>/…` : aucun CDN à l'exécution (réseau fermé, CSP stricte).
 `geoeval/web/static/vendor/MANIFEST.json` porte les versions, licences et empreintes SHA-256, vérifiées en CI.
 
@@ -342,7 +342,9 @@ alembic -c geoeval/db/alembic.ini revision --autogenerate -m "ma_modif"   # nouv
 
 ## API v1 (ADR-088 §2.3 — API first)
 
-Sous-application montée sur `/api/v1`, documentation interactive sur `/api/v1/docs`.
+Sous-application montée sur `/api/v1`, documentation interactive (Swagger UI vendorisé, sans CDN) sur
+`/api/v1/docs`, schéma OpenAPI versionné dans `docs/openapi.json` (`python -m scripts.export_openapi`).
+Guide : [`docs/api.md`](docs/api.md).
 Ressources par organisation : `/api/v1/orgs/{slug}/…` (périmètres, questions et vérité de référence,
 modèles, évaluations, statistiques, planifications, jobs, jetons), en lecture et en écriture pour le corpus
 (editor+). Jamais de suppression de question : désactivation (ADR-076). Les évaluations et statistiques sont lisibles sans
