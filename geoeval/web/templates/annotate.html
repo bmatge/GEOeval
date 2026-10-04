@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+{% block title %}Annoter — run #{{ run.run_id }}{% endblock %}
+{% block content %}
+<a class="fr-link fr-icon-arrow-left-line fr-link--icon-left" href="{{ url_prefix }}/runs/{{ run.run_id }}">Retour au run #{{ run.run_id }}</a>
+<h1 class="fr-mt-2w">Annoter la question #{{ test.test_id }}</h1>
+<p class="fr-hint-text">Ton annotation rejoint le jeu de calibration de {{ org.name }} (et de ses sous-entités) : elle sert à
+  mesurer l'accord des notateurs, jamais à modifier une note. Une seule annotation par personne et par résultat ;
+  l'enregistrer à nouveau la remplace.</p>
+<p class="fr-text--bold fr-mb-1v">Question</p><p>{{ test.prompt }}</p>
+<p class="fr-text--bold fr-mb-1v">Réponse attendue</p><p class="fr-text--sm">{{ test.expected_answer or '—' }}</p>
+<p class="fr-text--bold fr-mb-1v">Réponse de {{ model.model_version if model else "l'IA" }}</p>
+<div class="fr-px-2w fr-py-1w" style="white-space:pre-wrap; background:var(--background-alt-grey); border-radius:.25rem;">{{ result.raw_answer }}</div>
+{% if result.raw_citations %}
+<p class="fr-text--bold fr-mt-2w fr-mb-1v">Sources citées</p>
+<ul>{% for c in result.raw_citations %}{% set u = c.url if c is mapping else c %}<li><a class="fr-link" href="{{ u }}" target="_blank" rel="noopener">{{ u }}</a></li>{% endfor %}</ul>
+{% endif %}
+<form method="post" action="{{ url_prefix }}/runs/{{ run.run_id }}/tests/{{ test.test_id }}/annotate" class="fr-mt-3w" style="max-width:40rem;">
+  {% for part, title in (('response', 'Réponse'), ('citation', 'Citations')) %}
+  <fieldset class="fr-fieldset">
+    <legend class="fr-fieldset__legend">{{ title }}</legend>
+    <div class="fr-fieldset__element"><div class="fr-select-group">
+      <label class="fr-label" for="{{ part }}_label">Label</label>
+      <select class="fr-select" id="{{ part }}_label" name="{{ part }}_label" required>
+        {% for l in labels %}<option value="{{ l }}" {% if mine and mine[part ~ '_label'] == l %}selected{% endif %}>{{ l|replace('_', ' ') }}</option>{% endfor %}
+      </select>
+    </div></div>
+    <div class="fr-fieldset__element"><div class="fr-input-group">
+      <label class="fr-label" for="{{ part }}_score">Note sur 10</label>
+      <input class="fr-input" id="{{ part }}_score" name="{{ part }}_score" inputmode="decimal" required
+             value="{{ mine[part ~ '_score'] if mine else '' }}">
+    </div></div>
+  </fieldset>
+  {% endfor %}
+  <div class="fr-input-group">
+    <label class="fr-label" for="notes">Commentaire <span class="fr-hint-text">(optionnel)</span></label>
+    <textarea class="fr-input" id="notes" name="notes" rows="2">{{ mine.notes or '' if mine else '' }}</textarea>
+  </div>
+  <button type="submit" class="fr-btn">Enregistrer l'annotation</button>
+</form>
+{% endblock %}

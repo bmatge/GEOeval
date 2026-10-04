@@ -37,4 +37,8 @@ def run_detail(run_id: int, request: Request, ctx=Depends(public_org), db: Sessi
     detail = services.get_run_detail(db, org.id, run_id)
     if detail is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id} introuvable")
-    return render(request, "run_detail.html", active="runs", org=org, role=role, run=detail)
+    from geoeval.web import calibration, rejudge
+
+    return render(request, "run_detail.html", active="runs", org=org, role=role, run=detail,
+                  annotated=calibration.annotated_test_ids(db, run_id) if role else {},
+                  batches=rejudge.runs_with_batches(db, [run_id]).get(run_id, []) if role else [])

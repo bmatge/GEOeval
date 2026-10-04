@@ -10,13 +10,20 @@
   {% if run.official_share is not none %}<li><p class="fr-badge fr-badge--purple-glycine"
       title="Domaines officiels du périmètre : {{ run.official_domains|join(', ') }}">Sources officielles : {{ (run.official_share * 100)|round|int }} %</p></li>{% endif %}
 </ul>
+{% if role in ('editor', 'org_admin') %}
+<p class="fr-mt-2w"><a class="fr-btn fr-btn--secondary fr-btn--sm fr-icon-refresh-line fr-btn--icon-left" href="{{ url_prefix }}/rejudge/new?run_id={{ run.run_id }}">Rejuger ce run</a>
+  {% for b in batches %}<a class="fr-link fr-link--sm fr-ml-2w" href="{{ url_prefix }}/rejudge/{{ b }}">lot #{{ b }}</a>{% endfor %}</p>
+{% elif batches %}
+<p class="fr-mt-2w">Rejugé dans : {% for b in batches %}<a class="fr-link fr-link--sm fr-ml-1w" href="{{ url_prefix }}/rejudge/{{ b }}">lot #{{ b }}</a>{% endfor %}</p>
+{% endif %}
 
 {% for res in run.results %}
 <div class="fr-card fr-card--no-arrow fr-mt-3w">
   <div class="fr-card__body">
     <div class="fr-card__content">
       <h3 class="fr-card__title">Question #{{ res.test_id }}
-        {% if role %}<a class="fr-link fr-link--sm fr-ml-2w fr-icon-flag-line fr-link--icon-left" href="{{ url_prefix }}/tests/{{ res.test_id }}/report?run_id={{ run.run_id }}">Signaler</a>{% endif %}</h3>
+        {% if role %}<a class="fr-link fr-link--sm fr-ml-2w fr-icon-flag-line fr-link--icon-left" href="{{ url_prefix }}/tests/{{ res.test_id }}/report?run_id={{ run.run_id }}">Signaler</a>{% endif %}
+        {% if role in ('editor', 'org_admin') and res.expected_answer %}<a class="fr-link fr-link--sm fr-ml-2w fr-icon-edit-line fr-link--icon-left" href="{{ url_prefix }}/runs/{{ run.run_id }}/tests/{{ res.test_id }}/annotate">Annoter{% if annotated.get(res.test_id) %} ({{ annotated[res.test_id] }}){% endif %}</a>{% endif %}</h3>
       <p class="fr-text--bold fr-mb-1v">Question</p>
       <p>{{ res.prompt }}</p>
 

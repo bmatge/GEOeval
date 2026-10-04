@@ -93,7 +93,7 @@
 
           {# --- Configurer (dropdown, editor+) --- #}
           {% if role in ('editor', 'org_admin') or (user and user.is_platform_admin) %}
-          {% set conf_active = active in ('perimeters', 'tests', 'pools', 'campaigns', 'reports', 'prompts', 'schedules') %}
+          {% set conf_active = active in ('perimeters', 'tests', 'pools', 'campaigns', 'reports', 'prompts', 'rejudge', 'calibration', 'schedules') %}
           <li class="fr-nav__item">
             <button class="fr-nav__btn" aria-expanded="false" aria-controls="menu-configurer"
                     {% if conf_active %}aria-current="true"{% endif %}>Configurer</button>
@@ -122,6 +122,14 @@
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/prompts"
                      {% if active == 'prompts' %}aria-current="page"{% endif %}>Grilles de notation</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/rejudge"
+                     {% if active == 'rejudge' %}aria-current="page"{% endif %}>Rejugements</a>
+                </li>
+                <li>
+                  <a class="fr-nav__link" href="{{ url_prefix }}/calibration"
+                     {% if active == 'calibration' %}aria-current="page"{% endif %}>Calibration des notateurs</a>
                 </li>
                 <li>
                   <a class="fr-nav__link" href="{{ url_prefix }}/schedules"

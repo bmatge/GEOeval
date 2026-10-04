@@ -555,10 +555,15 @@ class GoldAnnotation(Base):
     __table_args__ = (
         Index("ix_gold_annotations_run_id", "run_id"),
         Index("uq_gold_annotations_test_run_annotator", "test_id", "run_id", "annotator_email", unique=True),
+        Index("ix_gold_annotations_org", "organization_id"),
     )
     id: Mapped[int] = mapped_column(primary_key=True)
     test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), nullable=False)
     run_id: Mapped[int] = mapped_column(ForeignKey("runs.run_id"), nullable=False)
+    # E8 suite : jeu de calibration de l'entité (annotation dans l'app), hérité vers le
+    # bas ; NULL = import CSV de la plateforme (ADR-079), valable pour toutes les entités.
+    organization_id: Mapped[Optional[int]] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), nullable=True)
+    annotator_user_id: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     ground_truth_version: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     annotator_email: Mapped[str] = mapped_column(Text, nullable=False)
     response_label: Mapped[str] = mapped_column(Text, nullable=False)
@@ -888,6 +893,8 @@ class DetectorSetting(Base):
                         name="ck_detector_settings_threshold"),
         CheckConstraint("citation_drop_points IS NULL OR (citation_drop_points > 0 AND citation_drop_points <= 100)",
                         name="ck_detector_settings_citation_drop"),
+        CheckConstraint("calibration_min_rho IS NULL OR (calibration_min_rho >= 0 AND calibration_min_rho <= 1)",
+                        name="ck_detector_settings_calibration"),
     )
 
     organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id", ondelete="CASCADE"), primary_key=True)
@@ -895,6 +902,8 @@ class DetectorSetting(Base):
     always_wrong_threshold: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
     # Chute des citations officielles (E7 suite) : écart en points de pourcentage.
     citation_drop_points: Mapped[Optional[Decimal]] = mapped_column(Numeric(5, 2), nullable=True)
+    # Calibration (E8 suite) : corrélation de rang minimale notateur / gold (note de réponse).
+    calibration_min_rho: Mapped[Optional[Decimal]] = mapped_column(Numeric(3, 2), nullable=True)
     updated_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True), nullable=False, server_default=func.now(), onupdate=func.now(),
     )
@@ -978,4 +987,48 @@ class TestReport(Base):
     resolution_comment: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     resolved_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     resolved_at: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+
+
+# =====================================================================
+# ADR-089 §2.9 (suite E8) — rejugement versionné de l'historique.
+# =====================================================================
+class EvaluationBatch(Base):
+    """Lot de rejugement : des runs d'une entité notés à nouveau par d'autres notateurs
+    (ou une autre grille). N'écrase rien : les notes vont dans `rejudge_evaluations`,
+    les notes d'origine restent la référence des tableaux de bord."""
+    __tablename__ = "evaluation_batches"
+    __table_args__ = (Index("ix_evaluation_batches_org", "organization_id", "created_at"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    organization_id: Mapped[int] = mapped_column(ForeignKey("organizations.id"), nullable=False)
+    label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    run_ids: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    # [{"model_id", "model_version", "repeats"}] : versions épinglées à la création.
+    judges: Mapped[list[Any]] = mapped_column(JSONB, nullable=False)
+    # Grille imposée à toutes les questions (NULL = grille de chaque question).
+    response_prompt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("evaluation_prompts.prompt_id"), nullable=True)
+    citation_prompt_id: Mapped[Optional[int]] = mapped_column(ForeignKey("evaluation_prompts.prompt_id"), nullable=True)
+    # Instantané des grilles utilisées : {prompt_id: {"name", "sha256"}}.
+    grids: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, server_default=text("'{}'::jsonb"))
+    estimate_eur: Mapped[Optional[Decimal]] = mapped_column(Numeric(12, 4), nullable=True)
+    job_id: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    created_by: Mapped[Optional[int]] = mapped_column(ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())
+
+
+class RejudgeEvaluation(Base):
+    """Note d'un lot de rejugement (mêmes colonnes que `run_evaluations`)."""
+    __tablename__ = "rejudge_evaluations"
+    __table_args__ = (Index("ix_rejudge_evaluations_run_test", "run_id", "test_id"),)
+
+    batch_id: Mapped[int] = mapped_column(ForeignKey("evaluation_batches.id", ondelete="CASCADE"), primary_key=True)
+    run_id: Mapped[int] = mapped_column(ForeignKey("runs.run_id"), primary_key=True)
+    test_id: Mapped[int] = mapped_column(ForeignKey("tests.test_id"), primary_key=True)
+    judge_model_id: Mapped[int] = mapped_column(ForeignKey("models.model_id"), primary_key=True)
+    judge_run_index: Mapped[int] = mapped_column(Integer, primary_key=True, default=1)
+    response_quality_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    response_quality_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
+    citation_quality_label: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    citation_quality_score: Mapped[Optional[Decimal]] = mapped_column(Numeric(4, 2), nullable=True)
     created_at: Mapped[datetime] = mapped_column(TIMESTAMP(timezone=True), nullable=False, server_default=func.now())

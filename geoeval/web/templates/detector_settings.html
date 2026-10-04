@@ -9,11 +9,13 @@
 <div class="fr-callout">
   <p class="fr-callout__text">
     <strong>Réglage effectif</strong> : {{ effective.runs }} évaluations d'affilée sous {{ effective.threshold }}/10 ·
-    chute de {{ '%g' % effective.citation_drop_points }} points des citations officielles.<br>
+    chute de {{ '%g' % effective.citation_drop_points }} points des citations officielles ·
+    corrélation notateur / gold d'au moins {{ effective.calibration_min_rho }}.<br>
     <span class="fr-hint-text">
       Nombre : {{ ('posé par ' ~ effective.runs_from.name) if effective.runs_from else ('défaut plateforme (' ~ default_runs ~ ')') }} ·
       seuil : {{ ('posé par ' ~ effective.threshold_from.name) if effective.threshold_from else ('défaut plateforme (' ~ default_threshold ~ ')') }} ·
-      écart : {{ ('posé par ' ~ effective.citation_drop_from.name) if effective.citation_drop_from else ('défaut plateforme (' ~ ('%g' % default_citation_drop) ~ ')') }}
+      écart : {{ ('posé par ' ~ effective.citation_drop_from.name) if effective.citation_drop_from else ('défaut plateforme (' ~ ('%g' % default_citation_drop) ~ ')') }} ·
+      calibration : {{ ('posé par ' ~ effective.calibration_from.name) if effective.calibration_from else ('défaut plateforme (' ~ default_calibration[0] ~ ')') }}
     </span>
   </p>
 </div>
@@ -48,6 +50,19 @@
         <label class="fr-label" for="citation_drop_points">Écart déclencheur (points de pourcentage, 1 à 100)</label>
         <input class="fr-input" id="citation_drop_points" name="citation_drop_points" inputmode="decimal"
                value="{{ ('%g' % own.citation_drop_points) if own and own.citation_drop_points is not none else '' }}">
+      </div>
+    </div>
+  </fieldset>
+  <fieldset class="fr-fieldset">
+    <legend class="fr-fieldset__legend">Notateur en désaccord avec le gold</legend>
+    <p class="fr-hint-text fr-px-1w">Sur le jeu de calibration (annotations humaines de l'entité et de ses entités
+      parentes, et gold set de la plateforme), la corrélation de rang entre un notateur et les annotations (note de
+      réponse) passe sous ce seuil, globalement ou pour un thème, avec au moins {{ default_calibration[1] }} paires.</p>
+    <div class="fr-fieldset__element">
+      <div class="fr-input-group">
+        <label class="fr-label" for="calibration_min_rho">Corrélation minimale (0 à 1)</label>
+        <input class="fr-input" id="calibration_min_rho" name="calibration_min_rho" inputmode="decimal"
+               value="{{ own.calibration_min_rho if own and own.calibration_min_rho is not none else '' }}">
       </div>
     </div>
   </fieldset>

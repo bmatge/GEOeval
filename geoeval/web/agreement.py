@@ -84,7 +84,8 @@ def compute_agreement_vs_gold(
     session: Session, judge_model_id: int
 ) -> dict[str, Any]:
     """Compare tous les jugements du judge_model aux annotations gold pour les
-    mêmes (test_id, run_id)."""
+    mêmes (test_id, run_id). Gold set de la plateforme seulement (import CSV) :
+    les annotations des entités (E8 suite) alimentent leur propre page de calibration."""
     stmt = (
         select(
             GoldAnnotation.response_label, RunEvaluation.response_quality_label,
@@ -99,6 +100,7 @@ def compute_agreement_vs_gold(
             & (RunEvaluation.run_id == GoldAnnotation.run_id)
             & (RunEvaluation.judge_model_id == judge_model_id),
         )
+        .where(GoldAnnotation.organization_id.is_(None))
     )
     rows = list(session.execute(stmt).all())
     if not rows:

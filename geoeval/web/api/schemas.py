@@ -583,6 +583,8 @@ class DetectorSettingsIn(BaseModel):
     always_wrong_threshold: Optional[Decimal] = Field(None, ge=0, le=10, description="None = hériter")
     citation_drop_points: Optional[Decimal] = Field(
         None, gt=0, le=100, description="Écart (points de %) sous la moyenne des 3 runs précédents ; None = hériter")
+    calibration_min_rho: Optional[Decimal] = Field(
+        None, ge=0, le=1, description="Corrélation de rang minimale notateur / gold ; None = hériter")
 
 
 class DetectorSettingsOut(BaseModel):
@@ -590,9 +592,11 @@ class DetectorSettingsOut(BaseModel):
     effective_runs: int
     effective_threshold: Decimal
     effective_citation_drop_points: Decimal
+    effective_calibration_min_rho: Decimal
     runs_from_org_slug: Optional[str] = None
     threshold_from_org_slug: Optional[str] = None
     citation_drop_from_org_slug: Optional[str] = None
+    calibration_from_org_slug: Optional[str] = None
 
 
 # ---- Signalements (suite E7) ----------------------------------------
@@ -700,3 +704,108 @@ class CampaignResultOut(BaseModel):
 class CampaignExecutionOut(BaseModel):
     queued: list[dict[str, Any]]
     skipped: list[dict[str, Any]]
+
+
+# ---- Rejugement et calibration (suite E8) ----------------------------
+class EvaluationBatchIn(BaseModel):
+    """Lot de rejugement : runs de l'entité, notateurs, grilles imposées optionnelles."""
+    run_ids: list[int] = Field(min_length=1, max_length=100)
+    judge_models: list[str] = Field(min_length=1)
+    repeats: int = Field(1, ge=1, le=5)
+    response_prompt_id: Optional[int] = None
+    citation_prompt_id: Optional[int] = None
+    label: Optional[str] = Field(None, max_length=200)
+
+
+class ComparisonLineOut(BaseModel):
+    n_pairs: int
+    orig_response: Optional[float] = None
+    new_response: Optional[float] = None
+    delta_response: Optional[float] = None
+    abs_delta_response: Optional[float] = None
+    orig_citation: Optional[float] = None
+    new_citation: Optional[float] = None
+    delta_citation: Optional[float] = None
+    rank_correlation: Optional[float] = None
+    tested_model: Optional[str] = None
+
+
+class ComparisonPairOut(BaseModel):
+    run_id: int
+    test_id: int
+    tested_model: str
+    orig_response: Optional[float] = None
+    new_response: Optional[float] = None
+    delta_response: Optional[float] = None
+    orig_citation: Optional[float] = None
+    new_citation: Optional[float] = None
+    delta_citation: Optional[float] = None
+
+
+class EvaluationBatchOut(BaseModel):
+    id: int
+    label: Optional[str] = None
+    status: str
+    run_ids: list[int]
+    judges: list[dict[str, Any]]
+    response_prompt_id: Optional[int] = None
+    citation_prompt_id: Optional[int] = None
+    grids: dict[str, Any]
+    estimate_eur: Optional[Decimal] = None
+    job_id: Optional[str] = None
+    created_at: datetime
+    summary: Optional[ComparisonLineOut] = None
+    by_model: list[ComparisonLineOut] = Field(default_factory=list)
+    pairs: list[ComparisonPairOut] = Field(default_factory=list)
+
+
+class AnnotationIn(BaseModel):
+    run_id: int
+    test_id: int
+    response_label: Literal["conforme", "partiel", "non_conforme", "hors_sujet"]
+    response_score: Decimal = Field(ge=0, le=10)
+    citation_label: Literal["conforme", "partiel", "non_conforme", "hors_sujet"]
+    citation_score: Decimal = Field(ge=0, le=10)
+    notes: Optional[str] = Field(None, max_length=2000)
+
+
+class AnnotationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    id: int
+    run_id: int
+    test_id: int
+    organization_id: Optional[int] = None
+    annotator_email: str
+    response_label: str
+    response_score: Decimal
+    citation_label: str
+    citation_score: Decimal
+    notes: Optional[str] = None
+    annotated_at: datetime
+
+
+class AgreementMetricsOut(BaseModel):
+    n_pairs: int
+    response_spearman: Optional[float] = None
+    response_kappa: Optional[float] = None
+    response_mae: Optional[float] = None
+    citation_spearman: Optional[float] = None
+    citation_kappa: Optional[float] = None
+    theme_id: Optional[int] = None
+    label: Optional[str] = None
+
+
+class JudgeAgreementOut(BaseModel):
+    model_version: str
+    batch_id: Optional[int] = None
+    overall: AgreementMetricsOut
+    by_theme: list[AgreementMetricsOut] = Field(default_factory=list)
+    below_threshold: bool
+
+
+class CalibrationOut(BaseModel):
+    n_gold_pairs: int
+    threshold: Decimal
+    threshold_from_org_slug: Optional[str] = None
+    min_pairs: int
+    judges: list[JudgeAgreementOut]
