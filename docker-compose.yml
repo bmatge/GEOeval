@@ -112,7 +112,10 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
-    networks: [default]
+    # `proxy` : le worker envoie la plupart des emails (échec de job, budget, détecteurs,
+    # récapitulatif) et doit joindre le relais SMTP de la plateforme (mailer / smtp-relay),
+    # qui vit sur ce réseau. Aucun label Traefik : il n'est pas exposé.
+    networks: [proxy, default]
     stop_grace_period: 15m           # SIGTERM : le modèle en cours se termine, les suivants ne démarrent pas
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:9100/healthz', timeout=3).status == 200 else 1)"]
