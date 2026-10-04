@@ -96,7 +96,9 @@ date du jour injectée, consigne de répondre plutôt que de demander une clarif
    - **Qualité réponse** : le juge reçoit le prompt d'éval + `[Réponse attendue]` + `[Réponse du modèle]`.
      La réponse attendue peut contenir plusieurs variantes séparées par le token `' OU '` → on garde la
      meilleure note.
-   - **Qualité citation** : le juge reçoit le prompt d'éval + la réponse du modèle.
+   - **Qualité citation** : le juge reçoit le prompt d'éval, la réponse du modèle et la liste des sources
+     que l'IA a renvoyées à part (`raw_citations`). Une IA qui cite par renvois numérotés (`[1]`, `[2]`) et
+     fournit ses URL hors du texte est ainsi notée sur ses sources, pas sur sa mise en forme.
 3. Le juge doit répondre en **JSON strict** (`build_prompt_json_guardrails`) :
    `{"label": "...", "score": 0-10}`. Parsé par `parse_judge_output()` (avec repli : extraction du
    premier bloc `{...}` si le JSON est entouré de texte).
