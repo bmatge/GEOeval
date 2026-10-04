@@ -130,8 +130,11 @@ class QuestionOut(_Orm):
     validity_start_at: datetime
     validity_end_at: Optional[datetime] = None
     is_active: bool = True
-    status: str = "published"           # draft | published | retired (E8)
+    status: str = "published"           # draft | in_review | published | retired (E8)
     theme_ids: list[int] = Field(default_factory=list)
+    submitted_at: Optional[datetime] = None
+    reviewed_at: Optional[datetime] = None
+    review_comment: Optional[str] = None
 
 
 class EffectiveQuestionOut(QuestionOut):
@@ -754,9 +757,17 @@ class EvaluationBatchOut(BaseModel):
     estimate_eur: Optional[Decimal] = None
     job_id: Optional[str] = None
     created_at: datetime
+    promoted_at: Optional[datetime] = None
+    promoted_run_ids: list[int] = Field(default_factory=list)
     summary: Optional[ComparisonLineOut] = None
     by_model: list[ComparisonLineOut] = Field(default_factory=list)
     pairs: list[ComparisonPairOut] = Field(default_factory=list)
+
+
+class PromotionOut(BaseModel):
+    promoted_run_ids: list[int]
+    skipped: list[dict[str, Any]] = Field(default_factory=list, description="[{run_id, reason}]")
+    batch: EvaluationBatchOut
 
 
 class AnnotationIn(BaseModel):
@@ -809,3 +820,16 @@ class CalibrationOut(BaseModel):
     threshold_from_org_slug: Optional[str] = None
     min_pairs: int
     judges: list[JudgeAgreementOut]
+
+
+# ---- Validation métier (fin de E8) -----------------------------------
+class ReviewRejectIn(BaseModel):
+    comment: str = Field(min_length=1, max_length=2000)
+
+
+class ReviewSettingsIO(BaseModel):
+    """`review_required` : réglage propre (None = hériter). Lecture : réglage effectif et source."""
+    review_required: Optional[bool] = None
+    validator_user_ids: list[int] = Field(default_factory=list, description="Validateurs désignés (membres directs)")
+    effective_required: Optional[bool] = None
+    source_org_slug: Optional[str] = None

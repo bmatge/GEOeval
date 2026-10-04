@@ -48,7 +48,7 @@ matérialisé, budget consolidé souple, rôles hérités vers le bas, pools par
 - [ ] E7 (fin) — webhooks (Tchap), abonnements partagés
 - [x] E8 (minimal) — cycle de vie brouillon / publiée / retirée ; campagnes à participants désignés, protocole figé à l'activation, exécution planifiée par participant (sautée et tracée si refusée), grilles verrouillées, comparaison participants × IA (révision 0007), UI + API v1
 - [x] E8 (suite) — rejugement versionné (lots comparés aux notes d'origine, jamais écrasées), calibration des notateurs (annotation dans l'app héritée, accord par notateur et thème, notification sous seuil hérité) (révision 0009), UI + API v1
-- [ ] E8 (fin) — validation métier des questions, promotion d'un lot de rejugement comme référence
+- [x] E8 (fin) — promotion réversible d'un lot rejugé (archive des notes d'origine, org_admin, hors campagnes), validation métier optionnelle héritée à quatre yeux avec validateurs désignés et re-relecture (révision 0010), UI + API v1
 
 ## À faire
 - Rendre `main.py` paramétrable en ligne de commande (argparse) plutôt que des listes en dur.

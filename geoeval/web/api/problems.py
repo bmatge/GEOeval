@@ -35,6 +35,7 @@ LAUNCH_TITLES = {
     "forbidden_models": "Modèles non autorisés pour cette organisation",
     "budget": "Plafond budgétaire atteint",
     "not_found": "Ressource introuvable",
+    "conflict": "Opération impossible dans l'état actuel",
 }
 
 

@@ -16,6 +16,7 @@ from geoeval.web import (
     ground_truth,
     perimeters,
     reports,
+    reviews,
     services,
     themes,
 )
@@ -59,6 +60,7 @@ def tests(
         all_themes=all_themes,
         current_theme=theme_obj,
         test_themes=themes.for_tests(db, [t.test_id for t in tlist]),
+        review_required=reviews.required(db, org),
     )
 
 
@@ -95,6 +97,7 @@ def test_create(
     citation_quality_prompt_id: str = Form(""),
     theme_ids: list[int] = Form(default=[]),
     draft: bool = Form(False),
+    user: CurrentUser = Depends(require_user),
 ):
     org, _ = ctx
     peri = perimeters.get_by_id(db, org.id, perimeter_id)
@@ -109,7 +112,7 @@ def test_create(
         prompt=prompt, expected_answer=expected_answer,
         response_quality_prompt_id=opt_int(response_quality_prompt_id),
         citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
-        status="draft" if draft else "published",
+        status="draft" if draft else "published", created_by=user.id,
     )
     themes.set_for_test(db, test.test_id, theme_ids)
     return RedirectResponse(f"/o/{org.slug}/perimeters/{perimeter_id}", status_code=303)
@@ -143,6 +146,7 @@ def test_update(
     response_quality_prompt_id: str = Form(""),
     citation_quality_prompt_id: str = Form(""),
     theme_ids: list[int] = Form(default=[]),
+    user: CurrentUser = Depends(require_user),
 ):
     org, _ = ctx
     # Déplacement éventuel de périmètre.
@@ -164,7 +168,7 @@ def test_update(
             db, org.id, test_id,
             prompt=prompt, expected_answer=expected_answer,
             response_quality_prompt_id=opt_int(response_quality_prompt_id),
-            citation_quality_prompt_id=opt_int(citation_quality_prompt_id),
+            citation_quality_prompt_id=opt_int(citation_quality_prompt_id), user_id=user.id,
         )
     except ValueError as e:
         raise HTTPException(status_code=409, detail=str(e))
@@ -180,21 +184,23 @@ def test_deactivate(test_id: int, ctx=Depends(require_role("editor")), db: Sessi
 
 
 @router.post("/o/{org_slug}/tests/{test_id}/publish")
-def test_publish(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
-    """Brouillon → publiée (E8)."""
+def test_publish(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db),
+                 user: CurrentUser = Depends(require_user)):
+    """Brouillon → publiée (E8), ou → en relecture si la validation métier est requise."""
     org, _ = ctx
     try:
-        services.publish_test(db, org.id, test_id)
+        services.publish_test(db, org.id, test_id, user_id=user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)
 
 
 @router.post("/o/{org_slug}/tests/{test_id}/reactivate")
-def test_reactivate(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db)):
+def test_reactivate(test_id: int, ctx=Depends(require_role("editor")), db: Session = Depends(get_db),
+                    user: CurrentUser = Depends(require_user)):
     org, _ = ctx
     try:
-        services.reactivate_test(db, org.id, test_id)
+        services.reactivate_test(db, org.id, test_id, user_id=user.id)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     return RedirectResponse(f"/o/{org.slug}/tests", status_code=303)

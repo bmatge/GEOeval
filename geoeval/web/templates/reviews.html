@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Relectures{% endblock %}
+{% block content %}
+<h1>Relectures</h1>
+<p>Validation métier des questions de {{ org.name }} :
+  {% if required %}<strong>requise</strong>{% else %}<strong>non requise</strong>{% endif %}
+  ({{ ('posé par ' ~ source.name) if source else 'défaut plateforme' }}).
+  Une question soumise reste hors des runs, pools et campagnes jusqu'à l'approbation d'un validateur autre que son
+  auteur. Modifier l'énoncé ou la réponse attendue d'une question publiée la renvoie en relecture.
+  {% if role == 'org_admin' %}<a class="fr-link" href="{{ url_prefix }}/settings/reviews">Régler</a>{% endif %}</p>
+{% if items %}
+<div class="fr-table"><table>
+  <thead><tr><th>#</th><th>Question</th><th>Réponse attendue</th><th>Soumise par</th><th>Le</th>{% if can_review %}<th>Décision</th>{% endif %}</tr></thead>
+  <tbody>
+  {% for t in items %}
+    <tr>
+      <td><a class="fr-link" href="{{ url_prefix }}/tests/{{ t.test_id }}">{{ t.test_id }}</a></td>
+      <td>{{ t.prompt|truncate(120) }}</td>
+      <td class="fr-text--sm">{{ (t.expected_answer or '—')|truncate(120) }}</td>
+      <td>{{ authors[t.submitted_by].email if t.submitted_by in authors else '—' }}</td>
+      <td>{{ t.submitted_at.strftime("%d/%m/%Y") if t.submitted_at else '—' }}</td>
+      {% if can_review %}
+      <td>
+        {% if t.submitted_by == me %}<span class="fr-hint-text">ta soumission : un autre validateur décide</span>
+        {% else %}
+        <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/approve" style="display:inline">
+          <button class="fr-btn fr-btn--sm" type="submit">Approuver</button>
+        </form>
+        <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/reject" class="fr-mt-1w">
+          <input class="fr-input fr-input--sm" name="comment" required maxlength="2000" placeholder="Motif du renvoi" aria-label="Motif du renvoi">
+          <button class="fr-btn fr-btn--sm fr-btn--secondary fr-mt-1v" type="submit">Renvoyer en brouillon</button>
+        </form>
+        {% endif %}
+      </td>
+      {% endif %}
+    </tr>
+  {% endfor %}
+  </tbody>
+</table></div>
+{% else %}
+<p>Aucune question en relecture.</p>
+{% endif %}
+{% endblock %}

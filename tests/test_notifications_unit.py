@@ -39,9 +39,9 @@ def test_catalogue_des_types(kind):
 def test_defauts_email_par_type():
     """Arbitrages E7 : email immédiat par défaut pour budget, contrats, échec ; application seule pour le reste."""
     assert {k for k, v in notifications.KINDS.items() if v.default_mode == "immediate"} == {
-        "budget_threshold", "job_failed", "contract_expiring", "contract_expired"}
+        "budget_threshold", "job_failed", "contract_expiring", "contract_expired", "review_requested"}
     assert {k for k, v in notifications.KINDS.items() if v.default_mode == "none"} == {
-        "always_wrong", "citation_drop", "report_opened", "report_resolved", "judge_disagreement"}
+        "always_wrong", "citation_drop", "report_opened", "report_resolved", "judge_disagreement", "review_done"}
 
 
 def test_echeance_du_recapitulatif(monkeypatch):

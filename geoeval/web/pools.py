@@ -205,9 +205,9 @@ def add_tests(session: Session, pool: QuestionPool, test_ids: Iterable[int]) -> 
     foreign = [i for i in ids if i not in found or found[i].organization_id != pool.owner_org_id]
     if foreign:
         raise PoolError(f"Questions introuvables ou n'appartenant pas à l'entité propriétaire du pool : {foreign}")
-    drafts = [i for i in ids if found[i].status == "draft"]
+    drafts = [i for i in ids if found[i].status in ("draft", "in_review")]
     if drafts:
-        raise PoolError(f"Questions encore en brouillon : publie-les avant de les partager ({drafts}).")
+        raise PoolError(f"Questions encore en brouillon ou en relecture : publie-les avant de les partager ({drafts}).")
     existing = set(pool_test_ids(session, pool.id))
     added = 0
     for i in ids:

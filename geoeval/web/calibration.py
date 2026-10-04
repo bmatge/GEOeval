@@ -246,7 +246,8 @@ def overview(session: Session, org: Organization) -> list[JudgeAgreement]:
     for batch_id, model_id in session.execute(
         select(RejudgeEvaluation.batch_id, RejudgeEvaluation.judge_model_id)
         .join(EvaluationBatch, EvaluationBatch.id == RejudgeEvaluation.batch_id)
-        .where(RejudgeEvaluation.run_id.in_(run_ids), EvaluationBatch.organization_id.in_(scope_ids(session, org)))
+        .where(RejudgeEvaluation.run_id.in_(run_ids), EvaluationBatch.organization_id.in_(scope_ids(session, org)),
+               EvaluationBatch.kind == "rejudge")
         .distinct()
     ).all():
         ag = agreement_for(session, org, model_id=model_id, batch_id=batch_id, gold=gold)

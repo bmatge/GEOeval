@@ -21,6 +21,7 @@ from sqlalchemy.orm import Session
 from geoeval.db.models import (
     EvaluationPrompt,
     Model,
+    Organization,
     Perimeter,
     PromptType,
     RunEvaluation,
@@ -537,10 +538,16 @@ def create_test(
     response_quality_prompt_id: Optional[int],
     citation_quality_prompt_id: Optional[int],
     status: str = "published",
+    created_by: Optional[int] = None,
 ) -> Test:
-    """Crée une question, publiée par défaut ou en brouillon (E8)."""
+    """Crée une question, publiée par défaut ou en brouillon (E8). Validation métier
+    requise (fin de E8) : « publiée » devient « en relecture », soumise par `created_by`."""
     if status not in ("draft", "published"):
         raise ValueError(f"Statut de création invalide : {status!r} (brouillon ou publiée).")
+    from geoeval.web import reviews
+
+    org = session.get(Organization, org_id)
+    submit = status == "published" and org is not None and reviews.required(session, org)
     default_resp, default_cit = default_prompt_ids(session)
     test = Test(
         organization_id=org_id,
@@ -551,10 +558,12 @@ def create_test(
         citation_quality_prompt_id=citation_quality_prompt_id or default_cit,
         validity_start_at=datetime.now(timezone.utc),
         validity_end_at=None,
-        status=status,
+        status="draft" if submit else status,
     )
     session.add(test)
     session.commit()
+    if submit:
+        reviews.mark_submitted(session, org, test, created_by, reason="nouvelle question")
     return test
 
 
@@ -567,10 +576,14 @@ def update_test(
     expected_answer: Optional[str],
     response_quality_prompt_id: Optional[int],
     citation_quality_prompt_id: Optional[int],
+    user_id: Optional[int] = None,
 ) -> Test:
+    """Validation métier requise (fin de E8) : changer l'énoncé ou la réponse attendue d'une
+    question publiée ou en relecture la (re)met en relecture, soumise par `user_id`."""
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
+    statement_changed = (prompt != test.prompt) or ((expected_answer or None) != test.expected_answer)
     default_resp, default_cit = default_prompt_ids(session)
     new_resp = response_quality_prompt_id or default_resp
     new_cit = citation_quality_prompt_id or default_cit
@@ -585,10 +598,16 @@ def update_test(
     test.response_quality_prompt_id = response_quality_prompt_id or default_resp
     test.citation_quality_prompt_id = citation_quality_prompt_id or default_cit
     session.commit()
+    if statement_changed and test.status in ("published", "in_review"):
+        from geoeval.web import reviews
+
+        org = session.get(Organization, org_id)
+        if reviews.required(session, org):
+            reviews.mark_submitted(session, org, test, user_id, reason="énoncé ou réponse attendue modifié")
     return test
 
 
-TEST_STATUS_LABELS = {"draft": "brouillon", "published": "publiée", "retired": "retirée"}
+TEST_STATUS_LABELS = {"draft": "brouillon", "in_review": "en relecture", "published": "publiée", "retired": "retirée"}
 
 
 def deactivate_test(session: Session, org_id: int, test_id: int) -> None:
@@ -601,25 +620,38 @@ def deactivate_test(session: Session, org_id: int, test_id: int) -> None:
     session.commit()
 
 
-def reactivate_test(session: Session, org_id: int, test_id: int) -> None:
-    """Republie une question retirée (un brouillon se publie avec `publish_test`)."""
+def reactivate_test(session: Session, org_id: int, test_id: int, user_id: Optional[int] = None) -> None:
+    """Republie une question retirée (un brouillon se publie avec `publish_test`).
+    Validation métier requise : la question repasse en relecture."""
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
-    if test.status == "draft":
-        raise ValueError("Une question en brouillon se publie, elle ne se réactive pas.")
+    if test.status in ("draft", "in_review"):
+        raise ValueError("Seule une question retirée se réactive.")
+    from geoeval.web import reviews
+
+    org = session.get(Organization, org_id)
+    if reviews.required(session, org):
+        reviews.mark_submitted(session, org, test, user_id, reason="réactivation")
+        return
     test.status = "published"
     test.validity_end_at = None
     session.commit()
 
 
-def publish_test(session: Session, org_id: int, test_id: int) -> Test:
-    """Brouillon → publiée : la question entre dans les runs, pools et campagnes."""
+def publish_test(session: Session, org_id: int, test_id: int, user_id: Optional[int] = None) -> Test:
+    """Brouillon → publiée : la question entre dans les runs, pools et campagnes.
+    Validation métier requise (fin de E8) : brouillon → en relecture (soumission)."""
     test = get_test(session, org_id, test_id)
     if test is None:
         raise ValueError(f"test_id={test_id} introuvable pour org={org_id}")
     if test.status != "draft":
         raise ValueError(f"Seule une question en brouillon se publie (statut actuel : {TEST_STATUS_LABELS[test.status]}).")
+    from geoeval.web import reviews
+
+    org = session.get(Organization, org_id)
+    if reviews.required(session, org):
+        return reviews.submit(session, org, test, user_id)
     test.status = "published"
     test.validity_start_at = datetime.now(timezone.utc)
     session.commit()

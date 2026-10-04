@@ -252,6 +252,11 @@ Une question naît **publiée** ou en **brouillon** ; un brouillon n'entre dans 
 aucune campagne tant qu'il n'est pas publié. Une question **retirée** sort des évaluations sans que son historique
 soit touché ; elle peut être republiée.
 
+Une entité peut exiger une **validation métier** (*Paramètres › Validation métier des questions*, réglage hérité
+par les sous-entités). Publier une question la soumet alors à la relecture : un validateur (administrateur ou
+membre désigné) autre que l'auteur l'approuve ou la renvoie en brouillon avec un motif (*Configurer ›
+Relectures*). Modifier l'énoncé ou la réponse attendue d'une question publiée la renvoie en relecture.
+
 Une **campagne** (*Configurer › Campagnes*, administrateurs de l'entité) fait exécuter un protocole commun par des
 entités désignées de son sous-arbre : les questions publiées d'un pool, les mêmes IA évaluées, les mêmes notateurs,
 à la même fréquence. À l'activation, ce protocole est figé ; chaque participant l'exécute ensuite à ses frais et
@@ -262,8 +267,10 @@ La page de la campagne compare les notes par participant et par IA, avec l'écar
 
 Un **rejugement** (*Configurer › Rejugements*, éditeurs) fait noter à nouveau des runs passés par d'autres
 notateurs, ou avec une grille imposée. Les réponses stockées sont réutilisées : seuls les notateurs sont appelés,
-sous les contrôles habituels (notateurs autorisés, routage, contrats, budget). Les notes d'origine ne changent
-jamais et restent celles des tableaux de bord ; le lot s'affiche à côté, avec les écarts par question et par IA.
+sous les contrôles habituels (notateurs autorisés, routage, contrats, budget). Le lot s'affiche à côté des notes
+d'origine, avec les écarts par question et par IA. Un administrateur peut ensuite le **promouvoir** : ses notes
+deviennent les notes officielles des runs (hors campagnes), les notes d'origine sont archivées et restent
+restaurables d'un clic.
 
 La **calibration** (*Configurer › Calibration des notateurs*) compare chaque notateur aux annotations humaines :
 celles de l'entité (bouton « Annoter » sur le détail d'un run), de ses entités parentes et le gold set de la

@@ -21,6 +21,35 @@
   {% if batch.job_id %}<dt class="fr-text--bold fr-mt-1w">Exécution</dt><dd><a class="fr-link" href="{{ url_prefix }}/jobs/{{ batch.job_id }}">job {{ batch.job_id }}</a></dd>{% endif %}
 </dl>
 
+<h2 class="fr-mt-4w">Notes officielles</h2>
+{% if promoted_runs %}
+<div class="fr-alert fr-alert--info fr-mb-2w"><p>Ce lot fait foi pour {{ promoted_runs|length }} run(s) :
+  {% for r in promoted_runs %}<a class="fr-link fr-mr-1w" href="{{ url_prefix }}/runs/{{ r }}">#{{ r }}</a>{% endfor %}
+  {% if batch.promoted_at %}(promu le {{ batch.promoted_at.strftime("%d/%m/%Y %H:%M") }}){% endif %}.
+  Tableaux de bord et statistiques affichent ses notes ; les notes d'origine sont archivées.</p></div>
+{% else %}
+<p>Les notes d'origine font foi. Promouvoir ce lot installe ses notes comme notes officielles des runs (hors runs de
+  campagne, dont le protocole fige les notateurs) ; les notes d'origine sont archivées et peuvent être restaurées.</p>
+{% endif %}
+{% if skipped %}<div class="fr-alert fr-alert--warning fr-alert--sm fr-mb-2w"><p>{{ skipped }} run(s) non promu(s) : run de campagne, sans note dans ce lot, ou déjà promu.</p></div>{% endif %}
+{% if campaign_runs %}<p class="fr-hint-text">Runs de campagne exclus de la promotion : {{ campaign_runs|sort|join(', ') }}.</p>{% endif %}
+{% if role == 'org_admin' %}
+<div class="fr-btns-group fr-btns-group--inline-md fr-mb-2w">
+  {% if status == 'done' %}
+  <form method="post" action="{{ url_prefix }}/rejudge/{{ batch.id }}/promote"
+        onsubmit="return confirm('Les notes de ce lot deviendront les notes officielles de ses runs. Continuer ?');">
+    <button class="fr-btn fr-btn--sm fr-icon-checkbox-circle-line fr-btn--icon-left" type="submit">Promouvoir comme référence</button>
+  </form>
+  {% endif %}
+  {% if promoted_runs %}
+  <form method="post" action="{{ url_prefix }}/rejudge/{{ batch.id }}/revert"
+        onsubmit="return confirm('Restaurer les notes d\'origine de ces runs ?');">
+    <button class="fr-btn fr-btn--sm fr-btn--secondary fr-icon-arrow-go-back-line fr-btn--icon-left" type="submit">Revenir aux notes d'origine</button>
+  </form>
+  {% endif %}
+</div>
+{% endif %}
+
 <h2 class="fr-mt-4w">Comparaison avec les notes d'origine</h2>
 <p class="fr-hint-text">Moyennes tous notateurs confondus, sur 10. Écart = lot − origine. Les tableaux de bord continuent d'afficher les notes d'origine.</p>
 {% set s = comparison.summary %}

@@ -20,6 +20,7 @@ from geoeval.web.api.schemas import (
     EvaluationBatchIn,
     EvaluationBatchOut,
     JudgeAgreementOut,
+    PromotionOut,
 )
 from geoeval.web.deps import get_db
 
@@ -30,7 +31,8 @@ def _out(db: Session, b, *, with_comparison: bool) -> EvaluationBatchOut:
     out = EvaluationBatchOut(
         id=b.id, label=b.label, status=rejudge.status(db, b), run_ids=list(b.run_ids), judges=list(b.judges),
         response_prompt_id=b.response_prompt_id, citation_prompt_id=b.citation_prompt_id, grids=dict(b.grids or {}),
-        estimate_eur=b.estimate_eur, job_id=b.job_id, created_at=b.created_at,
+        estimate_eur=b.estimate_eur, job_id=b.job_id, created_at=b.created_at, promoted_at=b.promoted_at,
+        promoted_run_ids=rejudge.promoted_runs(db, b),
     )
     if with_comparison:
         cmp = rejudge.compare(db, b)
@@ -64,6 +66,27 @@ def create_batch(body: EvaluationBatchIn, principal: Principal = Depends(require
             summary="Lot de rejugement et comparaison avec les notes d'origine")
 def get_batch(batch_id: int, principal: Principal = Depends(require_role("viewer")), db: Session = Depends(get_db)):
     return _out(db, rejudge.get_for_org(db, principal.org, batch_id), with_comparison=True)
+
+
+@router.post("/rejudge/{batch_id}/promote", response_model=PromotionOut,
+             summary="Promouvoir le lot : ses notes deviennent officielles (org_admin, hors runs de campagne)")
+def promote_batch(batch_id: int, principal: Principal = Depends(require_role("org_admin")), db: Session = Depends(get_db)):
+    b = rejudge.get_for_org(db, principal.org, batch_id)
+    res = rejudge.promote(db, principal.org, b, user_id=principal.user_id)
+    audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="promote", entity_type="evaluation_batch",
+                 entity_id=b.id, meta={"runs": res.done, "skipped": [r for r, _ in res.skipped], **principal.audit_meta()})
+    return PromotionOut(promoted_run_ids=res.done, skipped=[{"run_id": r, "reason": why} for r, why in res.skipped],
+                        batch=_out(db, b, with_comparison=False))
+
+
+@router.post("/rejudge/{batch_id}/revert", response_model=EvaluationBatchOut,
+             summary="Restaurer les notes d'origine des runs dont ce lot est la référence (org_admin)")
+def revert_batch(batch_id: int, principal: Principal = Depends(require_role("org_admin")), db: Session = Depends(get_db)):
+    b = rejudge.get_for_org(db, principal.org, batch_id)
+    restored = rejudge.revert(db, principal.org, b)
+    audit.record(db, user_id=principal.user_id, org_id=principal.org.id, action="revert", entity_type="evaluation_batch",
+                 entity_id=b.id, meta={"runs": restored, **principal.audit_meta()})
+    return _out(db, b, with_comparison=False)
 
 
 @router.get("/calibration", response_model=CalibrationOut,

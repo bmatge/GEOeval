@@ -11,6 +11,14 @@ s'exécute dans le worker (job `kind = "rejudge"`).
 
 Versions épinglées : le lot fige à sa création les versions des notateurs et
 l'empreinte (SHA-256) de chaque grille utilisée.
+
+Promotion (fin de E8) : **échange réversible**, réservé aux org_admin, **hors runs de
+campagne** (leur protocole fige les notateurs). Promouvoir un lot archive d'abord les
+notes d'origine de chaque run dans un lot `kind = "origin"` (une seule fois par run),
+puis installe les notes du lot dans `run_evaluations` : tableaux de bord, statistiques,
+API suivent sans autre changement. Revenir en arrière restaure les notes d'origine.
+Rien n'est perdu : les notes quittent `run_evaluations` seulement après avoir été
+copiées dans l'archive, dans la même transaction.
 """
 from __future__ import annotations
 
@@ -19,7 +27,9 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import Any, Optional
 
-from sqlalchemy import func, select
+from datetime import datetime, timezone
+
+from sqlalchemy import delete, func, insert, literal, select
 from sqlalchemy.orm import Session
 
 from geoeval.db.models import (
@@ -172,14 +182,14 @@ def create(
 # ---------------------------------------------------------------------
 def list_for_org(session: Session, org: Organization, *, limit: int = 100) -> list[EvaluationBatch]:
     return list(session.execute(
-        select(EvaluationBatch).where(EvaluationBatch.organization_id == org.id)
+        select(EvaluationBatch).where(EvaluationBatch.organization_id == org.id, EvaluationBatch.kind == "rejudge")
         .order_by(EvaluationBatch.created_at.desc(), EvaluationBatch.id.desc()).limit(limit)
     ).scalars())
 
 
 def get_for_org(session: Session, org: Organization, batch_id: int) -> EvaluationBatch:
     b = session.get(EvaluationBatch, batch_id)
-    if b is None or b.organization_id != org.id:
+    if b is None or b.organization_id != org.id or b.kind != "rejudge":
         raise LaunchError("not_found", "Lot de rejugement introuvable.")
     return b
 
@@ -194,7 +204,9 @@ def runs_with_batches(session: Session, run_ids: list[int]) -> dict[int, list[in
     """run_id → lots qui l'ont rejugé (pour signaler un rejugement sur le détail d'un run)."""
     out: dict[int, list[int]] = {}
     for rid, bid in session.execute(
-        select(RejudgeEvaluation.run_id, RejudgeEvaluation.batch_id).where(RejudgeEvaluation.run_id.in_(run_ids or [-1]))
+        select(RejudgeEvaluation.run_id, RejudgeEvaluation.batch_id)
+        .join(EvaluationBatch, EvaluationBatch.id == RejudgeEvaluation.batch_id)
+        .where(RejudgeEvaluation.run_id.in_(run_ids or [-1]), EvaluationBatch.kind == "rejudge")
         .distinct()
     ).all():
         out.setdefault(rid, []).append(bid)
@@ -233,9 +245,15 @@ def compare(session: Session, batch: EvaluationBatch, *, top: int = 50) -> Compa
         return {(r, t): (float(a) if a is not None else None, float(c) if c is not None else None)
                 for r, t, a, c in rows}
 
-    orig = _scores(RunEvaluation, [])
-    new = _scores(RejudgeEvaluation, [RejudgeEvaluation.batch_id == batch.id])
     runs = {r.run_id: r for r in session.execute(select(RunRow).where(RunRow.run_id.in_(batch.run_ids or [-1]))).scalars()}
+    # Notes d'origine : `run_evaluations`, ou leur archive quand un lot a été promu sur le run.
+    orig = _scores(RunEvaluation, [])
+    for origin_id in {r.origin_batch_id for r in runs.values() if r.reference_batch_id and r.origin_batch_id}:
+        archived = _scores(RejudgeEvaluation, [RejudgeEvaluation.batch_id == origin_id])
+        promoted = {r.run_id for r in runs.values() if r.reference_batch_id and r.origin_batch_id == origin_id}
+        orig = {k: v for k, v in orig.items() if k[0] not in promoted}
+        orig.update({k: v for k, v in archived.items() if k[0] in promoted})
+    new = _scores(RejudgeEvaluation, [RejudgeEvaluation.batch_id == batch.id])
     models = {m.model_id: m for m in session.execute(
         select(Model).where(Model.model_id.in_({r.tested_model_id for r in runs.values()} or {-1}))).scalars()}
     tests = {t.test_id: t for t in session.execute(
@@ -278,6 +296,94 @@ def compare(session: Session, batch: EvaluationBatch, *, top: int = 50) -> Compa
         by_model=[dict(tested_model=k, **_agg(v)) for k, v in sorted(by_model.items())],
         summary=_agg(pairs),
     )
+
+
+# ---------------------------------------------------------------------
+# Promotion réversible (fin de E8)
+# ---------------------------------------------------------------------
+_EVAL_COLS = ("test_id", "judge_model_id", "judge_run_index", "response_quality_label", "response_quality_score",
+              "citation_quality_label", "citation_quality_score")
+
+
+@dataclass
+class PromotionResult:
+    done: list[int] = field(default_factory=list)                    # runs basculés
+    skipped: list[tuple[int, str]] = field(default_factory=list)     # (run, motif)
+
+
+def _copy_to_archive(session: Session, run_id: int, archive_id: int) -> None:
+    src = select(literal(archive_id), RunEvaluation.run_id, *[getattr(RunEvaluation, c) for c in _EVAL_COLS]) \
+        .where(RunEvaluation.run_id == run_id)
+    session.execute(insert(RejudgeEvaluation).from_select(["batch_id", "run_id", *_EVAL_COLS], src))
+
+
+def _install(session: Session, run_id: int, source_batch_id: int) -> None:
+    """Remplace les notes officielles du run par celles d'un lot (rejugé ou archive d'origine)."""
+    session.execute(delete(RunEvaluation).where(RunEvaluation.run_id == run_id))
+    src = select(RejudgeEvaluation.run_id, *[getattr(RejudgeEvaluation, c) for c in _EVAL_COLS]) \
+        .where(RejudgeEvaluation.batch_id == source_batch_id, RejudgeEvaluation.run_id == run_id)
+    session.execute(insert(RunEvaluation).from_select(["run_id", *_EVAL_COLS], src))
+
+
+def promote(session: Session, org: Organization, batch: EvaluationBatch, *, user_id: Optional[int]) -> PromotionResult:
+    """Les notes du lot deviennent les notes officielles de ses runs (hors campagne).
+    Lève LaunchError : lot pas terminé (409). Les runs non promus sont listés avec leur motif."""
+    if batch.organization_id != org.id or batch.kind != "rejudge":
+        raise LaunchError("not_found", "Lot de rejugement introuvable.")
+    if status(session, batch) != "done":
+        raise LaunchError("conflict", "Le lot n'est pas terminé : sa promotion attend la fin du rejugement.")
+    with_notes = set(session.execute(
+        select(RejudgeEvaluation.run_id).where(RejudgeEvaluation.batch_id == batch.id).distinct()).scalars())
+    res = PromotionResult()
+    archive: Optional[EvaluationBatch] = None
+    for run in session.execute(select(RunRow).where(RunRow.run_id.in_(batch.run_ids or [-1]))
+                               .order_by(RunRow.run_id)).scalars():
+        if run.campaign_id is not None:
+            res.skipped.append((run.run_id, "run de campagne : son protocole fige les notateurs"))
+            continue
+        if run.run_id not in with_notes:
+            res.skipped.append((run.run_id, "aucune note dans ce lot"))
+            continue
+        if run.reference_batch_id == batch.id:
+            res.skipped.append((run.run_id, "déjà promu"))
+            continue
+        if run.origin_batch_id is None:
+            if archive is None:
+                archive = EvaluationBatch(
+                    organization_id=org.id, kind="origin", run_ids=[], judges=[],
+                    label=f"Notes d'origine archivées à la promotion du lot #{batch.id}", created_by=user_id)
+                session.add(archive)
+                session.flush()
+            _copy_to_archive(session, run.run_id, archive.id)
+            archive.run_ids = [*archive.run_ids, run.run_id]
+            run.origin_batch_id = archive.id
+        _install(session, run.run_id, batch.id)
+        run.reference_batch_id = batch.id
+        res.done.append(run.run_id)
+    if res.done:
+        batch.promoted_at, batch.promoted_by = datetime.now(timezone.utc), user_id
+    session.commit()
+    return res
+
+
+def revert(session: Session, org: Organization, batch: EvaluationBatch) -> list[int]:
+    """Restaure les notes d'origine des runs dont ce lot est la référence. Renvoie ces runs."""
+    if batch.organization_id != org.id or batch.kind != "rejudge":
+        raise LaunchError("not_found", "Lot de rejugement introuvable.")
+    restored = []
+    for run in session.execute(select(RunRow).where(RunRow.reference_batch_id == batch.id)
+                               .order_by(RunRow.run_id)).scalars():
+        _install(session, run.run_id, run.origin_batch_id)
+        run.reference_batch_id = None
+        restored.append(run.run_id)
+    batch.promoted_at, batch.promoted_by = None, None
+    session.commit()
+    return restored
+
+
+def promoted_runs(session: Session, batch: EvaluationBatch) -> list[int]:
+    return list(session.execute(
+        select(RunRow.run_id).where(RunRow.reference_batch_id == batch.id).order_by(RunRow.run_id)).scalars())
 
 
 def judges_label(batch: EvaluationBatch) -> str:

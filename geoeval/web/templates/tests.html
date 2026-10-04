@@ -68,15 +68,17 @@
           <a class="fr-link fr-mr-2w" href="{{ url_prefix }}/tests/{{ t.test_id }}/edit">Éditer</a>
           {% if t.status == 'draft' %}
           <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/publish" style="display:inline">
-            <button type="submit" class="fr-link">Publier</button>
+            <button type="submit" class="fr-link">{{ 'Soumettre en relecture' if review_required else 'Publier' }}</button>
           </form>
+          {% elif t.status == 'in_review' %}
+          <a class="fr-link" href="{{ url_prefix }}/reviews">En relecture</a>
           {% elif t.status == 'published' %}
           <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/deactivate" style="display:inline">
             <button type="submit" class="fr-link">Retirer</button>
           </form>
           {% else %}
           <form method="post" action="{{ url_prefix }}/tests/{{ t.test_id }}/reactivate" style="display:inline">
-            <button type="submit" class="fr-link">Republier</button>
+            <button type="submit" class="fr-link">{{ 'Resoumettre' if review_required else 'Republier' }}</button>
           </form>
           {% endif %}
           {% endif %}
