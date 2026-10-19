@@ -5,6 +5,10 @@ on:
   push:
     branches: [master]
 
+# Jeton en lecture seule par défaut (CodeQL actions/missing-workflow-permissions).
+permissions:
+  contents: read
+
 jobs:
   lint-test:
     name: ruff + pytest (PostgreSQL 16)
