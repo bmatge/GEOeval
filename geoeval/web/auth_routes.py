@@ -45,10 +45,20 @@ def _render(request: Request, template: str, **ctx) -> HTMLResponse:
 
 
 def _safe_next(next_url: Optional[str]) -> str:
-    """Anti open-redirect : seules les URLs relatives internes sont suivies."""
-    if next_url and next_url.startswith("/") and not next_url.startswith("//"):
-        return next_url
-    return "/"
+    """Anti open-redirect : seules les URLs relatives internes sont suivies.
+
+    Un chemin doit commencer par « / » sans être protocole-relatif. Les
+    navigateurs normalisent « \\ » en « / », donc « /\\exemple.com » vaut
+    « //exemple.com » : on refuse les deux formes, ainsi que les caractères
+    de contrôle qui permettent de tronquer l'en-tête Location.
+    """
+    if not next_url or not next_url.startswith("/"):
+        return "/"
+    if next_url.startswith("//") or next_url.startswith("/\\"):
+        return "/"
+    if any(c in next_url for c in "\r\n\t") or any(ord(c) < 0x20 for c in next_url):
+        return "/"
+    return next_url
 
 
 def _login_session(request: Request, user_id: int) -> None:
